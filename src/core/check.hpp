@@ -22,7 +22,7 @@ void reportFailedCheck(
 #define CHECK_NE(a, b) CHECK_BINARY_OPERATOR(!=, a, b)
 #define CHECK_LT(a, b) CHECK_BINARY_OPERATOR(<, a, b)
 #define CHECK_GT(a, b) CHECK_BINARY_OPERATOR(>, a, b)
-#define CHECK_LE(a, b) CHECK_BINARY_OPERATOR(>=, a, b)
+#define CHECK_LE(a, b) CHECK_BINARY_OPERATOR(<=, a, b)
 #define CHECK_GE(a, b) CHECK_BINARY_OPERATOR(>=, a, b)
 #define CHECK(a) CHECK_BINARY_OPERATOR(==, a, true)
 
@@ -30,7 +30,7 @@ void reportFailedCheck(
 #define DCHECK_NE(a, b) CHECK_BINARY_OPERATOR(!=, a, b)
 #define DCHECK_LT(a, b) CHECK_BINARY_OPERATOR(<, a, b)
 #define DCHECK_GT(a, b) CHECK_BINARY_OPERATOR(>, a, b)
-#define DCHECK_LE(a, b) CHECK_BINARY_OPERATOR(>=, a, b)
+#define DCHECK_LE(a, b) CHECK_BINARY_OPERATOR(<=, a, b)
 #define DCHECK_GE(a, b) CHECK_BINARY_OPERATOR(>=, a, b)
 #define DCHECK(a) CHECK_BINARY_OPERATOR(==, a, true)
 

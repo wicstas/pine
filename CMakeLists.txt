@@ -4,10 +4,20 @@ project(pine)
 
 # Pine Library
 add_library(pine_lib
+src/core/intersection.cpp
+src/core/integrator.cpp
+src/core/material.cpp
+src/core/parallel.cpp
 src/core/testing.cpp
+src/core/camera.cpp
+src/core/shapes.cpp
 src/core/string.cpp
 src/core/check.cpp
+src/core/color.cpp
+src/core/image.cpp
+src/core/scene.cpp
 src/core/math.cpp
+src/core/ray.cpp
 )
 target_include_directories(pine_lib PUBLIC src)
 target_compile_features(pine_lib PUBLIC cxx_std_20)

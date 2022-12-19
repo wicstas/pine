@@ -8,6 +8,13 @@
 
 namespace pine {
 
+constexpr float Epsilon = std::numeric_limits<float>::epsilon();
+constexpr float MaxFloat = std::numeric_limits<float>::max();
+constexpr float Infinity = std::numeric_limits<float>::infinity();
+constexpr float OneMinusEpsilon = 1.0f - Epsilon;
+constexpr float E = 2.71828182846f;
+constexpr float Pi = 3.1415926535f;
+
 auto sqr(auto x) { return x * x; }
 auto lengthSquared(auto x) { return sqr(x); }
 auto length(auto x) { return std::sqrt(lengthSquared(x)); }
@@ -22,7 +29,17 @@ auto length(auto x) { return std::sqrt(lengthSquared(x)); }
     }                                                              \
   while (false)
 
-constexpr int sum(auto... xs) { return (xs + ...); }
+#define DCHECK_EQF(a, b) CHECK_EQF(a, b)
+
+constexpr auto sum(auto... xs) { return (xs + ...); }
+
+constexpr auto max(auto a, auto b) { return std::max(a, b); }
+constexpr auto max(auto x, auto... xs) { return std::max(x, max(xs...)); }
+
+constexpr auto min(auto a, auto b) { return std::min(a, b); }
+constexpr auto min(auto x, auto... xs) { return std::min(x, min(xs...)); }
+
+constexpr bool between(auto x, auto a, auto b) { return x >= a && x <= b; }
 
 template <int N, typename F>
 constexpr auto dispatchSequence(F f) {
@@ -67,12 +84,15 @@ using ArithmeticResult = typename ArithmeticResult_<A, B, op>::type;
 template <typename T, int N>
 struct Vector;
 
-template <typename Ref, typename T>
+template <typename T>
 constexpr int dimensionOf = 1;
-template <typename Ref, typename T, int N>
-constexpr int dimensionOf<Ref, Vector<T, N>> = N;
 template <typename T, int N>
-constexpr int dimensionOf<Vector<T, N>, Vector<T, N>> = 1;
+constexpr int dimensionOf<Vector<T, N>> = N;
+
+template <typename T>
+constexpr bool isVector = false;
+template <int N, typename T>
+constexpr bool isVector<Vector<T, N>> = true;
 
 template <int N, typename T>
 constexpr bool isVectorN = false;
@@ -81,22 +101,22 @@ constexpr bool isVectorN<N, Vector<T, N>> = true;
 
 template <typename T, int N>
 struct Vector {
+  static_assert(!isVector<T>, "Recursive Vector is not allowed");
   Vector() = default;
 
   template <typename X>
-    requires(dimensionOf<T, X> == 1)
-  Vector(X x) {
+    requires(dimensionOf<X> == 1)
+  explicit Vector(X x) {
     dispatchIndex<N>([&]<int I>() { at(I) = x; });
   }
   template <typename X>
-    requires(dimensionOf<T, X> > N)
-  explicit Vector(X x) {
+    requires(dimensionOf<X> > N)
+  Vector(X x) {
     dispatchIndex<N>([&]<int I>() { at(I) = x[I]; });
   }
-
   template <typename... Ts>
-    requires(sum(dimensionOf<T, Ts>...) == N)
-  Vector(Ts... xs) {
+    requires(sum(dimensionOf<Ts>...) == N)
+  explicit Vector(Ts... xs) {
     constructFrom<0>(xs...);
   }
 
@@ -117,34 +137,40 @@ struct Vector {
   }
 
   template <typename B>
-  Vector operator+=(Vector<B, N> b) {
-    dispatchSequence<N>([&]<int I>() { at(I) += b[I]; });
+  Vector& operator+=(Vector<B, N> b) {
+    dispatchIndex<N>([&]<int I>() { at(I) += b[I]; });
     return *this;
   }
   template <typename B>
-  Vector operator-=(Vector<B, N> b) {
-    dispatchSequence<N>([&]<int I>() { at(I) -= b[I]; });
+  Vector& operator-=(Vector<B, N> b) {
+    dispatchIndex<N>([&]<int I>() { at(I) -= b[I]; });
     return *this;
   }
   template <typename B>
-  Vector operator*=(Vector<B, N> b) {
-    dispatchSequence<N>([&]<int I>() { at(I) *= b[I]; });
+  Vector& operator*=(Vector<B, N> b) {
+    dispatchIndex<N>([&]<int I>() { at(I) *= b[I]; });
     return *this;
   }
   template <typename B>
-  Vector operator/=(Vector<B, N> b) {
-    dispatchSequence<N>([&]<int I>() { at(I) /= b[I]; });
+  Vector& operator/=(Vector<B, N> b) {
+    dispatchIndex<N>([&]<int I>() { at(I) /= b[I]; });
     return *this;
   }
   template <typename B>
-  Vector operator*=(B b) {
-    dispatchSequence<N>([&]<int I>() { at(I) *= b; });
+  Vector& operator*=(B b) {
+    dispatchIndex<N>([&]<int I>() { at(I) *= b; });
     return *this;
   }
   template <typename B>
-  Vector operator/=(B b) {
-    dispatchSequence<N>([&]<int I>() { at(I) /= b; });
+  Vector& operator/=(B b) {
+    dispatchIndex<N>([&]<int I>() { at(I) /= b; });
     return *this;
+  }
+
+  Vector operator-() const {
+    auto copy = *this;
+    dispatchIndex<N>([&]<int I>() { copy[I] = -at(I); });
+    return copy;
   }
 
   friend auto operator<=>(Vector, Vector) = default;
@@ -152,7 +178,7 @@ struct Vector {
  private:
   template <int Offset, typename X, typename... Xs>
   void constructFrom(X x, Xs... xs) {
-    constexpr int dim = dimensionOf<T, X>;
+    constexpr int dim = dimensionOf<X>;
 
     if constexpr (dim > 1)
       dispatchIndex<dim>([&]<int I>() { at(Offset + I) = x[I]; });
@@ -164,72 +190,6 @@ struct Vector {
 
   std::array<T, N> components{};
 };
-
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '+'>, N>>
-R operator+(Vector<A, N> a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() {
-    return R((a[Is] + b[Is])...);
-  });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '-'>, N>>
-R operator-(Vector<A, N> a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() {
-    return R((a[Is] - b[Is])...);
-  });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
-R operator*(Vector<A, N> a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() {
-    return R((a[Is] * b[Is])...);
-  });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
-R operator/(Vector<A, N> a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() {
-    return R((a[Is] / b[Is])...);
-  });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '+'>, N>>
-R operator*(Vector<A, N> a, B b) {
-  return dispatchSequence<N>([&]<int... Is>() { return R((a[Is] * b)...); });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
-R operator*(A a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() { return R((a * b[Is])...); });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
-R operator/(Vector<A, N> a, B b) {
-  return dispatchSequence<N>([&]<int... Is>() { return R((a[Is] / b)...); });
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
-R operator/(A a, Vector<B, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() { return R((a / b[Is])...); });
-}
-
-template <typename T, int N>
-T innerProduct(Vector<T, N> a, Vector<T, N> b) {
-  return dispatchSequence<N>([&]<int... Is>() {
-    return sum((a[Is] * b[Is])...);
-  });
-}
-
-template <typename T, int N>
-T dot(Vector<T, N> a, Vector<T, N> b) {
-  return innerProduct(a, b);
-}
-
-template <typename T, int N>
-auto lengthSquared(Vector<T, N> x) {
-  return dot(x, x);
-}
 
 template <typename T>
 using Vector2 = Vector<T, 2>;
@@ -248,6 +208,149 @@ using vec2u8 = Vector2<uint8_t>;
 using vec3u8 = Vector3<uint8_t>;
 using vec4u8 = Vector4<uint8_t>;
 
+template <int I, typename T>
+auto nthComponent(T x) {
+  if constexpr (isVector<T>)
+    return x[I];
+  else
+    return x;
+}
+
+template <int N, typename F, typename... Ts>
+auto apply(F f, Ts... xs) {
+  const auto applyAt = [&]<int I>() { return f(nthComponent<I>(xs)...); };
+
+  return dispatchSequence<N>([&]<int... Is>() {
+    using R = decltype(applyAt.template operator()<0>());
+    return Vector<R, N>(applyAt.template operator()<Is>()...);
+  });
+}
+
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '+'>, N>>
+R operator+(Vector<A, N> a, Vector<B, N> b) {
+  return apply<N>(std::plus(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '-'>, N>>
+R operator-(Vector<A, N> a, Vector<B, N> b) {
+  return apply<N>(std::minus(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
+R operator*(Vector<A, N> a, Vector<B, N> b) {
+  return apply<N>(std::multiplies(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
+R operator/(Vector<A, N> a, Vector<B, N> b) {
+  return apply<N>(std::divides(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '+'>, N>>
+R operator*(Vector<A, N> a, B b) {
+  return apply<N>(std::multiplies(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
+R operator*(A a, Vector<B, N> b) {
+  return apply<N>(std::multiplies(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
+R operator/(Vector<A, N> a, B b) {
+  return apply<N>(std::divides(), a, b);
+}
+template <typename A, typename B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
+R operator/(A a, Vector<B, N> b) {
+  return apply<N>(std::divides(), a, b);
+}
+
+template <typename T, int N>
+T innerProduct(Vector<T, N> a, Vector<T, N> b) {
+  return dispatchSequence<N>([&]<int... Is>() {
+    return sum((a[Is] * b[Is])...);
+  });
+}
+
+template <typename T, int N>
+T dot(Vector<T, N> a, Vector<T, N> b) {
+  return innerProduct(a, b);
+}
+
+template <typename T>
+Vector3<T> cross(Vector3<T> a, Vector3<T> b) {
+  return Vector3<T>(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0]);
+}
+
+template <typename T, int N>
+T lengthSquared(Vector<T, N> x) {
+  return dot(x, x);
+}
+
+template <typename T, int N>
+Vector<T, N> normalize(Vector<T, N> x) {
+  return x / length(x);
+}
+
+template <typename T, typename IndexType, int M, int N>
+Vector<T, N> shuffle(Vector<T, M> x, Vector<IndexType, N> index) {
+  return apply<N>([&](int i) { return x[i]; }, index);
+}
+
+template <typename T, int N, int I>
+Vector<T, N> oneAt() {
+  auto x = Vector<T, N>();
+  x[I] = T(1);
+  return x;
+}
+
+template <typename T, int N>
+Vector<T, N> abs(Vector<T, N> x) {
+  return apply<N>([](auto x) { return std::abs(x); }, x);
+}
+
+template <typename T, int N>
+Vector<T, N> sqrt(Vector<T, N> x) {
+  return apply<N>([](auto x) { return std::sqrt(x); }, x);
+}
+
+template <typename T, int N>
+Vector<T, N> exp(Vector<T, N> x) {
+  return apply<N>([](auto x) { return std::exp(x); }, x);
+}
+
+template <typename T, int N>
+Vector<T, N> log(Vector<T, N> x) {
+  return apply<N>([](auto x) { return std::log(x); }, x);
+}
+
+template <typename T, int N>
+Vector<T, N> pow(Vector<T, N> base, auto exp) {
+  return apply<N>([](auto base, auto exp) { return std::pow(base, exp); }, base,
+                  exp);
+}
+
+template <typename T>
+T clamp(T x, T a, T b) {
+  return std::max(std::min(x, b), a);
+}
+template <typename T, int N>
+Vector<T, N> clamp(Vector<T, N> x, Vector<T, N> a, Vector<T, N> b) {
+  return apply<N>(clamp<T>, x, a, b);
+}
+
+template <typename X, typename T>
+X lerp(X a, X b, T t) {
+  return a * (T(1) - t) + b * t;
+}
+template <typename X, typename T, int N>
+Vector<T, N> lerp(Vector<X, N> a, Vector<X, N> b, T t) {
+  return apply<N>(lerp<X, T>, a, b, t);
+}
+
 template <typename T, int N, int M>
 struct Matrix {
   static Matrix identity() {
@@ -258,8 +361,14 @@ struct Matrix {
 
   Matrix() = default;
   template <typename... Columns>
-    requires(isVectorN<N, Columns> && ...)
-  Matrix(Columns... columns) : columns(columns...) {}
+    requires(sizeof...(Columns) == M && (isVectorN<N, Columns> && ...))
+  explicit Matrix(Columns... columns) : columns{columns...} {}
+
+  template <typename B, int N1, int M1>
+  explicit Matrix(Matrix<B, N1, M1> b) {
+    for (int c = 0; c < std::min(N, N1); ++c)
+      for (int r = 0; r < std::min(M, M1); ++r) column(c)[r] = b[c][r];
+  }
 
   constexpr std::size_t size() const { return M; }
 
@@ -285,7 +394,7 @@ struct Matrix {
   friend auto operator<=>(Matrix, Matrix) = default;
 
  private:
-  Vector<Vector<T, N>, M> columns;
+  std::array<Vector<T, N>, M> columns;
 };
 
 template <typename A, typename B, int N, int M,
@@ -316,7 +425,14 @@ R operator*(Matrix<A, N, M> a, Matrix<B, M, K> b) {
 }
 
 template <typename T, int N, int M>
-auto lengthSquared(Matrix<T, N, M> x) {
+Matrix<T, M, N> transpose(Matrix<T, N, M> x) {
+  return dispatchSequence<N>([&]<int... Is>() {
+    return Matrix<T, M, N>(x.row(Is)...);
+  });
+}
+
+template <typename T, int N, int M>
+T lengthSquared(Matrix<T, N, M> x) {
   return dispatchSequence<M>([&]<int... Is>() {
     return sum(lengthSquared(x[Is])...);
   });
@@ -333,17 +449,82 @@ using mat2 = Matrix2<float>;
 using mat3 = Matrix3<float>;
 using mat4 = Matrix4<float>;
 
+template <typename T>
+T determinant(Matrix2<T> x) {
+  return x[0][0] * x[1][1] - x[0][1] * x[1][0];
+}
+template <typename T>
+T determinant(Matrix3<T> x) {
+  return dot(x[0], cross(x[1], x[2]));
+}
+template <typename T>
+T determinant(Matrix4<T> x) {
+  auto d = T(0);
+
+  const auto subMatrixDeterminant = [&](int i) {
+    const auto indices = vec3i((i + 1) % 4, (i + 2) % 4, (i + 3) % 4);
+    return dot(shuffle(x[1], indices),
+               cross(shuffle(x[2], indices), shuffle(x[3], indices)));
+  };
+  for (int i = 0; i < 4; ++i) d = -d + x[0][i] * subMatrixDeterminant(i);
+  return -d;
+}
+
+template <int column, typename T, int N, int M>
+Matrix<T, N, M> replaceColumn(Matrix<T, N, M> m, Vector<T, N> x) {
+  m[column] = x;
+  return m;
+}
+
 template <typename T, int N>
-auto translate(Vector<T, N> x) {
+Vector<T, N> solve(Matrix<T, N, N> m, Vector<T, N> b) {
+  const auto d = determinant(m);
+  return dispatchSequence<N>([&]<int... Is>() {
+    return Vector<T, N>((determinant(replaceColumn<Is>(m, b)) / d)...);
+  });
+}
+
+template <typename T, int N>
+Matrix<T, N, N> inverse(Matrix<T, N, N> m) {
+  return dispatchSequence<N>([&]<int... Is>() {
+    return Matrix<T, N, N>(solve(m, oneAt<T, N, Is>())...);
+  });
+}
+
+inline mat3 coordinateSystem(vec3 n) {
+  DCHECK_EQ(lengthSquared(n), 1);
+  auto m = mat3();
+  m[2] = n;
+
+  if (std::abs(n[0]) < 0.5f)
+    m[0] = normalize(cross(n, vec3(1, 0, 0)));
+  else
+    m[0] = normalize(cross(n, vec3(0, 1, 0)));
+
+  m[1] = cross(m[0], m[1]);
+
+  return m;
+}
+
+inline mat4 lookAt(vec3 from, vec3 to, vec3 up = vec3(0, 1, 0)) {
+  auto m = mat4();
+  m[2] = vec4(normalize(to - from), 0);
+  m[0] = vec4(normalize(cross<float>(up, m[2])), 0);
+  m[1] = vec4(cross<float>(m[0], m[2]), 0);
+  m[3] = vec4(from, 1);
+  return m;
+}
+
+template <typename T, int N>
+Matrix<T, N + 1, N + 1> translate(Vector<T, N> x) {
   auto m = Matrix<T, N + 1, N + 1>::identity();
   m[N] = Vector<T, N + 1>(x, 1);
   return m;
 }
 template <typename T, int N>
-auto scale(Vector<T, N> x) {
+Matrix<T, N, N> scale(Vector<T, N> x) {
   auto m = Matrix<T, N, N>();
-  for(int i = 0; i < N; i++)
-  m[i][i] = x[i];
+  for (int i = 0; i < N; i++) m[i][i] = x[i];
   return m;
 }
 
