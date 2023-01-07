@@ -39,7 +39,8 @@ constexpr auto max(auto x, auto... xs) { return std::max(x, max(xs...)); }
 constexpr auto min(auto a, auto b) { return std::min(a, b); }
 constexpr auto min(auto x, auto... xs) { return std::min(x, min(xs...)); }
 
-constexpr bool between(auto x, auto a, auto b) { return x >= a && x <= b; }
+template<typename T>
+constexpr bool between(T x, T a, T b) { return x >= a && x < b; }
 
 template <int N, typename F>
 constexpr auto dispatchSequence(F f) {
@@ -55,6 +56,9 @@ constexpr void dispatchIndex(F f) {
     dump((f.template operator()<Is>(), 0)...);
   });
 }
+
+template <typename T>
+concept Arithmetic = std::is_arithmetic_v<T>;
 
 template <typename A, typename B, char op>
 struct ArithmeticResult_;
@@ -108,16 +112,19 @@ struct Vector {
     requires(dimensionOf<X> == 1)
   explicit Vector(X x) {
     dispatchIndex<N>([&]<int I>() { at(I) = x; });
+    DCHECK(!hasNaN());
   }
   template <typename X>
     requires(dimensionOf<X> > N)
   Vector(X x) {
     dispatchIndex<N>([&]<int I>() { at(I) = x[I]; });
+    DCHECK(!hasNaN());
   }
   template <typename... Ts>
     requires(sum(dimensionOf<Ts>...) == N)
   explicit Vector(Ts... xs) {
     constructFrom<0>(xs...);
+    DCHECK(!hasNaN());
   }
 
   constexpr std::size_t size() const { return N; }
@@ -171,6 +178,12 @@ struct Vector {
     auto copy = *this;
     dispatchIndex<N>([&]<int I>() { copy[I] = -at(I); });
     return copy;
+  }
+
+  bool hasNaN() const {
+    return dispatchSequence<N>([&]<int... Is>() {
+      return (std::isnan(at(Is)) || ...);
+    });
   }
 
   friend auto operator<=>(Vector, Vector) = default;
@@ -246,24 +259,20 @@ template <typename A, typename B, int N,
 R operator/(Vector<A, N> a, Vector<B, N> b) {
   return apply<N>(std::divides(), a, b);
 }
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '+'>, N>>
+template <typename A, Arithmetic B, int N,
+          typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
 R operator*(Vector<A, N> a, B b) {
   return apply<N>(std::multiplies(), a, b);
 }
-template <typename A, typename B, int N,
+template <Arithmetic A, typename B, int N,
           typename R = Vector<ArithmeticResult<A, B, '*'>, N>>
 R operator*(A a, Vector<B, N> b) {
   return apply<N>(std::multiplies(), a, b);
 }
-template <typename A, typename B, int N,
+template <typename A, Arithmetic B, int N,
           typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
 R operator/(Vector<A, N> a, B b) {
-  return apply<N>(std::divides(), a, b);
-}
-template <typename A, typename B, int N,
-          typename R = Vector<ArithmeticResult<A, B, '/'>, N>>
-R operator/(A a, Vector<B, N> b) {
+  DCHECK_NE(b, 0);
   return apply<N>(std::divides(), a, b);
 }
 
@@ -292,6 +301,7 @@ T lengthSquared(Vector<T, N> x) {
 
 template <typename T, int N>
 Vector<T, N> normalize(Vector<T, N> x) {
+  DCHECK_GT(length(x), 0);
   return x / length(x);
 }
 
@@ -301,6 +311,7 @@ Vector<T, N> shuffle(Vector<T, M> x, Vector<IndexType, N> index) {
 }
 
 template <typename T, int N, int I>
+  requires(I >= 0 && I < N)
 Vector<T, N> oneAt() {
   auto x = Vector<T, N>();
   x[I] = T(1);
@@ -314,7 +325,12 @@ Vector<T, N> abs(Vector<T, N> x) {
 
 template <typename T, int N>
 Vector<T, N> sqrt(Vector<T, N> x) {
-  return apply<N>([](auto x) { return std::sqrt(x); }, x);
+  return apply<N>(
+      [](auto x) {
+        DCHECK_GE(x, 0);
+        return std::sqrt(x);
+      },
+      x);
 }
 
 template <typename T, int N>
@@ -324,13 +340,22 @@ Vector<T, N> exp(Vector<T, N> x) {
 
 template <typename T, int N>
 Vector<T, N> log(Vector<T, N> x) {
-  return apply<N>([](auto x) { return std::log(x); }, x);
+  return apply<N>(
+      [](auto x) {
+        DCHECK_GT(x, 0);
+        return std::log(x);
+      },
+      x);
 }
 
 template <typename T, int N>
-Vector<T, N> pow(Vector<T, N> base, auto exp) {
-  return apply<N>([](auto base, auto exp) { return std::pow(base, exp); }, base,
-                  exp);
+Vector<T, N> pow(Vector<T, N> base, T exp) {
+  return apply<N>(
+      [](auto base, auto exp) {
+        DCHECK_GE(base, 0);
+        return std::pow(base, exp);
+      },
+      base, exp);
 }
 
 template <typename T>
@@ -351,6 +376,13 @@ Vector<T, N> lerp(Vector<X, N> a, Vector<X, N> b, T t) {
   return apply<N>(lerp<X, T>, a, b, t);
 }
 
+template <typename T, int N>
+bool between(Vector<T, N> x, Vector<T, N> a, Vector<T, N> b) {
+  return dispatchSequence<N>([&]<int... Is>() {
+    return (between(x[Is], a[Is], b[Is]) && ...);
+  });
+}
+
 template <typename T, int N, int M>
 struct Matrix {
   static Matrix identity() {
@@ -362,12 +394,15 @@ struct Matrix {
   Matrix() = default;
   template <typename... Columns>
     requires(sizeof...(Columns) == M && (isVectorN<N, Columns> && ...))
-  explicit Matrix(Columns... columns) : columns{columns...} {}
+  explicit Matrix(Columns... columns) : columns{columns...} {
+    DCHECK(!hasNaN());
+  }
 
   template <typename B, int N1, int M1>
   explicit Matrix(Matrix<B, N1, M1> b) {
     for (int c = 0; c < std::min(N, N1); ++c)
       for (int r = 0; r < std::min(M, M1); ++r) column(c)[r] = b[c][r];
+    DCHECK(!hasNaN());
   }
 
   constexpr std::size_t size() const { return M; }
@@ -390,6 +425,12 @@ struct Matrix {
 
   Vector<T, N>& operator[](int i) { return column(i); }
   const Vector<T, N>& operator[](int i) const { return column(i); }
+
+  bool hasNaN() const {
+    return dispatchSequence<M>([&]<int... Is>() {
+      return (column(Is).hasNaN() || ...);
+    });
+  }
 
   friend auto operator<=>(Matrix, Matrix) = default;
 
@@ -479,6 +520,7 @@ Matrix<T, N, M> replaceColumn(Matrix<T, N, M> m, Vector<T, N> x) {
 template <typename T, int N>
 Vector<T, N> solve(Matrix<T, N, N> m, Vector<T, N> b) {
   const auto d = determinant(m);
+  DCHECK_NE(d, 0);
   return dispatchSequence<N>([&]<int... Is>() {
     return Vector<T, N>((determinant(replaceColumn<Is>(m, b)) / d)...);
   });

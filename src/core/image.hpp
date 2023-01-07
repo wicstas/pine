@@ -71,11 +71,15 @@ using ImageLDR = Image<vec3u8>;
 
 void writeImageAsTGA(std::string fileName, const ImageLDR& image);
 inline void writeImageAsTGA(std::string fileName, const Image<vec3>& image) {
-  return writeImageAsTGA(
-      fileName, ImageLDR(image([](auto x) {
-                           return clamp(x, vec3(0), vec3(OneMinusEpsilon));
-                         }) *
-                         vec3(256.0f)));
+  writeImageAsTGA(fileName, ImageLDR(image([](auto x) {
+                                       return clamp(x, vec3(0),
+                                                    vec3(OneMinusEpsilon));
+                                     }) *
+                                     vec3(256.0f)));
+}
+
+inline void saveImage(std::string fileName, const Image<vec3>& image) {
+  writeImageAsTGA(fileName, image);
 }
 
 }  // namespace pine

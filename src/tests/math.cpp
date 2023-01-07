@@ -64,7 +64,6 @@ PINE_TEST("Vector operations") {
   CHECK_EQF(x * 2.0f, vec3(2, 4, 6));
   CHECK_EQF(x / 2.0f, vec3(0.5, 1.0, 1.5));
   CHECK_EQF(2.0f * x, vec3(2, 4, 6));
-  CHECK_EQF(2.0f / x, vec3(2, 1, 2.0f / 3));
   CHECK_EQF(innerProduct(vec2(1, 2), vec2(10, 20)), 50);
   CHECK_EQF(dot(vec2(1, 2), vec2(10, 20)), 50);
   CHECK_EQF(lengthSquared(vec2(1, 2)), 5);
@@ -76,7 +75,6 @@ PINE_TEST("Vector operations") {
   CHECK_EQF(abs(vec2(3, -2)), vec2(3, 2));
   CHECK_EQF(sqrt(vec2(4, 9)), vec2(2, 3));
   CHECK_EQF(pow(vec2(2, 3), 2.0f), vec2(4, 9));
-  CHECK_EQF(pow(vec2(2, 3), vec2(2, 3)), vec2(4, 27));
   CHECK_EQF(exp(vec2(1, 2)), vec2(E, E * E));
   CHECK_EQF(log(vec2(E, E * E)), vec2(1, 2));
   CHECK_EQF(clamp(7, 1, 6), 6);

@@ -10,7 +10,7 @@ struct Scene {
   void setCamera(auto... args) { camera = Camera(args...); }
   void addShape(auto... args) { shapes.push_back(Shape(args...)); }
 
-  const Camera& getCamera() const { return camera; }
+  Camera& getCamera() { return camera; }
 
   bool intersect(Ray& ray, Intersection& it) const {
     auto hit = false;

@@ -16,7 +16,7 @@ requires requires(T x) {
   std::size(x);
   x[0];
 }
-std::string toString(T x) {
+std::string toString(const T& x) {
   auto str = std::string("[");
   for (size_t i = 0; i < std::size(x); ++i) str += toString(x[i]) + ' ';
   str.back() = ']';
@@ -24,7 +24,7 @@ std::string toString(T x) {
 }
 
 template <typename... Ts>
-requires(sizeof...(Ts) > 1) std::string toString(Ts... args) {
+requires(sizeof...(Ts) > 1) std::string toString(const Ts&... args) {
   return (toString(args) + ...);
 }
 

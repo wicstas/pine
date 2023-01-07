@@ -4,6 +4,10 @@
 namespace pine {
 
 struct Ray {
+  Ray() = default;
+  Ray(vec3 origin, vec3 direction, float tmin = 0, float tmax = Infinity)
+      : o(origin), d(direction), tmin(tmin), tmax(tmax) {}
+
   vec3 operator()(float t) const { return o + t * d; }
   bool contains(float t) const { return between(t, tmin, tmax); }
   bool tooClose(float t) const { return t < tmin; }

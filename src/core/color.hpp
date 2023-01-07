@@ -43,9 +43,11 @@ struct CoefficientSpectrum {
   friend Derived operator*(Derived a, const Derived& b) { return a *= b; }
   friend Derived operator/(Derived a, const Derived& b) { return a /= b; }
   friend Derived operator*(Derived a, float b) { return a *= b; }
-  friend Derived operator/(Derived a, float b) { return a /= b; }
+  friend Derived operator/(Derived a, float b) {
+    DCHECK_NE(b, 0);
+    return a /= b;
+  }
   friend Derived operator*(float a, Derived b) { return Derived(a * b.c); }
-  friend Derived operator/(float a, Derived b) { return Derived(a / b.c); }
   friend Derived sqrt(Derived x) { return Derived(sqrt(x.c)); }
   friend Derived exp(Derived x) { return Derived(exp(x.c)); }
   friend Derived log(Derived x) { return Derived(log(x.c)); }
@@ -58,36 +60,45 @@ struct CoefficientSpectrum {
   Coefficients c;
 };
 
-inline const mat3 XYZ2RGBMatrix =
-    mat3(vec3(3.2405, -0.9693, 0.0557), vec3(-1.5372, 1.8760, -0.2040),
-         vec3(-0.4985, 0.0416, 1.0573));
-inline const mat3 RGB2XYZMatrix = inverse(XYZ2RGBMatrix);
+inline vec3 xyz2RGB(vec3 xyz) {
+  return mat3(vec3(3.2405, -0.9693, 0.0557), vec3(-1.5372, 1.8760, -0.2040),
+              vec3(-0.4985, 0.0416, 1.0573)) *
+         xyz;
+}
+inline vec3 rgb2XYZ(vec3 rgb) {
+  return inverse(mat3(vec3(3.2405, -0.9693, 0.0557),
+                      vec3(-1.5372, 1.8760, -0.2040),
+                      vec3(-0.4985, 0.0416, 1.0573))) *
+         rgb;
+}
 
 struct XYZSpectrum;
 struct RGBSpectrum;
 
-using Spectrum = RGBSpectrum;
+using Spectrum = XYZSpectrum;
 
 struct XYZSpectrum : CoefficientSpectrum<3, XYZSpectrum> {
   using Base = CoefficientSpectrum<3, XYZSpectrum>;
-  using Base::Base;
+
+  XYZSpectrum() = default;
+  XYZSpectrum(vec3 rgb) : Base(rgb2XYZ(rgb)) {}
 
   explicit operator RGBSpectrum() const;
-  vec3 toRGB() { return XYZ2RGBMatrix * c; }
+  vec3 toRGB() const { return xyz2RGB(c); }
 };
 
 struct RGBSpectrum : CoefficientSpectrum<3, RGBSpectrum> {
   using Base = CoefficientSpectrum<3, RGBSpectrum>;
-  using Base::Base;
 
-  explicit operator XYZSpectrum() const {
-    return XYZSpectrum(RGB2XYZMatrix * c);
-  }
-  vec3 toRGB() { return c; }
+  RGBSpectrum() = default;
+  RGBSpectrum(vec3 rgb) : Base(rgb) {}
+
+  explicit operator XYZSpectrum() const { return XYZSpectrum(rgb2XYZ(c)); }
+  vec3 toRGB() const { return c; }
 };
 
 inline XYZSpectrum::operator RGBSpectrum() const {
-  return RGBSpectrum(XYZ2RGBMatrix * c);
+  return RGBSpectrum(toRGB());
 }
 
 }  // namespace pine
