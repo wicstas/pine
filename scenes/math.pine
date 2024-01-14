@@ -1,0 +1,25 @@
+var x = 2.7;
+var y = -1.1;
+
+println(x, " ", y);
+println(min(x, y));
+println(max(x, y));
+println(abs(x), " ", abs(y));
+println(sqr(x), " ", sqr(y));
+println(sqrt(x), " ", sqrt(y));
+println(floor(x), " ", floor(y));
+println(ceil(x), " ", ceil(y));
+println(pow(x, y));
+println(exp(x), " ", exp(y));
+println(log(x), " ", log(y));
+println(sin(x), " ", sin(y));
+println(cos(x), " ", cos(y));
+println(tan(x), " ", tan(y));
+println(asin(x), " ", asin(y));
+println(acos(x), " ", acos(y));
+println(atan2(x, y));
+assert(1 + 2 + 3 == 6);
+assert(1 - 2 - 3 == -4);
+assert(1 - 2 * 3 == -5);
+assert(1 - 1 + 2 == 2);
+assert(1 * 2 + 3 == 5);

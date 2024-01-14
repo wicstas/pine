@@ -1,0 +1,230 @@
+#pragma once
+
+#include <pine/psl/type_traits.h>
+#include <pine/psl/utility.h>
+#include <pine/psl/memory.h>
+
+namespace psl {
+
+namespace detail {
+
+// Union for plain type
+template <typename T, typename... Ts>
+struct Union {
+  using First = T;
+  using Rest = Union<Ts...>;
+
+  Union() {
+  }
+  ~Union() {
+  }
+  Union(const Union&) = delete;
+  Union(Union&&) = delete;
+  Union& operator=(Union&) = delete;
+  Union& operator=(Union&&) = delete;
+
+  template <typename X>
+  void construct_from(X x) {
+    if constexpr (SameAs<X, First>)
+      psl::construct_at(&first, psl::move(x));
+    else
+      rest.construct_from(psl::move(x));
+  }
+
+  template <typename X>
+  X& be() {
+    if constexpr (SameAs<X, First>)
+      return first;
+    else
+      return rest.template be<X>();
+  }
+  template <typename X>
+  const X& be() const {
+    if constexpr (SameAs<X, First>)
+      return first;
+    else
+      return rest.template be<X>();
+  }
+
+  union {
+    First first;
+    Rest rest;
+  };
+};
+
+template <typename T>
+struct Union<T> {
+  using First = T;
+
+  Union() {
+  }
+  ~Union() {
+  }
+  Union(const Union&) = delete;
+  Union(Union&&) = delete;
+  Union& operator=(Union&) = delete;
+  Union& operator=(Union&&) = delete;
+
+  template <typename X>
+  void construct_from(X x) {
+    static_assert(SameAs<X, First>, "type X is not one of the Union's");
+    psl::construct_at(&first, psl::forward<X>(x));
+  }
+
+  template <typename X>
+  X& be() {
+    static_assert(SameAs<X, First>, "type X is not one of the Union's");
+
+    return first;
+  }
+  template <typename X>
+  const X& be() const {
+    static_assert(SameAs<X, First>, "type X is not one of the Union's");
+
+    return first;
+  }
+
+  union {
+    First first;
+  };
+};
+
+}  // namespace detail
+
+template <typename T, typename First, typename... Rest>
+constexpr int index() {
+  static_assert(SameAs<T, First> || sizeof...(Rest) != 0,
+                "type T is not in the parameter pack");
+
+  if constexpr (SameAs<T, First>)
+    return 0;
+  else
+    return 1 + index<T, Rest...>();
+}
+
+template <typename VariantType, typename F, typename TargetType>
+constexpr decltype(auto) dispatch_helper(VariantType&& object, F&& f) {
+  return f(psl::forward<VariantType>(object).template be<TargetType>());
+}
+
+template <typename... Ts, typename VariantType, typename F>
+decltype(auto) dispatch(VariantType&& object, int index, F&& f) {
+  using Fwt = decltype(+dispatch_helper<VariantType, F, FirstTypeT<Ts...>>);
+  constexpr static Fwt table[]{dispatch_helper<VariantType, F, Ts>...};
+
+  return table[index](psl::forward<VariantType>(object), psl::forward<F>(f));
+}
+
+template <typename... Ts>
+struct Variant {
+  static_assert(sizeof...(Ts) < (1 << 8), "Variant only support 1 ~ 255 possible types");
+  using Aggregate = detail::Union<Ts...>;
+
+  template <typename T>
+  constexpr bool one_of() {
+    return (psl::SameAs<T, Ts> && ...);
+  }
+
+  Variant() = default;
+  ~Variant() {
+    reset();
+  }
+
+  Variant(const Variant& rhs) {
+    rhs.try_dispatch([&](const auto& x) {
+      value.construct_from(x);
+      tag_ = rhs.tag_;
+    });
+  }
+  Variant(Variant&& rhs) {
+    rhs.try_dispatch([&](auto& x) {
+      value.construct_from(psl::move(x));
+      tag_ = rhs.tag_;
+    });
+  }
+  Variant& operator=(Variant rhs) {
+    reset();
+    rhs.try_dispatch([&](auto& rx) {
+      value.construct_from(psl::move(rx));
+      tag_ = rhs.tag_;
+    });
+    return *this;
+  }
+  template <typename T>
+  Variant(T x) {
+    value.construct_from(psl::move(x));
+    tag_ = psl::index<DecayT<T>, Ts...>();
+  }
+  template <typename T>
+  Variant& operator=(T x) {
+    reset();
+    value.construct_from(psl::move(x));
+    tag_ = psl::index<DecayT<T>, Ts...>();
+    return *this;
+  }
+
+  template <typename F>
+  decltype(auto) dispatch(F&& f) {
+    return psl::dispatch<Ts...>(value, tag_, psl::forward<F>(f));
+  }
+
+  template <typename F>
+  decltype(auto) dispatch(F&& f) const {
+    return psl::dispatch<Ts...>(value, tag_, psl::forward<F>(f));
+  }
+
+  template <typename F>
+  void try_dispatch(F&& f) {
+    if (is_valid())
+      psl::dispatch<Ts...>(value, tag_, psl::forward<F>(f));
+  }
+
+  template <typename F>
+  void try_dispatch(F&& f) const {
+    if (is_valid())
+      psl::dispatch<Ts...>(value, tag_, psl::forward<F>(f));
+  }
+
+  bool is_valid() const {
+    return tag_ != invalid_tag;
+  }
+
+  int tag() const {
+    return tag_;
+  }
+
+  template <typename T>
+  static int index() {
+    return psl::index<T, Ts...>();
+  }
+
+  template <typename T>
+  bool is() const {
+    return tag_ == index<T>();
+  }
+
+  template <typename T>
+  T& be() {
+    return value.template be<T>();
+  }
+
+  template <typename T>
+  const T& be() const {
+    return value.template be<T>();
+  }
+
+  void reset() {
+    try_dispatch([](auto& x) {
+      using T = DecayT<decltype(x)>;
+      x.~T();
+    });
+    tag_ = invalid_tag;
+  }
+
+private:
+  Aggregate value;
+  uint8_t tag_ = invalid_tag;
+  static constexpr uint8_t invalid_tag = static_cast<uint8_t>(-1);
+};
+
+}  // namespace psl

@@ -1,0 +1,31 @@
+#Get started by exploring the example 
+#files. You can find more examples using 
+#the File button.
+
+var scene = Scene();
+#Create a variable named image_size of type vec2i
+var image_size = [720, 360];
+
+#Add a shape of type Plane with material
+#of type DiffuseMaterial with albedo 0.8
+scene.add(Plane([0, 0, 0], [0, 1, 0]), Diffuse([0.8, 0.8, 0.8]));
+
+#Add a light of type PointLight with position
+#[4, 8, 0] and color 100
+scene.add(PointLight([4, 8, 0], 100));
+
+#Set the camera to a ThinLenCamera that looks from
+#[0, 4, 8] to [0, 1, 0] and with field-of-view(fov) 0.3
+scene.set(ThinLenCamera(Film(image_size), [0, 4, 8], [0, 1, 0], 0.3));
+
+#Create an integrator that has as its:
+#acceleration structure: BVH()
+#sampler: HaltonSampler(4, image_size)
+#light_sampler: UniformLightSampler()
+#max_depth: 5
+var sampler = HaltonSampler(4, image_size);
+var light_sampler = UniformLightSampler();
+var integrator = PathIntegrator(BVH(), sampler, light_sampler, 5);
+
+integrator.render(scene);
+save("image.bpm", scene.camera.film());

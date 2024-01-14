@@ -1,0 +1,28 @@
+var count = 0;
+while(count < 5)
+    print(count++, " ");
+println();
+
+var count = 0;
+while(true) {
+    print(count++, " ");
+    if(count >= 5)
+        break;
+}
+println();
+
+for(var i = 0; i < 5; i++)
+    print(i, " ");
+println();
+
+for(var i = 0; i < 5; i++) {
+    if(i < 2)
+        print("case0 ");
+    else if(i < 3)
+        print("case1 ");
+    else if(i < 4)
+        print("case2 ");
+    else
+        print("case3 ");
+}
+println();

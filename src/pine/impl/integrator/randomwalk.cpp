@@ -1,0 +1,39 @@
+#include <pine/impl/integrator/randomwalk.h>
+#include <pine/core/scene.h>
+
+namespace pine {
+
+vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
+  auto L = vec3{0.0f};
+  auto beta = vec3{1.0f};
+
+  for (int depth = 0; depth < max_depth; depth++) {
+    auto it = Interaction{};
+    if (!intersect(ray, it)) {
+      if (scene.env_light) {
+        L += beta * scene.env_light->color(ray.d);
+      }
+      break;
+    }
+    if (it.material->is<EmissiveMaterial>()) {
+      L += beta * it.material->le({it, -ray.d});
+      break;
+    }
+
+    if (depth + 1 == max_depth)
+      break;
+
+    if (auto bs = it.material->sample({it, -ray.d, sampler.Get1D(), sampler.Get2D()})) {
+      beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
+      if (beta.is_black())
+        break;
+      ray = it.SpawnRay(bs->wo);
+    } else {
+      break;
+    }
+  }
+
+  return L;
+}
+
+}  // namespace pine
