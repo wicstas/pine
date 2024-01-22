@@ -18,22 +18,22 @@ size_t type_id() {
 
 struct TypeId {
   TypeId() = default;
-  TypeId(size_t code, bool is_const, bool is_reference)
-      : code{code}, is_const{is_const}, is_reference{is_reference} {};
+  TypeId(size_t code, bool IsConst, bool IsReference)
+      : code{code}, IsConst{IsConst}, IsReference{IsReference} {};
 
   bool operator<(TypeId rhs) const {
     return code < rhs.code;
   }
 
   size_t code = invalid;
-  bool is_const = false;
-  bool is_reference = false;
+  bool IsConst = false;
+  bool IsReference = false;
   static constexpr size_t invalid = static_cast<size_t>(-1);
 };
 template <typename T>
 TypeId type_id_full() {
-  static auto id = TypeId{typeid(T).hash_code(), psl::is_const<T>,
-                          psl::is_reference<T> || psl::is_rv_reference<T>};
+  static auto id = TypeId{typeid(T).hash_code(), psl::IsConst<T>,
+                          psl::IsReference<T> || psl::IsRvReference<T>};
   return id;
 }
 

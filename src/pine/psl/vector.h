@@ -52,14 +52,14 @@ public:
     resize(len);
   }
   VectorBase(size_t len, const T& x) : VectorBase{len} {
-    fill(*this, x);
+    psl::fill(*this, x);
   }
   template <Range ARange>
   explicit VectorBase(ARange&& range) : VectorBase(psl::size(range)) {
-    copy(begin(), range);
+    psl::copy(begin(), range);
   }
   template <ForwardIterator It>
-  VectorBase(It first, It last) : VectorBase{psl::make_range(first, last)} {
+  VectorBase(It first, It last) : VectorBase(psl::range(first, last)) {
   }
 
   VectorBase(const VectorBase& rhs) : VectorBase{} {
@@ -260,7 +260,7 @@ auto vector_of(Ts... xs) {
   if constexpr (sizeof...(Us) > 1) {
     static_assert(psl::deferred_bool<false, Ts...>, "Only one type-specifier is allowed");
   } else if constexpr (sizeof...(Us) == 1) {
-    using T = FirstTypeT<Us...>;
+    using T = FirstType<Us...>;
     if constexpr (sizeof...(Ts) == 0)
       return vector<T>{};
     else
@@ -270,7 +270,7 @@ auto vector_of(Ts... xs) {
       static_assert(psl::deferred_bool<false, Ts...>,
                     "When the parameter pack can be null, please specify the vector type");
     else {
-      using T = FirstTypeT<Ts...>;
+      using T = FirstType<Ts...>;
       return vector<T>{std::initializer_list<T>{psl::move(xs)...}};
     }
   }

@@ -109,7 +109,7 @@ constexpr decltype(auto) dispatch_helper(VariantType&& object, F&& f) {
 
 template <typename... Ts, typename VariantType, typename F>
 decltype(auto) dispatch(VariantType&& object, int index, F&& f) {
-  using Fwt = decltype(+dispatch_helper<VariantType, F, FirstTypeT<Ts...>>);
+  using Fwt = decltype(+dispatch_helper<VariantType, F, FirstType<Ts...>>);
   constexpr static Fwt table[]{dispatch_helper<VariantType, F, Ts>...};
 
   return table[index](psl::forward<VariantType>(object), psl::forward<F>(f));
@@ -153,13 +153,13 @@ struct Variant {
   template <typename T>
   Variant(T x) {
     value.construct_from(psl::move(x));
-    tag_ = psl::index<DecayT<T>, Ts...>();
+    tag_ = psl::index<Decay<T>, Ts...>();
   }
   template <typename T>
   Variant& operator=(T x) {
     reset();
     value.construct_from(psl::move(x));
-    tag_ = psl::index<DecayT<T>, Ts...>();
+    tag_ = psl::index<Decay<T>, Ts...>();
     return *this;
   }
 
@@ -215,7 +215,7 @@ struct Variant {
 
   void reset() {
     try_dispatch([](auto& x) {
-      using T = DecayT<decltype(x)>;
+      using T = Decay<decltype(x)>;
       x.~T();
     });
     tag_ = invalid_tag;

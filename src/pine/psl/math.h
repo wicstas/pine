@@ -119,37 +119,37 @@ inline constexpr int sign(T v) {
 }
 
 // TODO
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline constexpr T floor(T v) {
-  auto i = (CorrespondingIntT<T>)v;
+  auto i = (CorrespondingInt<T>)v;
   if (v < 0 && i != v)
     i -= 1;
   return i;
 }
 
 // TODO
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline constexpr T ceil(T v) {
-  auto i = (CorrespondingIntT<T>)v;
+  auto i = (CorrespondingInt<T>)v;
   if (v > 0 && i != v)
     i += 1;
   return i;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline constexpr T fract(T v) {
-  v = v - (CorrespondingIntT<T>)v;
+  v = v - (CorrespondingInt<T>)v;
   v = v + (T)1;
-  return v - (CorrespondingIntT<T>)v;
+  return v - (CorrespondingInt<T>)v;
 }
 
 template <typename T>
 inline constexpr T absfract(T v) {
   v = psl::abs(v);
-  return v - (CorrespondingUintT<T>)v;
+  return v - (CorrespondingInt<T>)v;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T sqrt(T y) {
   return std::sqrt(y);
   T x = psl::exp2i(psl::ieeeexp(y) / 2);
@@ -196,7 +196,7 @@ inline constexpr T pow(T x, T e) {
   return y;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T log2(T y) {
   int log = psl::ieeeexp(y);
 
@@ -223,12 +223,12 @@ inline T log2(T y) {
   return log + (logl + logr) / 2;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T log(T y) {
   return Ln2 * psl::log2(y);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T log10(T y) {
   return Ln2 / Ln10 * psl::log2(y);
 }
@@ -238,7 +238,7 @@ inline T log2int(T y) {
   return psl::hsb(y);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T exp(T x) {
   return std::exp(x);
   if (x < 0)
@@ -253,17 +253,17 @@ inline T exp(T x) {
   return y;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline bool isnan(T x) {
   return !(x == x);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline bool isinf(T x) {
   return __builtin_isinf(x);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T cos_0_pi_2(T x) {
   T y = 1;
 
@@ -274,13 +274,13 @@ inline T cos_0_pi_2(T x) {
   return y;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T cos(T x) {
   return std::cos(x);
   if (x < 0)
     x = -x;
   // TODO
-  CorrespondingUintT<T> y = x / (pi * 2);
+  CorrespondingInt<T> y = x / (pi * 2);
   x -= y * (pi * 2);
   if (x > pi)
     x = pi * 2 - x;
@@ -291,18 +291,18 @@ inline T cos(T x) {
     return -cos_0_pi_2(pi - x);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T sin(T x) {
   return psl::cos(x - pi / 2);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T tan(T x) {
   // TODO
   return psl::sin(x) / psl::cos(x);
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T acos(T y) {
   return std::acos(y);
   // TODO
@@ -322,7 +322,7 @@ inline T acos(T y) {
   return x;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T asin(T y) {
   return std::asin(y);
   // TODO
@@ -342,7 +342,7 @@ inline T asin(T y) {
   return x;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T atan(T y) {
   return std::atan(y);
   // TODO
@@ -359,7 +359,7 @@ inline T atan(T y) {
   return x;
 }
 
-template <typename T, typename = EnableIfT<is_floating_point<T>>>
+template <FloatingPoint T>
 inline T atan2(T y, T x) {
   return std::atan2(y, x);
   if (x > 0)

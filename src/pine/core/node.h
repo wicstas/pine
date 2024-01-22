@@ -63,7 +63,7 @@ struct Mnode<float> {
   }
 
 private:
-  psl::Box<psl::CopyTemplateT<psl::Variant, Types>> value;
+  psl::Box<psl::CopyTemplateArguments<psl::Variant, Types>> value;
 };
 
 template <>
@@ -91,7 +91,7 @@ struct Mnode<vec3> {
   }
 
 private:
-  psl::Box<psl::CopyTemplateT<psl::Variant, Types>> value;
+  psl::Box<psl::CopyTemplateArguments<psl::Variant, Types>> value;
 };
 
 template <typename T>

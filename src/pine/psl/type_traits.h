@@ -4,47 +4,22 @@
 
 namespace psl {
 
-template <typename T, T Value>
-struct IntegralConstant {
-  using ValueType = T;
-
-  static constexpr T value = Value;
+struct TrueType {
+  static constexpr bool value = true;
+};
+struct FalseType {
+  static constexpr bool value = false;
 };
 
-using TrueType = IntegralConstant<bool, true>;
-using FalseType = IntegralConstant<bool, false>;
-
 template <typename T>
-struct TypeIdentity {
+struct _TypeIdentity {
   using Type = T;
 };
 template <typename T>
-using TypeIdentityT = typename TypeIdentity<T>::Type;
+using TypeIdentity = typename _TypeIdentity<T>::Type;
 
 template <typename... Ts>
-using VoidT = void;
-
-template <bool, typename T = void>
-struct EnableIf {};
-template <typename T>
-struct EnableIf<true, T> {
-  using Type = T;
-};
-template <bool Value, typename T = void>
-using EnableIfT = typename EnableIf<Value, T>::Type;
-
-template <bool, typename T, typename U>
-struct Conditional;
-template <typename T, typename U>
-struct Conditional<false, T, U> {
-  using type = T;
-};
-template <typename T, typename U>
-struct Conditional<true, T, U> {
-  using type = U;
-};
-template <bool Value, typename T, typename U>
-using ConditionalT = typename Conditional<Value, T, U>::type;
+using Voidify = void;
 
 template <typename T, typename U>
 struct _SameAs : FalseType {};
@@ -60,65 +35,62 @@ template <typename T, typename U>
 concept DifferentFrom = !SameAs<T, U>;
 
 template <typename T>
-struct IsArray : FalseType {};
+struct _IsArray : FalseType {};
 template <typename T>
-struct IsArray<T[]> : TrueType {};
+struct _IsArray<T[]> : TrueType {};
 template <typename T, int N>
-struct IsArray<T[N]> : TrueType {};
+struct _IsArray<T[N]> : TrueType {};
 template <typename T>
-constexpr bool isArray = IsArray<T>::value;
+concept IsArray = _IsArray<T>::value;
 
 template <typename T>
-struct IsFunction : FalseType {};
+struct _IsFunction : FalseType {};
 template <typename R, typename... Args>
-struct IsFunction<R(Args...)> : TrueType {};
+struct _IsFunction<R(Args...)> : TrueType {};
 template <typename T>
-constexpr bool isFunction = IsFunction<T>::value;
+concept IsFunction = _IsFunction<T>::value;
 
 template <typename T>
-struct IsPointer : FalseType {};
+struct _IsPointer : FalseType {};
 template <typename T>
-struct IsPointer<T *> : TrueType {};
+struct _IsPointer<T *> : TrueType {};
 template <typename T>
-constexpr bool is_pointer = IsPointer<T>::value;
+constexpr bool IsPointer = _IsPointer<T>::value;
 
 template <typename T>
-struct IsIntegral : FalseType {};
+struct _IsIntegral : FalseType {};
 template <>
-struct IsIntegral<int8_t> : TrueType {};
+struct _IsIntegral<int8_t> : TrueType {};
 template <>
-struct IsIntegral<int16_t> : TrueType {};
+struct _IsIntegral<int16_t> : TrueType {};
 template <>
-struct IsIntegral<int32_t> : TrueType {};
+struct _IsIntegral<int32_t> : TrueType {};
 template <>
-struct IsIntegral<int64_t> : TrueType {};
+struct _IsIntegral<int64_t> : TrueType {};
 template <>
-struct IsIntegral<uint8_t> : TrueType {};
+struct _IsIntegral<uint8_t> : TrueType {};
 template <>
-struct IsIntegral<uint16_t> : TrueType {};
+struct _IsIntegral<uint16_t> : TrueType {};
 template <>
-struct IsIntegral<uint32_t> : TrueType {};
+struct _IsIntegral<uint32_t> : TrueType {};
 template <>
-struct IsIntegral<uint64_t> : TrueType {};
+struct _IsIntegral<uint64_t> : TrueType {};
 template <typename T>
-constexpr bool isIntegral = IsIntegral<T>::value;
-template <typename T>
-concept Integral = isIntegral<T>;
+concept Integral = _IsIntegral<T>::value;
 
 template <typename T>
-struct IsFloatingPoint : FalseType {};
+struct _IsFloatingPoint : FalseType {};
 template <>
-struct IsFloatingPoint<float> : TrueType {};
+struct _IsFloatingPoint<float> : TrueType {};
 template <>
-struct IsFloatingPoint<double> : TrueType {};
+struct _IsFloatingPoint<double> : TrueType {};
 template <typename T>
-constexpr bool is_floating_point = IsFloatingPoint<T>::value;
+concept FloatingPoint = _IsFloatingPoint<T>::value;
+
 template <typename T>
-concept FloatingPoint = is_floating_point<T>;
+concept FundamentalNumerical = Integral<T> || FloatingPoint<T>;
 template <typename T>
-concept FundamentalArithmetic = Integral<T> || FloatingPoint<T>;
-template <typename T>
-concept FundamentalType = FundamentalArithmetic<T> || isArray<T> || is_pointer<T> || isFunction<T>;
+concept FundamentalType = FundamentalNumerical<T> || IsArray<T> || IsPointer<T> || IsFunction<T>;
 
 template <typename T>
 concept Arithmetic = requires(T x) {
@@ -126,103 +98,99 @@ concept Arithmetic = requires(T x) {
   x / x;
   x + x;
   x - x;
-  x += x;
-  x -= x;
 };
 template <typename T>
 concept LinearArithmetic = requires(T x) {
   x + x;
   x - x;
-  x += x;
-  x -= x;
 };
 
 template <typename T>
-struct IsReference : FalseType {};
+struct _IsReference : FalseType {};
 template <typename T>
-struct IsReference<T &> : TrueType {};
+struct _IsReference<T &> : TrueType {};
 template <typename T>
-constexpr bool is_reference = IsReference<T>::value;
+concept IsReference = _IsReference<T>::value;
 
 template <typename T>
-struct IsRvReference : FalseType {};
+struct _IsRvReference : FalseType {};
 template <typename T>
-struct IsRvReference<T &&> : TrueType {};
+struct _IsRvReference<T &&> : TrueType {};
 template <typename T>
-constexpr bool is_rv_reference = IsRvReference<T>::value;
+concept IsRvReference = _IsRvReference<T>::value;
 
 template <typename T>
-struct IsConst : FalseType {};
+struct _IsConst : FalseType {};
 template <typename T>
-struct IsConst<const T> : TrueType {};
+struct _IsConst<const T> : TrueType {};
 template <typename T>
-constexpr bool is_const = IsConst<T>::value;
+constexpr bool IsConst = _IsConst<T>::value;
 
 template <typename T>
-struct RemoveConst {
-  using type = T;
+struct _RemoveConst {
+  using Type = T;
 };
 template <typename T>
-struct RemoveConst<const T> {
-  using type = T;
+struct _RemoveConst<const T> {
+  using Type = T;
 };
 template <typename T>
-using RemoveConstT = typename RemoveConst<T>::type;
+using RemoveConst = typename _RemoveConst<T>::Type;
 
 template <typename T>
-struct RemoveReference {
-  using type = T;
+struct _RemoveReference {
+  using Type = T;
 };
 template <typename T>
-struct RemoveReference<T &> {
-  using type = T;
+struct _RemoveReference<T &> {
+  using Type = T;
 };
 template <typename T>
-struct RemoveReference<T &&> {
-  using type = T;
+struct _RemoveReference<T &&> {
+  using Type = T;
 };
 template <typename T>
-using RemoveReferenceT = typename RemoveReference<T>::type;
+using RemoveReference = typename _RemoveReference<T>::Type;
 
 template <typename T>
-struct RemoveExtent {
-  using type = T;
+struct _RemoveExtent {
+  using Type = T;
 };
 template <typename T>
-struct RemoveExtent<T[]> {
-  using type = T;
+struct _RemoveExtent<T[]> {
+  using Type = T;
 };
 template <typename T, size_t N>
-struct RemoveExtent<T[N]> {
-  using type = T;
+struct _RemoveExtent<T[N]> {
+  using Type = T;
 };
 template <typename T>
-using RemoveExtentT = typename RemoveExtent<T>::type;
+using RemoveExtent = typename _RemoveExtent<T>::Type;
 
-template <typename T, bool IsArray = isArray<T>, bool IsFunction = isFunction<T>>
-struct DecaySelector;
+template <typename T, bool IsArray = IsArray<T>, bool IsFunction = IsFunction<T>>
+struct _DecaySelector;
 template <typename T>
-struct DecaySelector<T, false, false> {
-  using Type = RemoveConstT<T>;
+struct _DecaySelector<T, false, false> {
+  using Type = RemoveConst<T>;
 };
 template <typename T>
-struct DecaySelector<T, true, false> {
-  using Type = RemoveExtentT<T> *;
+struct _DecaySelector<T, true, false> {
+  using Type = RemoveExtent<T> *;
 };
 template <typename T>
-struct DecaySelector<T, false, true> {
+struct _DecaySelector<T, false, true> {
   using Type = T *;
 };
 template <typename T>
-struct Decay {
+struct _Decay {
 private:
-  using NoRef = RemoveReferenceT<T>;
+  using NoRef = RemoveReference<T>;
 
 public:
-  using Type = typename DecaySelector<NoRef>::Type;
+  using Type = typename _DecaySelector<NoRef>::Type;
 };
 template <typename T>
-using DecayT = typename Decay<T>::Type;
+using Decay = typename _Decay<T>::Type;
 
 template <typename T>
 T declval() {
@@ -230,10 +198,10 @@ T declval() {
 }
 
 template <typename F, typename... Args>
-using ReturnTypeT = decltype(psl::declval<F>()(psl::declval<Args>()...));
+using ReturnType = decltype(psl::declval<F>()(psl::declval<Args>()...));
 
 template <typename From, typename To>
-struct IsConverible {
+struct _IsConverible {
 private:
   static constexpr TrueType check(To);
   static constexpr FalseType check(...);
@@ -242,44 +210,31 @@ public:
   static constexpr bool value = decltype(check(psl::declval<From>()))::value;
 };
 template <typename From, typename To>
-constexpr bool is_convertible = IsConverible<From, To>::value;
+concept IsConvertible = _IsConverible<From, To>::value;
 
 template <typename T>
-struct CorrespondingInt;
+struct _CorrespondingInt;
 template <>
-struct CorrespondingInt<float> {
-  using type = int32_t;
+struct _CorrespondingInt<float> {
+  using Type = int32_t;
 };
 template <>
-struct CorrespondingInt<double> {
-  using type = int64_t;
-};
-template <typename T>
-using CorrespondingIntT = typename CorrespondingInt<T>::type;
-
-template <typename T>
-struct CorrespondingUint;
-template <>
-struct CorrespondingUint<float> {
-  using type = uint32_t;
-};
-template <>
-struct CorrespondingUint<double> {
-  using type = uint64_t;
+struct _CorrespondingInt<double> {
+  using Type = int64_t;
 };
 template <typename T>
-using CorrespondingUintT = typename CorrespondingUint<T>::type;
+using CorrespondingInt = typename _CorrespondingInt<T>::Type;
 
 template <typename T, typename = void>
-struct IsDereferenceable {
+struct _IsDereferenceable {
   static constexpr bool value = false;
 };
 template <typename T>
-struct IsDereferenceable<T, VoidT<decltype(*psl::declval<T>())>> {
+struct _IsDereferenceable<T, Voidify<decltype(*psl::declval<T>())>> {
   static constexpr bool value = true;
 };
 template <typename T>
-constexpr bool is_dereferenceable = IsDereferenceable<T>::value;
+concept Dereferenceable = _IsDereferenceable<T>::value;
 
 template <bool value, typename... Ts>
 constexpr bool deferred_bool = value;
@@ -323,7 +278,8 @@ struct MakeIntegerSequenceImpl<I, 12> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 
 
 template <typename I, int N>
 auto make_integer_sequence() {
-  return MakeIntegerSequenceImpl<I, N>{};
+  IntegerSequence seq = MakeIntegerSequenceImpl<I, N>{};
+  return seq;
 }
 
 template <typename T, int I>
@@ -347,20 +303,20 @@ auto make_indexed_type_sequence() {
 };
 
 template <typename T, typename... Ts>
-struct FirstType {
+struct _FirstType {
   using Type = T;
 };
 template <typename... Ts>
-using FirstTypeT = typename FirstType<Ts...>::Type;
+using FirstType = typename _FirstType<Ts...>::Type;
 
 template <int I, typename T, typename... Ts>
-struct NthType : NthType<I - 1, Ts...> {};
+struct _NthType : _NthType<I - 1, Ts...> {};
 template <typename T, typename... Ts>
-struct NthType<0, T, Ts...> {
+struct _NthType<0, T, Ts...> {
   using Type = T;
 };
 template <int I, typename... Ts>
-using NthTypeT = typename NthType<I, Ts...>::Type;
+using NthType = typename _NthType<I, Ts...>::Type;
 
 template <typename... Ts>
 struct TypePack {};
@@ -371,53 +327,53 @@ template <typename T, typename... Ts>
 constexpr bool one_of<T, TypePack<Ts...>> = (SameAs<T, Ts> || ...);
 
 template <template <typename...> typename R, typename T>
-struct CopyTemplate;
+struct _CopyTemplateArguments;
 template <template <typename...> typename R, typename... Ts>
-struct CopyTemplate<R, TypePack<Ts...>> {
+struct _CopyTemplateArguments<R, TypePack<Ts...>> {
   using Type = R<Ts...>;
 };
 template <template <typename...> typename R, typename T>
-using CopyTemplateT = typename CopyTemplate<R, T>::Type;
+using CopyTemplateArguments = typename _CopyTemplateArguments<R, T>::Type;
 
 template <typename T, typename U, char C>
-struct OpResult;
+struct _OpResult;
 template <typename T, typename U, char C>
-using OpResultT = typename OpResult<T, U, C>::type;
+using OpResult = typename _OpResult<T, U, C>::Type;
 template <typename T, typename U>
-struct OpResult<T, U, '+'> {
-  using type = decltype(declval<T>() + declval<U>());
+struct _OpResult<T, U, '+'> {
+  using Type = decltype(declval<T>() + declval<U>());
 };
 template <typename T, typename U>
-struct OpResult<T, U, '-'> {
-  using type = decltype(declval<T>() - declval<U>());
+struct _OpResult<T, U, '-'> {
+  using Type = decltype(declval<T>() - declval<U>());
 };
 template <typename T, typename U>
-struct OpResult<T, U, '*'> {
-  using type = decltype(declval<T>() * declval<U>());
+struct _OpResult<T, U, '*'> {
+  using Type = decltype(declval<T>() * declval<U>());
 };
 template <typename T, typename U>
-struct OpResult<T, U, '/'> {
-  using type = decltype(declval<T>() / declval<U>());
+struct _OpResult<T, U, '/'> {
+  using Type = decltype(declval<T>() / declval<U>());
 };
 template <typename T, typename U>
-struct OpResult<T, U, '%'> {
-  using type = decltype(declval<T>() & declval<U>());
+struct _OpResult<T, U, '%'> {
+  using Type = decltype(declval<T>() & declval<U>());
 };
 
 template <typename T>
-struct MpClassType;
+struct _MpClassType;
 template <typename T>
-using MpClassTypeT = typename MpClassType<T>::Type;
+using MpClassType = typename _MpClassType<T>::Type;
 template <typename T, typename R, typename... Args>
-struct MpClassType<R (T::*)(Args...)> {
+struct _MpClassType<R (T::*)(Args...)> {
   using Type = T;
 };
 template <typename T>
-struct MpReturnType;
+struct _MpReturnType;
 template <typename T>
-using MpReturnTypeT = typename MpReturnType<T>::Type;
+using MpReturnType = typename _MpReturnType<T>::Type;
 template <typename T, typename R, typename... Args>
-struct MpReturnType<R (T::*)(Args...)> {
+struct _MpReturnType<R (T::*)(Args...)> {
   using Type = R;
 };
 
@@ -495,21 +451,21 @@ struct IteratorTraits<T> {
 
 template <typename T>
 concept ForwardIterator =
-    Copyable<T> && is_dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       it++;
     };
 template <typename T>
 concept BackwardIterator =
-    Copyable<T> && is_dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { --it } -> SameAs<T &>;
       it--;
     };
 template <typename T>
 concept BidirectionalIterator =
-    Copyable<T> && is_dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       { --it } -> SameAs<T &>;

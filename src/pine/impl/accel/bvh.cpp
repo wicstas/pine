@@ -109,7 +109,7 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
   if (minCost > leafCost)
     return MakeLeaf();
 
-  Primitive* pmid = psl::partition(psl::make_range(begin, end), [=](const Primitive& prim) {
+  Primitive* pmid = psl::partition(psl::range(begin, end), [=](const Primitive& prim) {
     int b = nBuckets * aabbCentroid.Offset(prim.aabb.Centroid(bestAxis), bestAxis);
     if (b == nBuckets)
       b = nBuckets - 1;

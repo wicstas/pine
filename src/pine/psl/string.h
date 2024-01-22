@@ -54,12 +54,12 @@ public:
   }
   string(const char* cstr) {
     resize(psl::strlen(cstr));
-    psl::copy(begin(), make_range(cstr, size()));
+    psl::copy(begin(), range(cstr, size()));
   }
 
   string(const char* cstr, size_t len) {
     resize(len);
-    psl::copy(begin(), make_range(cstr, size()));
+    psl::copy(begin(), range(cstr, size()));
   }
 
   string substr(size_t pos, size_t len = -1) const {
@@ -73,7 +73,7 @@ public:
 
   string& operator=(const char* str) {
     resize(psl::strlen(str));
-    psl::copy(begin(), make_range(str, str + size()));
+    psl::copy(begin(), range(str, str + size()));
     return *this;
   }
   string& operator=(class string_view str);

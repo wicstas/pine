@@ -365,12 +365,12 @@ struct Generator {
 
     template <typename... Args, int... I>
     static bool is(const psl::vector<Object> &args, psl::IntegerSequence<int, I...>) {
-      return (args[I].is<psl::NthTypeT<I, Args...>>() && ...);
+      return (args[I].is<psl::NthType<I, Args...>>() && ...);
     }
 
     template <typename... Args, int... I>
     static Object constructBy(const psl::vector<Object> &args, psl::IntegerSequence<int, I...>) {
-      return Object{T(args[I].as<psl::NthTypeT<I, Args...>>()...)};
+      return Object{T(args[I].as<psl::NthType<I, Args...>>()...)};
     }
 
     template <typename... Args, typename... Cs>

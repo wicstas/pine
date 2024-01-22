@@ -21,7 +21,7 @@ struct optional {
   }
 
   template <typename U>
-  requires psl::DifferentFrom<psl::DecayT<U>, optional>
+  requires psl::DifferentFrom<psl::Decay<U>, optional>
   optional(U&& x) {
     psl::construct_at(ptr(), psl::forward<U>(x));
     valid = true;

@@ -82,7 +82,7 @@ auto distance(It first, It last) {
 }
 
 template <typename It>
-auto make_range(It first, It last) {
+auto range(It first, It last) {
   struct Wrapper {
     It begin() const {
       return first;
@@ -100,29 +100,13 @@ auto make_range(It first, It last) {
   return Wrapper{first, last};
 }
 template <typename It>
-auto make_range(It first, size_t length) {
-  struct Wrapper {
-    It begin() const {
-      return first;
-    }
-    It end() const {
-      return first + length;
-    }
-    size_t size() const {
-      return length;
-    }
-
-    It first;
-    size_t length;
-  };
-
-  return Wrapper{first, length};
+auto range(It first, size_t length) {
+  return range(first, first + length);
 }
 
 template <ForwardIterator It>
 It next(It it) {
-  ++it;
-  return it;
+  return ++it;
 }
 
 template <ForwardIterator It>
@@ -192,7 +176,7 @@ struct less<void> {
 
 template <typename T>
 struct less_than {
-  less_than(T value) : value(value) {
+  less_than(T value) : value(psl::move(value)) {
   }
   bool operator()(const auto& x) const {
     return x < value;
@@ -245,7 +229,7 @@ auto find_next(ARange&& range, const T& value, size_t n) {
   auto it = psl::begin(range);
   auto end = psl::end(range);
   for (; n != 0; n--) {
-    it = find(psl::make_range(it, end), value);
+    it = find(psl::range(it, end), value);
     if (it == end)
       break;
     else
@@ -258,7 +242,7 @@ auto find_next(ARange&& range, const T& value, size_t n) {
 // void insert_at(ARange&& range, const T& pivot, const T& value) {
 //   auto pos = size_t{0};
 //   while (true) {
-//     auto it = psl::find(psl::make_range(psl::begin(range) + pos, psl::end(range)), pivot);
+//     auto it = psl::find(psl::range(psl::begin(range) + pos, psl::end(range)), pivot);
 //     if (it == psl::end(range))
 //       return;
 //     pos = it - psl::begin(range);
@@ -332,9 +316,9 @@ void sort(ARange&& range, Pred&& pred) {
     }
   }
 
-  psl::sort(psl::make_range(first, pivot), pred);
+  psl::sort(psl::range(first, pivot), pred);
   ++pivot;
-  psl::sort(psl::make_range(pivot, last), pred);
+  psl::sort(psl::range(pivot, last), pred);
 }
 
 template <Range ARange, typename Pred>
@@ -479,7 +463,7 @@ auto trim(ARange&& range, size_t a, size_t b) {
 
 template <Range ARange>
 auto sum(ARange&& range) {
-  auto s = psl::DecayT<decltype(*psl::begin(range))>{0};
+  auto s = psl::Decay<decltype(*psl::begin(range))>{0};
   for (auto&& x : range)
     s += x;
   return s;

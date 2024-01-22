@@ -24,7 +24,7 @@ void free(void* ptr);
 
 template <typename T, typename... Args>
 void construct_at(T* ptr, Args&&... args) {
-  ::new (ptr) T{psl::forward<Args>(args)...};
+  ::new (ptr) T(psl::forward<Args>(args)...);
 }
 
 template <typename T>
@@ -39,12 +39,12 @@ struct DefaultDeleter {
 
   DefaultDeleter() = default;
   template <typename U>
-  requires is_convertible<U*, T*>
+  requires IsConvertible<U*, T*>
   DefaultDeleter(const DefaultDeleter<U>&) {
   }
 
-  void operator()(RemoveExtentT<T>* ptr) const {
-    if constexpr (isArray<T>)
+  void operator()(RemoveExtent<T>* ptr) const {
+    if constexpr (IsArray<T>)
       delete[] ptr;
     else
       delete ptr;
@@ -59,12 +59,11 @@ As bitcast(T&& x) {
   return *reinterpret_cast<As*>(storage);
 }
 
-// unique_ptr
 template <typename T, typename Deleter = DefaultDeleter<T>>
 class unique_ptr {
 public:
-  using Pointer = RemoveExtentT<T>*;
-  using Reference = RemoveExtentT<T>&;
+  using Pointer = RemoveExtent<T>*;
+  using Reference = RemoveExtent<T>&;
 
   template <typename U, typename UDeleter>
   friend class unique_ptr;
@@ -91,12 +90,12 @@ public:
   }
 
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   unique_ptr(unique_ptr<U, ChangeBasisT<Deleter, U>>&& rhs) : unique_ptr() {
     *this = psl::move(rhs);
   }
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   unique_ptr& operator=(unique_ptr<U, ChangeBasisT<Deleter, U>>&& rhs) {
     take(rhs);
     return *this;
@@ -109,7 +108,7 @@ public:
     return ptr;
   }
   Reference operator[](size_t i) const {
-    static_assert(isArray<T>, "operator[] can only be used when the underlying type is array");
+    static_assert(IsArray<T>, "operator[] can only be used when the underlying type is array");
     return ptr[i];
   }
 
@@ -171,12 +170,11 @@ unique_ptr<T> make_unique(Args&&... args) {
   return unique_ptr<T>{new T{forward<Args>(args)...}};
 }
 
-// shared_ptr
 template <typename T, typename Deleter = DefaultDeleter<T>>
 class shared_ptr {
 public:
-  using Pointer = RemoveExtentT<T>*;
-  using Reference = RemoveExtentT<T>&;
+  using Pointer = RemoveExtent<T>*;
+  using Reference = RemoveExtent<T>&;
 
   template <typename U, typename UDeleter>
   friend class shared_ptr;
@@ -209,23 +207,23 @@ public:
   }
 
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   shared_ptr(const shared_ptr<U, ChangeBasisT<Deleter, U>>& rhs) : shared_ptr() {
     *this = rhs;
   }
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   shared_ptr(shared_ptr<U, ChangeBasisT<Deleter, U>>&& rhs) : shared_ptr() {
     *this = psl::move(rhs);
   }
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   shared_ptr& operator=(const shared_ptr<U, ChangeBasisT<Deleter, U>>& rhs) {
     copy(rhs);
     return *this;
   }
   template <typename U>
-  requires(is_convertible<U*, T*> && is_convertible<ChangeBasisT<Deleter, U>, Deleter>)
+  requires(IsConvertible<U*, T*> && IsConvertible<ChangeBasisT<Deleter, U>, Deleter>)
   shared_ptr& operator=(shared_ptr<U, ChangeBasisT<Deleter, U>>&& rhs) {
     take(rhs);
     return *this;
@@ -238,7 +236,7 @@ public:
     return ptr;
   }
   Reference operator[](size_t i) const {
-    static_assert(isArray<T>, "operator[] can only be used when the underlying type is array");
+    static_assert(IsArray<T>, "operator[] can only be used when the underlying type is array");
     return ptr[i];
   }
 
@@ -345,16 +343,16 @@ template <typename T>
 ref(T& x) -> ref<T>;
 
 template <typename T>
-struct IsReference<ref<T>> : TrueType {};
+struct _IsReference<ref<T>> : TrueType {};
 template <typename T>
-struct RemoveReference<ref<T>> {
-  using type = T;
+struct _RemoveReference<ref<T>> {
+  using Type = T;
 };
 
 template <typename T>
 struct Box {
   Box() = default;
-  Box(T x) : ptr{psl::make_unique<T>(psl::move(x))} {
+  Box(T x) : ptr(psl::make_unique<T>(psl::move(x))) {
   }
   Box(Box&&) = default;
   Box(const Box& b) {

@@ -36,7 +36,7 @@ src/pine/core/context.cpp
 src/pine/core/sampler.cpp
 src/pine/core/grammar.cpp
 src/pine/core/primes.cpp
-src/pine/core/earley.cpp
+#src/pine/core/earley.cpp
 src/pine/core/fileio.cpp
 src/pine/core/parser.cpp
 src/pine/core/camera.cpp

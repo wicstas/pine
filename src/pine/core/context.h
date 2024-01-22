@@ -95,8 +95,8 @@ TypeConcept& var_type() {
 
 template <typename T>
 auto var_type_alias() {
-  constexpr auto prefix = psl::is_const<T> ? "const " : "";
-  constexpr auto suffix = psl::is_reference<T> ? "&" : "";
+  constexpr auto prefix = psl::IsConst<T> ? "const " : "";
+  constexpr auto suffix = psl::IsReference<T> ? "&" : "";
   return prefix + var_type<T>().alias() + suffix;
 }
 
@@ -182,7 +182,7 @@ struct Variable {
   Variable() = default;
   template <typename T>
   Variable(T x)
-      : model(psl::make_shared<VariableModel<psl::RemoveReferenceT<T>, T>>(psl::move(x))) {
+      : model(psl::make_shared<VariableModel<psl::RemoveReference<T>, T>>(psl::move(x))) {
   }
   Variable make_copy() const {
     CHECK(model);
@@ -214,9 +214,9 @@ struct Variable {
   template <typename T>
   T as() const {
     CHECK(model);
-    using Base = psl::RemoveConstT<psl::RemoveReferenceT<T>>;
+    using Base = psl::RemoveConst<psl::RemoveReference<T>>;
     if (!is<Base>()) {
-      if (psl::is_reference<T> || psl::is_rv_reference<T>)
+      if (psl::IsReference<T> || psl::IsRvReference<T>)
         exception("Unable to convert `", model->type_alias(), "` to a reference type `",
                   var_type_alias<T>(), '`');
       if (auto r = model->convert(psl::type_id<T>()); r)
@@ -247,7 +247,7 @@ struct Function {
     }
 
     Variable call(const psl::vector<Variable>& args) override {
-      if constexpr (sizeof...(Args) == 1 && psl::SameAs<psl::DecayT<psl::FirstTypeT<Args..., void>>,
+      if constexpr (sizeof...(Args) == 1 && psl::SameAs<psl::Decay<psl::FirstType<Args..., void>>,
                                                         psl::vector<Variable>>) {
         if constexpr (psl::SameAs<R, void>)
           return (base(args), Variable{});
@@ -281,7 +281,7 @@ struct Function {
     }
     bool is_internal_function() const override {
       if constexpr (sizeof...(Args) == 1)
-        if constexpr (psl::SameAs<psl::DecayT<psl::FirstTypeT<Args...>>, psl::vector<Variable>>)
+        if constexpr (psl::SameAs<psl::Decay<psl::FirstType<Args...>>, psl::vector<Variable>>)
           return true;
       return false;
     }
@@ -351,8 +351,8 @@ struct TypeModel : TypeConcept {
       MemberVarModel(MemberT U::*ptr) : ptr{ptr} {
       }
       Variable get_var(void* x) const override {
-        static_assert(psl::is_convertible<T*, U*>, "");
-        if constexpr (psl::is_convertible<T*, U*>)
+        static_assert(psl::IsConvertible<T*, U*>, "");
+        if constexpr (psl::IsConvertible<T*, U*>)
           return Variable{psl::ref{reinterpret_cast<T*>(x)->*ptr}};
       }
       MemberT U::*ptr;
@@ -362,7 +362,7 @@ struct TypeModel : TypeConcept {
   }
 
   template <typename R, typename F>
-  requires psl::SameAs<R, psl::ReturnTypeT<F, T&>>
+  requires psl::SameAs<R, psl::ReturnType<F, T&>>
   TypeModel& add_converter(F f) {
     struct ConverterModel : TypeConcept::ConverterConcept {
       ConverterModel(F f) : f{psl::move(f)} {

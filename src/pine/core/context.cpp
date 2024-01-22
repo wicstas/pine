@@ -24,7 +24,7 @@ const Function* function_overload_resolution(const psl::multimap<psl::string, Fu
       for (size_t i = 0; i < args.size(); i++) {
         if (args[i].type_id() == arg_type_ids[i].code ||
             arg_type_ids[i].code == psl::type_id<Variable>()) {
-        } else if (!arg_type_ids[i].is_reference && args[i].convertible_to(arg_type_ids[i].code)) {
+        } else if (!arg_type_ids[i].IsReference && args[i].convertible_to(arg_type_ids[i].code)) {
           difference += 1;
         } else {
           match = false;
@@ -94,7 +94,7 @@ psl::vector<psl::string> split(psl::string_view input, auto pred) {
   auto parts = psl::vector<psl::string>{};
   auto start = input.begin();
   while (true) {
-    auto end = psl::find_if(psl::make_range(start, input.end()), pred);
+    auto end = psl::find_if(psl::range(start, input.end()), pred);
     parts.push_back(psl::string{start, end});
     if (end == input.end())
       break;

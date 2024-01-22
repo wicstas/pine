@@ -69,13 +69,13 @@ struct Vector2 {
     y %= rhs.y;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector2 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector2 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -83,40 +83,40 @@ struct Vector2 {
   }
 
   template <typename U>
-  friend Vector2<psl::OpResultT<T, U, '+'>> operator+(Vector2<T> lhs, Vector2<U> rhs) {
+  friend Vector2<psl::OpResult<T, U, '+'>> operator+(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y};
   }
   template <typename U>
-  friend Vector2<psl::OpResultT<T, U, '-'>> operator-(Vector2<T> lhs, Vector2<U> rhs) {
+  friend Vector2<psl::OpResult<T, U, '-'>> operator-(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y};
   }
   template <typename U>
-  friend Vector2<psl::OpResultT<T, U, '*'>> operator*(Vector2<T> lhs, Vector2<U> rhs) {
+  friend Vector2<psl::OpResult<T, U, '*'>> operator*(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y};
   }
   template <typename U>
-  friend Vector2<psl::OpResultT<T, U, '/'>> operator/(Vector2<T> lhs, Vector2<U> rhs) {
+  friend Vector2<psl::OpResult<T, U, '/'>> operator/(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y};
   }
   template <psl::Integral U>
   requires psl::Integral<T>
-  friend Vector2<psl::OpResultT<T, U, '%'>> operator%(Vector2<T> lhs, Vector2<U> rhs) {
+  friend Vector2<psl::OpResult<T, U, '%'>> operator%(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector2<psl::OpResultT<T, U, '*'>> operator*(Vector2<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector2<psl::OpResult<T, U, '*'>> operator*(Vector2<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector2<psl::OpResultT<T, U, '/'>> operator/(Vector2<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector2<psl::OpResult<T, U, '/'>> operator/(Vector2<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector2<psl::OpResultT<U, T, '*'>> operator*(U lhs, Vector2<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector2<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector2<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector2<psl::OpResultT<U, T, '/'>> operator/(U lhs, Vector2<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector2<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector2<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y};
   }
   template <typename U>
@@ -212,14 +212,14 @@ struct Vector3 {
     z %= rhs.z;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector3 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
     z *= rhs;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector3 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -228,40 +228,40 @@ struct Vector3 {
   }
 
   template <typename U>
-  friend Vector3<psl::OpResultT<T, U, '+'>> operator+(Vector3<T> lhs, Vector3<U> rhs) {
+  friend Vector3<psl::OpResult<T, U, '+'>> operator+(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
   }
   template <typename U>
-  friend Vector3<psl::OpResultT<T, U, '-'>> operator-(Vector3<T> lhs, Vector3<U> rhs) {
+  friend Vector3<psl::OpResult<T, U, '-'>> operator-(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
   }
   template <typename U>
-  friend Vector3<psl::OpResultT<T, U, '*'>> operator*(Vector3<T> lhs, Vector3<U> rhs) {
+  friend Vector3<psl::OpResult<T, U, '*'>> operator*(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
   }
   template <typename U>
-  friend Vector3<psl::OpResultT<T, U, '/'>> operator/(Vector3<T> lhs, Vector3<U> rhs) {
+  friend Vector3<psl::OpResult<T, U, '/'>> operator/(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
   }
   template <psl::Integral U>
   requires psl::Integral<T>
-  friend Vector3<psl::OpResultT<T, U, '%'>> operator%(Vector3<T> lhs, Vector3<U> rhs) {
+  friend Vector3<psl::OpResult<T, U, '%'>> operator%(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y, lhs.z % rhs.z};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector3<psl::OpResultT<T, U, '*'>> operator*(Vector3<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector3<psl::OpResult<T, U, '*'>> operator*(Vector3<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs, lhs.z * rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector3<psl::OpResultT<T, U, '/'>> operator/(Vector3<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector3<psl::OpResult<T, U, '/'>> operator/(Vector3<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs, lhs.z / rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector3<psl::OpResultT<U, T, '*'>> operator*(U lhs, Vector3<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector3<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector3<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y, lhs * rhs.z};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector3<psl::OpResultT<U, T, '/'>> operator/(U lhs, Vector3<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector3<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector3<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y, lhs / rhs.z};
   }
   template <typename U>
@@ -369,7 +369,7 @@ struct Vector4 {
     w %= rhs.w;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector4 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
@@ -377,7 +377,7 @@ struct Vector4 {
     w *= rhs;
     return *this;
   }
-  template <psl::FundamentalArithmetic U>
+  template <psl::FundamentalNumerical U>
   Vector4 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -387,40 +387,40 @@ struct Vector4 {
   }
 
   template <typename U>
-  friend Vector4<psl::OpResultT<T, U, '+'>> operator+(Vector4<T> lhs, Vector4<U> rhs) {
+  friend Vector4<psl::OpResult<T, U, '+'>> operator+(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
   }
   template <typename U>
-  friend Vector4<psl::OpResultT<T, U, '-'>> operator-(Vector4<T> lhs, Vector4<U> rhs) {
+  friend Vector4<psl::OpResult<T, U, '-'>> operator-(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
   }
   template <typename U>
-  friend Vector4<psl::OpResultT<T, U, '*'>> operator*(Vector4<T> lhs, Vector4<U> rhs) {
+  friend Vector4<psl::OpResult<T, U, '*'>> operator*(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
   }
   template <typename U>
-  friend Vector4<psl::OpResultT<T, U, '/'>> operator/(Vector4<T> lhs, Vector4<U> rhs) {
+  friend Vector4<psl::OpResult<T, U, '/'>> operator/(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
   }
   template <psl::Integral U>
   requires psl::Integral<T>
-  friend Vector4<psl::OpResultT<T, U, '%'>> operator%(Vector4<T> lhs, Vector4<U> rhs) {
+  friend Vector4<psl::OpResult<T, U, '%'>> operator%(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y, lhs.z % rhs.z, lhs.w % rhs.w};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector4<psl::OpResultT<T, U, '*'>> operator*(Vector4<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector4<psl::OpResult<T, U, '*'>> operator*(Vector4<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs, lhs.z * rhs, lhs.w * rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector4<psl::OpResultT<T, U, '/'>> operator/(Vector4<T> lhs, U rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector4<psl::OpResult<T, U, '/'>> operator/(Vector4<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs, lhs.z / rhs, lhs.w / rhs};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector4<psl::OpResultT<U, T, '*'>> operator*(U lhs, Vector4<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector4<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector4<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y, lhs * rhs.z, lhs * rhs.w};
   }
-  template <psl::FundamentalArithmetic U>
-  friend Vector4<psl::OpResultT<U, T, '/'>> operator/(U lhs, Vector4<T> rhs) {
+  template <psl::FundamentalNumerical U>
+  friend Vector4<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector4<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y, lhs / rhs.z, lhs / rhs.w};
   }
   template <typename U>

@@ -9,9 +9,9 @@ T&& move(T& x) {
   return static_cast<T&&>(x);
 }
 
-// `TypeIdentityT` is used to enforce user provides a template argument
+// `TypeIdentity` is used to enforce user to provide template argument `T`
 template <typename T>
-T&& forward(TypeIdentityT<T>& x) {
+T&& forward(TypeIdentity<T>& x) {
   return static_cast<T&&>(x);
 }
 
@@ -41,7 +41,7 @@ struct pair {
 
 template <typename T, typename... Ts>
 struct tuple {
-  tuple(T value, Ts... rest) : value{psl::forward<T>(value)}, rest{psl::forward<Ts>(rest)...} {
+  tuple(T value, Ts... rest) : value(static_cast<T&&>(value)), rest{static_cast<Ts&&>(rest)...} {
   }
   T value;
   tuple<Ts...> rest;
@@ -49,7 +49,7 @@ struct tuple {
 
 template <typename T>
 struct tuple<T> {
-  tuple(T value) : value{psl::forward<T>(value)} {
+  tuple(T value) : value(static_cast<T&&>(value)) {
   }
   T value;
 };
@@ -57,9 +57,9 @@ struct tuple<T> {
 template <typename T, typename F, typename... Ts, typename... Us>
 auto apply(tuple<T, Ts...> t, F&& f, Us... args) {
   if constexpr (sizeof...(Ts) != 0)
-    return apply(psl::move(t.rest), f, psl::forward<Us>(args)..., psl::move(t).value);
+    return apply(psl::move(t.rest), f, static_cast<Us&&>(args)..., psl::move(t).value);
   else
-    return f(psl::forward<Us>(args)..., psl::move(t).value);
+    return f(static_cast<Us&&>(args)..., psl::move(t).value);
 }
 
 template <typename T, typename F, typename... Ts, typename... Us>
