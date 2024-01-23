@@ -33,6 +33,32 @@ int strcmp(const char* lhs, const char* rhs) {
   }
 }
 
+string::string() {
+  reserve(1);
+}
+string::string(const char* cstr) {
+  resize(psl::strlen(cstr));
+  psl::copy(begin(), range(cstr, size()));
+}
+
+string::string(const char* cstr, size_t len) {
+  resize(len);
+  psl::copy(begin(), range(cstr, size()));
+}
+
+string string::substr(size_t pos, size_t len) const {
+  pos = clamp(pos, size_t{0}, size());
+  if (len == size_t(-1))
+    return string(data() + pos, size() - pos);
+  else
+    return string(data() + pos, min(len, size() - pos));
+}
+
+string& string::operator=(const char* str) {
+  resize(psl::strlen(str));
+  psl::copy(begin(), range(str, str + size()));
+  return *this;
+}
 string_view string::subview(size_t pos, size_t len) const {
   return string_view(*this).substr(pos, len);
 }
@@ -59,6 +85,10 @@ string& string::operator+=(class string_view rhs) {
 }
 string& string::operator+=(const char* rhs) {
   return (*this) += string_view(rhs);
+}
+string& string::operator+=(char c) {
+  push_back(c);
+  return *this;
 }
 string operator+(string lhs, string_view rhs) {
   return lhs += rhs;

@@ -1,4 +1,4 @@
-#include <pine/core/grammar.h>
+#include <pine/core/compiler.h>
 #include <pine/core/parser.h>
 #include <pine/core/fileio.h>
 #include <pine/core/scene.h>
@@ -15,11 +15,8 @@ namespace pine {
 
 Context get_default_context() {
   auto ctx = Context{};
-  ctx.type<bool, Class::BoolLike>("bool").ctor<>();
-  ctx.type<int, Class::IntLike>("int").ctors<bool, float>();
-  ctx.type<float, Class::FloatLike>("float").ctors<bool, int>();
-  ctx("pi") = pi;
-  ctx("E") = psl::E;
+  // ctx("pi") = pi;
+  // ctx("E") = psl::E;
   ctx("%") = +[](int a, int b) { return a % b; };
   ctx("+") = +[](int a, float b) { return a + b; };
   ctx("+") = +[](float a, int b) { return a + b; };
@@ -55,82 +52,82 @@ Context get_default_context() {
   ctx("acos") = psl::acos<float>;
   ctx("asin") = psl::asin<float>;
   ctx("atan2") = psl::atan2<float>;
-  ctx.type<vec2i, Class::ComplexLike>("vec2i")
+  ctx.type<vec2i, Context::Complex>("vec2i")
       .ctor<int>()
       .ctor<int, int>()
-      .var("x", &vec2i::x)
-      .var("y", &vec2i::y);
-  ctx.type<vec3i, Class::ComplexLike>("vec3i")
+      .member("x", &vec2i::x)
+      .member("y", &vec2i::y);
+  ctx.type<vec3i, Context::Complex>("vec3i")
       .ctor<int>()
       .ctor<int, int, int>()
-      .var("x", &vec3i::x)
-      .var("y", &vec3i::y)
-      .var("z", &vec3i::z);
-  ctx.type<vec2, Class::ComplexLike>("vec2")
+      .member("x", &vec3i::x)
+      .member("y", &vec3i::y)
+      .member("z", &vec3i::z);
+  ctx.type<vec2, Context::Complex>("vec2")
       .ctor<float, float>()
-      .ctors<vec2i, int, float>()
-      .var("x", &vec2::x)
-      .var("y", &vec2::y);
-  ctx.type<vec3, Class::ComplexLike>("vec3")
+      .ctor_variant<vec2i, int, float>()
+      .member("x", &vec2::x)
+      .member("y", &vec2::y);
+  ctx.type<vec3, Context::Complex>("vec3")
       .ctor<float, float, float>()
-      .ctors<vec3i, int, float>()
-      .var("x", &vec3::x)
-      .var("y", &vec3::y)
-      .var("z", &vec3::z);
-  ctx.type<vec4, Class::ComplexLike>("vec4")
+      .ctor_variant<vec3i, int, float>()
+      .member("x", &vec3::x)
+      .member("y", &vec3::y)
+      .member("z", &vec3::z);
+  ctx.type<vec4, Context::Complex>("vec4")
       .ctor<float, float, float, float>()
-      .ctors<vec4i, int, float>()
-      .var("x", &vec4::x)
-      .var("y", &vec4::y)
-      .var("z", &vec4::z)
-      .var("w", &vec4::w);
+      .ctor_variant<vec4i, int, float>()
+      .member("x", &vec4::x)
+      .member("y", &vec4::y)
+      .member("z", &vec4::z)
+      .member("w", &vec4::w);
   ctx.type<mat3>("mat3").ctor<vec3, vec3, vec3>().ctor<mat4>();
   ctx.type<mat4>("mat4").ctor<vec4, vec4, vec4, vec4>();
   ctx("*") = +[](const mat3& a, vec3 b) { return a * b; };
   ctx("*") = +[](const mat3& a, const mat3& b) { return a * b; };
   ctx("*") = +[](const mat4& a, vec4 b) { return a * b; };
   ctx("*") = +[](const mat4& a, const mat4& b) { return a * b; };
-  ctx("translate") = overload<mat4, vec3>(translate);
-  ctx("scale") = overload<mat4, vec3>(scale);
+  ctx("translate") = overloaded<vec3>(translate);
+  ctx("scale") = overloaded<vec3>(scale);
   ctx("look_at") = look_at;
-  add_f<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<int, float>>(ctx, "*", psl::mul_);
-  add_f<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<int, float>>(ctx, "/", psl::div_);
-  add_f<Overloads<int, float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(ctx, "*", psl::mul_);
-  add_f<Overloads<int, float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(ctx, "/", psl::div_);
-  add_f<Overloads<vec2i, vec3i>, Overloads<int>>(ctx, "*=", psl::mule_);
-  add_f<Overloads<vec2i, vec3i>, Overloads<int>>(ctx, "/=", psl::dive_);
-  add_f<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(ctx, "*=", psl::mule_);
-  add_f<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(ctx, "/=", psl::dive_);
+  ctx("*") = overloads_set<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<float>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<float>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(psl::div_);
+  ctx("*=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mule_);
+  ctx("/=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::dive_);
+  ctx("*=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::mule_);
+  ctx("/=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::dive_);
   ctx("normalize") = normalize<vec2>;
   ctx("normalize") = normalize<vec3>;
   ctx("length") = length<vec2>;
   ctx("length") = length<vec3>;
   ctx("distance") = distance<vec3>;
   ctx("distance") = distance<vec3>;
-  ctx("dot") = overload<float, vec2, vec2>(dot<float>);
-  ctx("dot") = overload<float, vec3, vec3>(dot<float>);
-  ctx("cross") = overload<float, vec3, vec3>(dot<float>);
-  ctx("fract") = overload<vec2, vec2>(fract<float>);
-  ctx("fract") = overload<vec3, vec3>(fract<float>);
-  ctx("floor") = overload<vec2, vec2>(floor<float>);
-  ctx("floor") = overload<vec3, vec3>(floor<float>);
-  ctx("ceil") = overload<vec2, vec2>(ceil<float>);
-  ctx("ceil") = overload<vec3, vec3>(ceil<float>);
-  ctx("sqrt") = overload<vec2, vec2>(sqrt<float>);
-  ctx("sqrt") = overload<vec3, vec3>(sqrt<float>);
-  ctx("exp") = overload<vec2, vec2>(exp<float>);
-  ctx("exp") = overload<vec3, vec3>(exp<float>);
-  ctx("abs") = overload<vec2, vec2>(abs<float>);
-  ctx("abs") = overload<vec3, vec3>(abs<float>);
-  ctx("min") = overload<vec2, vec2, vec2>(min<float>);
-  ctx("min") = overload<vec3, vec3, vec3>(min<float>);
-  ctx("max") = overload<vec2, vec2, vec2>(max<float>);
-  ctx("max") = overload<vec3, vec3, vec3>(max<float>);
-  ctx("clamp") = overload<vec2, vec2, vec2, vec2>(clamp<float>);
-  ctx("clamp") = overload<vec3, vec3, vec3, vec3>(clamp<float>);
-  ctx("lerp") = overload<vec2, vec2, vec2, vec2>(lerp<float>);
-  ctx("lerp") = overload<vec3, vec3, vec3, vec3>(lerp<float>);
-  ctx("coordinate_system") = overload<mat3, vec3>(coordinate_system);
+  ctx("dot") = overloaded<vec2, vec2>(dot<float>);
+  ctx("dot") = overloaded<vec3, vec3>(dot<float>);
+  ctx("cross") = overloaded<vec3, vec3>(dot<float>);
+  ctx("fract") = overloaded<vec2>(fract<float>);
+  ctx("fract") = overloaded<vec3>(fract<float>);
+  ctx("floor") = overloaded<vec2>(floor<float>);
+  ctx("floor") = overloaded<vec3>(floor<float>);
+  ctx("ceil") = overloaded<vec2>(ceil<float>);
+  ctx("ceil") = overloaded<vec3>(ceil<float>);
+  ctx("sqrt") = overloaded<vec2>(sqrt<float>);
+  ctx("sqrt") = overloaded<vec3>(sqrt<float>);
+  ctx("exp") = overloaded<vec2>(exp<float>);
+  ctx("exp") = overloaded<vec3>(exp<float>);
+  ctx("abs") = overloaded<vec2>(abs<float>);
+  ctx("abs") = overloaded<vec3>(abs<float>);
+  ctx("min") = overloaded<vec2, vec2>(min<float>);
+  ctx("min") = overloaded<vec3, vec3>(min<float>);
+  ctx("max") = overloaded<vec2, vec2>(max<float>);
+  ctx("max") = overloaded<vec3, vec3>(max<float>);
+  ctx("clamp") = overloaded<vec2, vec2, vec2>(clamp<float>);
+  ctx("clamp") = overloaded<vec3, vec3, vec3>(clamp<float>);
+  ctx("lerp") = overloaded<vec2, vec2, vec2>(lerp<float>);
+  ctx("lerp") = overloaded<vec3, vec3, vec3>(lerp<float>);
+  ctx("coordinate_system") = overloaded<vec3>(coordinate_system);
   ctx("rotate_x") = rotate_x;
   ctx("rotate_y") = rotate_y;
   ctx("rotate_z") = rotate_z;
@@ -150,27 +147,27 @@ Context get_default_context() {
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<TriangleMesh>("TriangleMesh").method("apply", &TriangleMesh::apply);
   ctx("load_mesh") = +[](psl::string filename) { return load_mesh(filename); };
-  ctx.type<Shape>("Shape").ctors<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
+  ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx.type<PointLight>("PointLight").ctor<vec3, vec3>();
   ctx.type<DirectionalLight>("DirectionalLight").ctor<vec3, vec3>();
-  ctx.type<Light>("Light").ctors<PointLight, DirectionalLight>();
+  ctx.type<Light>("Light").ctor_variant<PointLight, DirectionalLight>();
   ctx.type<Sky>("Sky").ctor<vec3>();
   ctx.type<Atmosphere>("Atmosphere").ctor<vec3, vec3>();
   ctx.type<ImageSky>("ImageSky")
       .ctor<psl::shared_ptr<Image>>()
       .ctor<psl::shared_ptr<Image>, vec3>();
-  ctx("ImageSky") = tag<ImageSky, psl::string>([&](psl::string filename) {
-    return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
-  });
-  ctx("ImageSky") = tag<ImageSky, psl::string, vec3>([&](psl::string filename, vec3 tint) {
-    return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>(), tint};
-  });
-  ctx.type<EnvironmentLight>("EnvironmentLight").ctors<Atmosphere, Sky, ImageSky>();
+  // ctx("ImageSky") = tag<ImageSky, psl::string>([&](psl::string filename) {
+  //   return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
+  // });
+  // ctx("ImageSky") = tag<ImageSky, psl::string, vec3>([&](psl::string filename, vec3 tint) {
+  //   return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>(), tint};
+  // });
+  ctx.type<EnvironmentLight>("EnvironmentLight").ctor_variant<Atmosphere, Sky, ImageSky>();
   ctx.type<NodePosition>("Position").ctor<>();
   ctx.type<NodeNormal>("Normal").ctor<>();
   ctx.type<NodeUV>("UV").ctor<>();
-  ctx.type<NodeConstant<float>>("Constantf").ctors<float>();
-  ctx.type<NodeConstant<vec3>>("Constant3f").ctors<vec3>();
+  ctx.type<NodeConstant<float>>("Constantf").ctor_variant<float>();
+  ctx.type<NodeConstant<vec3>>("Constant3f").ctor_variant<vec3>();
   ctx.type<NodeBinary<float, '+'>>("Addf").ctor<Nodef, Nodef>();
   ctx.type<NodeBinary<vec3, '+'>>("Add3f").ctor<Node3f, Node3f>();
   ctx.type<NodeBinary<float, '-'>>("Subf").ctor<Nodef, Nodef>();
@@ -198,9 +195,9 @@ Context get_default_context() {
   ctx.type<NodeCheckerboard>("Checkerboard").ctor<Node3f>().ctor<Node3f, float>();
   ctx.type<psl::shared_ptr<Image>>("Image");
   ctx.type<NodeImage>("Texture").ctor<Node3f, psl::shared_ptr<Image>>();
-  ctx("Texture") = tag<NodeImage, Node3f, psl::string>([&](Node3f p, psl::string filename) {
-    return NodeImage{p, ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
-  });
+  //   ctx("Texture") = tag<NodeImage, Node3f, psl::string>([&](Node3f p, psl::string filename) {
+  //     return NodeImage{p, ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
+  //   });
   ctx("load_image") =
       +[](psl::string filepath) { return psl::make_shared<Image>(read_image(filepath)); };
   ctx("+") = +[](Nodef a, Nodef b) { return NodeBinary<float, '+'>{psl::move(a), psl::move(b)}; };
@@ -222,23 +219,23 @@ Context get_default_context() {
   ctx("/") = +[](Nodef a, Node3f b) { return NodeBinary<vec3, '/'>{psl::move(a), psl::move(b)}; };
   ctx("[]") = +[](Node3f a, int index) { return NodeComponent{psl::move(a), index}; };
   ctx.type<Nodef>("Nodef")
-      .ctors<int, float, NodeConstant<float>, NodeBinary<float, '+'>, NodeBinary<float, '-'>,
-             NodeBinary<float, '*'>, NodeBinary<float, '/'>, NodeBinary<float, '^'>,
-             NodeUnary<float, '-'>, NodeUnary<float, 'a'>, NodeUnary<float, 's'>,
-             NodeUnary<float, 'r'>, NodeUnary<float, 'f'>, NodeComponent, NodeNoisef,
-             NodeCheckerboard>();
+      .ctor_variant<int, float, NodeConstant<float>, NodeBinary<float, '+'>, NodeBinary<float, '-'>,
+                    NodeBinary<float, '*'>, NodeBinary<float, '/'>, NodeBinary<float, '^'>,
+                    NodeUnary<float, '-'>, NodeUnary<float, 'a'>, NodeUnary<float, 's'>,
+                    NodeUnary<float, 'r'>, NodeUnary<float, 'f'>, NodeComponent, NodeNoisef,
+                    NodeCheckerboard>();
   ctx.type<Node3f>("Node3f")
-      .ctors<vec3i, vec3, NodeConstant<vec3>, NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>,
-             NodeBinary<vec3, '*'>, NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>,
-             NodeUnary<vec3, '-'>, NodeUnary<vec3, 'a'>, NodeUnary<vec3, 's'>, NodeUnary<vec3, 'r'>,
-             NodeUnary<vec3, 'f'>, NodeToVec3, NodeNoise3f, NodePosition, NodeNormal, NodeUV,
-             NodeImage>();
+      .ctor_variant<vec3i, vec3, NodeConstant<vec3>, NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>,
+                    NodeBinary<vec3, '*'>, NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>,
+                    NodeUnary<vec3, '-'>, NodeUnary<vec3, 'a'>, NodeUnary<vec3, 's'>,
+                    NodeUnary<vec3, 'r'>, NodeUnary<vec3, 'f'>, NodeToVec3, NodeNoise3f,
+                    NodePosition, NodeNormal, NodeUV, NodeImage>();
   ctx.type<DiffuseBSDF>("DiffuseBSDF").ctor<Node3f>();
   ctx.type<ConductorBSDF>("ConductorBSDF").ctor<Node3f, Nodef>();
   ctx.type<DielectricBSDF>("DielectricBSDF").ctor<Node3f, Nodef, Nodef>();
   ctx.type<SpecularReflectionBSDF>("SpecularReflectionBSDF").ctor<Node3f>();
   ctx.type<SpecularRefrectionBSDF>("SpecularRefrectionBSDF").ctor<Node3f, Nodef>();
-  ctx.type<BSDF>("BSDF").ctors<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
+  ctx.type<BSDF>("BSDF").ctor_variant<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
   ctx.type<LayeredMaterial>("Layered").ctor<BSDF>().ctor<BSDF, BSDF>();
   ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
   ctx.type<MetalMaterial>("Metal").ctor<Node3f, Nodef>();
@@ -248,8 +245,8 @@ Context get_default_context() {
   ctx.type<WaterMaterial>("Water").ctor<Node3f, Nodef>();
   ctx.type<EmissiveMaterial>("Emissive").ctor<Node3f>();
   ctx.type<Material>("Material")
-      .ctors<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial,
-             MirrorMaterial, WaterMaterial, EmissiveMaterial>();
+      .ctor_variant<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial,
+                    MirrorMaterial, WaterMaterial, EmissiveMaterial>();
   ctx.type<Film>("Film")
       .ctor<vec2i>()
       .method("scale", &Film::scale)
@@ -257,25 +254,25 @@ Context get_default_context() {
   ctx.type<ThinLenCamera>("ThinLenCamera")
       .ctor<Film, vec3, vec3, float>()
       .ctor<Film, vec3, vec3, float, float, float>();
-  ctx.type<Camera>("Camera").ctors<ThinLenCamera>().method(
+  ctx.type<Camera>("Camera").ctor_variant<ThinLenCamera>().method(
       "film", +[](Camera& camera) { return psl::ref{camera.film()}; });
   ctx.type<Scene>("Scene")
       .ctor<>()
-      .var("camera", &Scene::camera)
+      .member("camera", &Scene::camera)
       .method("add", &Scene::add_material)
-      .method("add", overload<void, Shape, psl::string>(&Scene::add_geometry))
-      .method("add", overload<void, Shape, Material>(&Scene::add_geometry))
-      .method("add", overload<void, Light>(&Scene::add_light))
+      .method("add", overloaded<Shape, psl::string>(&Scene::add_geometry))
+      .method("add", overloaded<Shape, Material>(&Scene::add_geometry))
+      .method("add", overloaded<Light>(&Scene::add_light))
       .method("set", &Scene::set_camera)
       .method("set", &Scene::set_env_light)
       .method("reset", &Scene::reset);
-  ctx("add_box") = overload<void, Scene&, mat4, Material>(add_box);
-  ctx("add_box") = overload<void, Scene&, mat4, psl::string>(add_box);
+  ctx("add_box") = overloaded<Scene&, mat4, Material>(add_box);
+  ctx("add_box") = overloaded<Scene&, mat4, psl::string>(add_box);
   ctx.type<UniformSampler>("UniformSampler").ctor<int>();
   ctx.type<HaltonSampler>("HaltonSampler").ctor<int, vec2i>();
-  ctx.type<Sampler>("Sampler").ctors<UniformSampler, HaltonSampler>();
+  ctx.type<Sampler>("Sampler").ctor_variant<UniformSampler, HaltonSampler>();
   ctx.type<BVH>("BVH").ctor();
-  ctx.type<Accel>("Accel").ctors<BVH>();
+  ctx.type<Accel>("Accel").ctor_variant<BVH>();
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
       .method("render", &AOIntegrator::render);
@@ -293,41 +290,17 @@ Context get_default_context() {
       .ctor<Accel, Sampler, psl::string>()
       .method("render", &VisualizerIntegrator::render);
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
-  ctx.type<LightSampler>("LightSampler").ctors<UniformLightSampler>();
+  ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx("save") = tag<void, psl::string, Film>(save_film_as_image);
-  add_f<Overloads<bool, int, float, vec2i, vec3i, vec2, vec3, psl::string>>(ctx, "to_string",
-                                                                            [](auto&& x) {
-                                                                              using psl::to_string;
-                                                                              return to_string(x);
-                                                                            });
-  ctx("print") =
-      tag<Variable, const psl::vector<Variable>&>([&](const psl::vector<Variable>& vars) {
-        auto str = psl::string{};
-        for (auto&& var : vars)
-          str += ctx.call("to_string", var).as<psl::string>();
-        Logr(str);
-        return Variable{};
-      });
-  ctx("println") =
-      tag<Variable, const psl::vector<Variable>&>([&](const psl::vector<Variable>& vars) {
-        auto str = psl::string{};
-        for (auto&& var : vars)
-          str += ctx.call("to_string", var).as<psl::string>();
-        Log(str);
-        return Variable{};
-      });
-  ctx("assert") = +[](bool x) {
-    if (!x)
-      exception("Assertion failed");
-  };
+  ctx("print") = overloads<bool, int, float, vec2i, vec3i, vec2, vec3, psl::string>(
+      [](const auto& x) { Log(x); });
 
   return ctx;
 }
 
-void interpret(Context& ctx, psl::string source) {
-  auto [file, sl] = parse_as_block(source);
-  ctx.sl = psl::move(sl);
-  file.eval(ctx);
+void interpret(Context& context, psl::string source) {
+  auto bytecode = compile(context, std::move(source));
+  execute(bytecode);
 }
 
 }  // namespace pine

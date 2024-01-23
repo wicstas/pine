@@ -247,38 +247,14 @@ struct PriorityTag<0> {};
 template <typename I, I...>
 struct IntegerSequence {};
 
-template <typename I, int N>
-struct MakeIntegerSequenceImpl;
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 0> : IntegerSequence<I> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 1> : IntegerSequence<I, 0> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 2> : IntegerSequence<I, 0, 1> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 3> : IntegerSequence<I, 0, 1, 2> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 4> : IntegerSequence<I, 0, 1, 2, 3> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 5> : IntegerSequence<I, 0, 1, 2, 3, 4> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 6> : IntegerSequence<I, 0, 1, 2, 3, 4, 5> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 7> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 8> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 7> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 9> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 7, 8> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 10> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 11> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10> {};
-template <typename I>
-struct MakeIntegerSequenceImpl<I, 12> : IntegerSequence<I, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11> {};
+template <typename T, int N, int... Is>
+struct _MakeIntegerSequence : _MakeIntegerSequence<T, N - 1, Is..., N - 1> {};
+template <typename T, int... Is>
+struct _MakeIntegerSequence<T, 0, Is...> : IntegerSequence<T, Is...> {};
 
-template <typename I, int N>
+template <typename T, int N>
 auto make_integer_sequence() {
-  IntegerSequence seq = MakeIntegerSequenceImpl<I, N>{};
+  IntegerSequence seq = _MakeIntegerSequence<T, N>{};
   return seq;
 }
 
@@ -477,7 +453,7 @@ concept OutputIterator =
     ForwardIterator<T> && requires(T it) { *it = declval<IteratorValueType<T>>(); };
 template <typename T>
 concept RandomAccessIterator =
-    BidirectionalIterator<T> && Arithmetic<T> && requires(T it, IteratorDifferenceType<T> n) {
+    BidirectionalIterator<T> && requires(T it, IteratorDifferenceType<T> n) {
       { it[n] } -> SameAs<IteratorReferenceType<T>>;
     };
 

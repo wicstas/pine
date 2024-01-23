@@ -459,7 +459,7 @@ void BVH::build(const Scene* scene_) {
 
   for (size_t i = 0; i < scene->geometries.size(); i++) {
     if (scene->geometries[i]->shape.is<TriangleMesh>()) {
-      auto& mesh = scene->geometries[i]->shape.be<TriangleMesh>();
+      auto& mesh = scene->geometries[i]->shape.as<TriangleMesh>();
       auto primitives = psl::vector<BVHImpl::Primitive>{};
       for (size_t it = 0; it < mesh.num_triangles(); it++) {
         auto primitive = BVHImpl::Primitive{};
@@ -502,7 +502,7 @@ bool BVH::hit(Ray ray) const {
 
     if (lbvhIndex < static_cast<int>(lbvh.size())) {
       return lbvh[lbvhIndex].hit(ray, [&](const Ray& ray, int index) {
-        return geometry->shape.be<TriangleMesh>().hit(ray, index);
+        return geometry->shape.as<TriangleMesh>().hit(ray, index);
       });
     } else {
       return geometry->hit(ray);
@@ -518,7 +518,7 @@ bool BVH::intersect(Ray& ray, Interaction& it) const {
     auto& geometry = scene->geometries[indices[i_lbvh]];
 
     if (i_lbvh < static_cast<int>(lbvh.size())) {
-      auto& mesh = geometry->shape.be<TriangleMesh>();
+      auto& mesh = geometry->shape.as<TriangleMesh>();
       auto hit = lbvh[i_lbvh].Intersect(ray, it, [&](Ray& ray, Interaction& it, int index) {
         return mesh.intersect(ray, it, index);
       });

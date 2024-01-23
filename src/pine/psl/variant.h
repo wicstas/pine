@@ -32,18 +32,18 @@ struct Union {
   }
 
   template <typename X>
-  X& be() {
+  X& as() {
     if constexpr (SameAs<X, First>)
       return first;
     else
-      return rest.template be<X>();
+      return rest.template as<X>();
   }
   template <typename X>
-  const X& be() const {
+  const X& as() const {
     if constexpr (SameAs<X, First>)
       return first;
     else
-      return rest.template be<X>();
+      return rest.template as<X>();
   }
 
   union {
@@ -72,13 +72,13 @@ struct Union<T> {
   }
 
   template <typename X>
-  X& be() {
+  X& as() {
     static_assert(SameAs<X, First>, "type X is not one of the Union's");
 
     return first;
   }
   template <typename X>
-  const X& be() const {
+  const X& as() const {
     static_assert(SameAs<X, First>, "type X is not one of the Union's");
 
     return first;
@@ -104,7 +104,7 @@ constexpr int index() {
 
 template <typename VariantType, typename F, typename TargetType>
 constexpr decltype(auto) dispatch_helper(VariantType&& object, F&& f) {
-  return f(psl::forward<VariantType>(object).template be<TargetType>());
+  return f(psl::forward<VariantType>(object).template as<TargetType>());
 }
 
 template <typename... Ts, typename VariantType, typename F>
@@ -204,13 +204,13 @@ struct Variant {
   }
 
   template <typename T>
-  T& be() {
-    return value.template be<T>();
+  T& as() {
+    return value.template as<T>();
   }
 
   template <typename T>
-  const T& be() const {
-    return value.template be<T>();
+  const T& as() const {
+    return value.template as<T>();
   }
 
   void reset() {

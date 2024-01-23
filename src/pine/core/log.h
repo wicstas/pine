@@ -53,7 +53,7 @@ void Warning(const Args&... args) {
   warning_stream(to_string(args...) + "\n");
 }
 template <typename... Args>
-void Fatal(const Args&... args) {
+[[noreturn]] void Fatal(const Args&... args) {
   using psl::to_string;
   fatal_stream(to_string(args...) + "\n");
   throw FatalException{};

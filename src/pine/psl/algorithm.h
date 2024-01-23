@@ -53,7 +53,7 @@ auto size(T[N]) {
 }
 
 template <typename T>
-concept Range = requires(T x) {
+concept Range = requires(T& x) {
   psl::begin(x);
   psl::end(x);
 };
@@ -449,6 +449,57 @@ auto filter(ARange&& range, F f) {
     ARange range;
   };
   return Ranger{psl::move(f), psl::forward<ARange>(range)};
+}
+
+template <Range ARange>
+auto reverse_ranger(ARange&& range) {
+  struct Ranger {
+    struct Iterator {
+      decltype(auto) operator*() const {
+        return *rit();
+      }
+      Iterator& operator++() {
+        --it;
+        return *this;
+      }
+      Iterator operator++(int) {
+        auto copy = *this;
+        --it;
+        return copy;
+      }
+      operator IteratorTypeT<ARange>() const {
+        return it;
+      }
+      auto operator->() {
+        return &(*rit());
+      }
+      bool operator==(const Iterator& b) const {
+        return it == b.it;
+      }
+      bool operator!=(const Iterator& b) const {
+        return !(*this == b);
+      }
+
+      auto rit() const {
+        return begin + (end - it - 1);
+      }
+
+      IteratorTypeT<ARange> it;
+      IteratorTypeT<ARange> begin;
+      IteratorTypeT<ARange> end;
+    };
+    Iterator begin() {
+      return {psl::begin(range), psl::begin(range), psl::end(range)};
+    }
+    Iterator end() {
+      return {psl::end(range), psl::begin(range), psl::end(range)};
+    }
+    size_t size() {
+      return psl::size(range);
+    }
+    ARange range;
+  };
+  return Ranger{psl::forward<ARange>(range)};
 }
 
 template <typename T, Range ARange>

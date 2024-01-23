@@ -125,7 +125,7 @@ public:
     return it;
   }
   template <Range ARange>
-  void insert(Iterator it, ARange&& range) {
+  void insert_range(Iterator it, ARange&& range) {
     auto first = psl::begin(range);
     auto last = psl::end(range);
     while (first != last) {
@@ -143,6 +143,18 @@ public:
       ++it;
     }
     pop_back();
+  }
+  void erase(Iterator first, Iterator last) {
+    psl_check(first <= last);
+    if (first == last)
+      return;
+    while (last != end()) {
+      psl::swap(*first, *last);
+      ++first;
+      ++last;
+    }
+
+    resize(len - (last - first));
   }
 
   void resize(size_t nlen) {
@@ -268,7 +280,7 @@ auto vector_of(Ts... xs) {
   } else {
     if constexpr (sizeof...(Ts) == 0)
       static_assert(psl::deferred_bool<false, Ts...>,
-                    "When the parameter pack can be null, please specify the vector type");
+                    "When the parameter pack can be_ null, please specify the vector type");
     else {
       using T = FirstType<Ts...>;
       return vector<T>{std::initializer_list<T>{psl::move(xs)...}};

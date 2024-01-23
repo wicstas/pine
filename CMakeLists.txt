@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-add_compile_options(-Wall -Wextra -pedantic -O3 -fno-omit-frame-pointer)
+add_compile_options(-Wall -Wextra -pedantic -fno-omit-frame-pointer)
 
 #psl Library
 add_library(psl
@@ -32,11 +32,10 @@ src/pine/core/geometry.cpp
 src/pine/core/material.cpp
 src/pine/core/profiler.cpp
 src/pine/core/parallel.cpp
+src/pine/core/compiler.cpp
 src/pine/core/context.cpp
 src/pine/core/sampler.cpp
-src/pine/core/grammar.cpp
 src/pine/core/primes.cpp
-#src/pine/core/earley.cpp
 src/pine/core/fileio.cpp
 src/pine/core/parser.cpp
 src/pine/core/camera.cpp

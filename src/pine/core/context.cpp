@@ -1,147 +1,188 @@
 #include <pine/core/context.h>
 
+#include <pine/psl/algorithm.h>
+
 namespace pine {
 
-psl::map<size_t, psl::shared_ptr<TypeConcept>> types;
+Context::Context() {
+  (*this).type<int, Context::Float>("int").to<float>();
+  // (*this)("^") = +[](int a, int b) { return static_cast<int>(psl::pow(a, b)); };
+  (*this)("++x") = +[](int& x) -> decltype(auto) { return ++x; };
+  (*this)("--x") = +[](int& x) -> decltype(auto) { return --x; };
+  (*this)("x++") = +[](int& x) -> decltype(auto) { return x++; };
+  (*this)("x--") = +[](int& x) -> decltype(auto) { return x--; };
+  (*this)("%") = +[](int a, int b) { return a % b; };
+  (*this)("%=") = +[](int& a, int b) -> int& { return a %= b; };
 
-const Function* function_overload_resolution(const psl::multimap<psl::string, Function>& functions,
-                                             psl::string_view name,
-                                             const psl::vector<Variable>& args) {
-  auto range = functions.equal_range(name);
-  auto first = range.first;
-  auto last = range.second;
-  auto best_difference = args.size();
-  auto best_match = first;
-  auto any_match = false;
+  (*this).type<float, Context::Float>("float").to<int>();
+  (*this)("^") = +[](float a, float b) { return psl::pow(a, b); };
+
+  (*this).type<bool>("bool");
+  add_f(
+      "==", +[](bool a, bool b) -> bool { return a == b; });
+  add_f(
+      "!=", +[](bool a, bool b) -> bool { return a != b; });
+  add_f(
+      "=", +[](bool& a, bool b) -> bool& { return a = b; });
+  (*this).type<bool>("bool");
+
+  (*this).type<psl::string>("string");
+  (*this)("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
+  (*this)("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
+  (*this)("+") = +[](psl::string a, psl::string b) { return a + b; };
+}
+
+size_t Context::TypeTrait::find_member_accessor_index(psl::string_view member_name) const {
+  if (auto it = member_accessors.find(member_name); it != member_accessors.end())
+    return it->second;
+  else
+    return size_t(-1);
+}
+size_t Context::TypeTrait::find_convert_to_index(size_t to_type_id) const {
+  if (auto it = convert_tos.find(to_type_id); it != convert_tos.end())
+    return it->second;
+  else
+    return size_t(-1);
+}
+size_t Context::TypeTrait::find_convert_from_index(size_t from_type_id) const {
+  if (auto it = convert_froms.find(from_type_id); it != convert_froms.end())
+    return it->second;
+  else
+    return size_t(-1);
+}
+
+size_t Context::converter_index(size_t from_id, size_t to_id) const {
+  auto index = size_t(-1);
+  if (auto it = types.find(from_id); it != types.end())
+    index = it->second.find_convert_to_index(to_id);
+
+  if (index == size_t(-1))
+    if (auto it = types.find(to_id); it != types.end())
+      index = it->second.find_convert_from_index(from_id);
+
+  return index;
+}
+
+static bool is_id_part(char c) {
+  return psl::isalpha(c) || psl::isdigit(c) || c == '_';
+}
+
+static int difference(psl::string_view a, psl::string_view b) {
+  auto diff = 0;
+  for (size_t i = 0; i < psl::max(a.size(), b.size()); i++) {
+    if (i >= a.size())
+      diff++;
+    else if (i >= b.size())
+      diff++;
+    else if (a[i] != b[i]) {
+      if (is_id_part(a[i]) && !is_id_part(b[i]))
+        diff += 1000;
+      if (!is_id_part(a[i]) && is_id_part(b[i]))
+        diff += 1000;
+      diff += 8;
+    }
+  }
+  return diff;
+}
+
+Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> arg_type_ids) const {
+  auto [first, last] = functions_map.equal_range(name);
+  auto min_difference = size_t(-1);
+  auto best_match = last;
+  auto best_converts = psl::vector<Context::FindFResult::ArgumentConversion>();
 
   for (auto fi = first; fi != last; fi++) {
-    if (fi->second.is_internal_function())
-      return &fi->second;
-    const auto& arg_type_ids = fi->second.arg_type_ids();
-    if (arg_type_ids.size() == args.size()) {
+    const auto& param_type_ids = functions[fi->second].parameter_type_ids();
+    if (param_type_ids.size() == 1 &&
+        param_type_ids[0].code == psl::type_id<psl::span<const Variable*>>()) {
+      best_converts = {};
+      best_match = fi;
+      break;
+    } else if (arg_type_ids.size() == param_type_ids.size()) {
+      auto converts = psl::vector<Context::FindFResult::ArgumentConversion>();
       auto difference = size_t{0};
       auto match = true;
-      for (size_t i = 0; i < args.size(); i++) {
-        if (args[i].type_id() == arg_type_ids[i].code ||
-            arg_type_ids[i].code == psl::type_id<Variable>()) {
-        } else if (!arg_type_ids[i].IsReference && args[i].convertible_to(arg_type_ids[i].code)) {
+      for (size_t i = 0; i < arg_type_ids.size(); i++) {
+        if (param_type_ids[i].code == psl::type_id<Variable>()) {
+        } else if (arg_type_ids[i] == param_type_ids[i].code) {
+        } else if (auto ci = converter_index(arg_type_ids[i], param_type_ids[i].code);
+                   !param_type_ids[i].is_ref && ci != size_t(-1)) {
+          converts.push_back({i, ci, param_type_ids[i].code});
           difference += 1;
         } else {
           match = false;
           break;
         }
       }
-      if (match && difference <= best_difference) {
-        best_difference = difference;
+      if (match && difference <= min_difference) {
+        min_difference = difference;
         best_match = fi;
-        any_match = true;
+        best_converts = converts;
       }
     }
   }
 
-  if (any_match)
-    return &best_match->second;
-  else
-    return decltype(&best_match->second)(nullptr);
-}
+  if (best_match != last) {
+    auto fi = best_match->second;
+    return {fi, functions[fi].return_type_id(), best_converts};
+  } else {
+    if (first != last) {
+      auto arg_type_aliases = psl::string();
+      auto candidates = psl::string();
+      for (auto arg_type_id : arg_type_ids) {
+        if (auto it = types.find(arg_type_id); it != types.end())
+          arg_type_aliases += it->second.alias + ", ";
+        else
+          Fatal("Some type trait is not set");
+      }
+      if (arg_type_aliases.size()) {
+        arg_type_aliases.pop_back();
+        arg_type_aliases.pop_back();
+      }
+      for (auto fi = first; fi != last; fi++) {
+        candidates += fi->first + '(';
+        for (auto param_type_id : functions[fi->second].parameter_type_ids()) {
+          if (auto it = types.find(param_type_id.code); it != types.end())
+            candidates += it->second.alias + ", ";
+          else
+            Fatal("Some type trait is not set");
+        }
+        if (functions[fi->second].n_parameters() != 0) {
+          candidates.pop_back();
+          candidates.pop_back();
+        }
+        candidates += ")\n";
+      }
+      if (candidates.size())
+        candidates.pop_back();
+      exception("No function `", name, "` that accepts `", arg_type_aliases,
+                "` is found, candidates:\n", candidates);
+    } else {
+      auto likely_func_name = psl::string();
+      auto min_difference = 8;
+      for (const auto& f : functions_map) {
+        if (f.first == "x++")
+          continue;
+        if (f.first == "x--")
+          continue;
+        if (auto diff = difference(name, f.first); diff < min_difference) {
+          likely_func_name = f.first;
+          min_difference = diff;
+        }
+      }
 
-Variable* Context::find(psl::string_view name) {
-  for (int i = int(variableStack.size()) - 1; i >= 0; i--) {
-    if (auto it = variableStack[i].find(name); it != variableStack[i].end())
-      return &it->second;
+      if (likely_func_name != "")
+        exception("No function named `", name, "` is found, did you mean `", likely_func_name,
+                  "`?");
+      else
+        exception("No function named `", name, "` is found");
+    }
   }
-  return nullptr;
-}
-Variable& Context::operator[](psl::string_view name) {
-  for (int i = int(variableStack.size()) - 1; i >= 0; i--)
-    if (auto it = variableStack[i].find(name); it != variableStack[i].end())
-      return it->second;
-  exception("Unable to find variable `", name, '`');
-  PINE_UNREACHABLE;
-}
-Function Context::f(psl::string_view name, const psl::vector<Variable>& args) {
-  if (auto func_ptr = function_overload_resolution(functions, name, args); func_ptr)
-    return *func_ptr;
-
-  auto arg_type_aliases =
-      psl::space_by(psl::to<psl::vector<psl::string>>(
-                        psl::transform(args, [](const Variable& arg) { return arg.type_alias(); })),
-                    " ");
-  auto candidates = psl::string{};
-  auto range = functions.equal_range(name);
-  for (auto it = range.first; it != range.second; it++) {
-    candidates += name + "(" + psl::space_by(it->second.arg_type_aliases(), " ") + ")\n";
-  }
-  if (candidates.size() != 0)
-    candidates.pop_back();
-
-  if (candidates.size() != 0)
-    exception("Unable to find function `", name, "` that accepts arguments of types `",
-              arg_type_aliases, "`, \ncandidate functions are:\n", candidates);
-  else {
-    exception("Unable to find function `", name, "` that accepts arguments of types `",
-              arg_type_aliases, "`, \nno function with this name is found");
-  }
-  PINE_UNREACHABLE;
 }
 
-psl::map<psl::string, Variable>& Context::top() {
-  CHECK(variableStack.size());
-  return variableStack.back();
-}
-
-psl::vector<psl::string> split(psl::string_view input, auto pred) {
-  auto parts = psl::vector<psl::string>{};
-  auto start = input.begin();
-  while (true) {
-    auto end = psl::find_if(psl::range(start, input.end()), pred);
-    parts.push_back(psl::string{start, end});
-    if (end == input.end())
-      break;
-    else
-      start = psl::next(end);
-  }
-
-  return parts;
-}
-
-SourceLines::SourceLines(psl::string_view tokens, size_t lines_padding)
-    : lines_padding{lines_padding} {
-  lines = split(tokens, psl::isnewline);
-  for (size_t i = 0; i < lines_padding; i++)
-    lines.push_front("");
-  for (size_t i = 0; i < lines_padding; i++)
-    lines.push_back("");
-}
-
-psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
-  CHECK_LE(row + lines_padding, lines.size());
-  if (row + lines_padding == lines.size())
-    return psl::nullopt;
-  return lines[row];
-}
-
-psl::optional<char> SourceLines::next(size_t row, size_t column) const {
-  if (auto line = next_line(row)) {
-    CHECK_LT(column, line->size());
-    return (*line)[column];
-  }
-  return psl::nullopt;
-}
-
-void SourceLines::error_impl(size_t row, size_t column, psl::string_view message) const {
-  CHECK(lines_padding != invalid);
-  auto vicinity = psl::string{};
-  for (size_t i = row - lines_padding; i <= row; i++)
-    vicinity += " | " + lines[i] + "\n";
-  vicinity += "  -" + psl::string(column, '-') + "^\n";
-  for (size_t i = row + 1; i <= row + lines_padding; i++)
-    vicinity += " | " + lines[i] + "\n";
-
-  if (vicinity.size())
-    vicinity.pop_back();
-
-  Fatal(message, "\n", vicinity);
+void Context::add_f(psl::string name, Function func) {
+  functions_map.insert({psl::move(name), functions.size()});
+  functions.push_back(psl::move(func));
 }
 
 }  // namespace pine

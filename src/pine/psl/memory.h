@@ -108,7 +108,7 @@ public:
     return ptr;
   }
   Reference operator[](size_t i) const {
-    static_assert(IsArray<T>, "operator[] can only be used when the underlying type is array");
+    static_assert(IsArray<T>, "operator[] can only as used when the underlying type is array");
     return ptr[i];
   }
 
@@ -236,7 +236,7 @@ public:
     return ptr;
   }
   Reference operator[](size_t i) const {
-    static_assert(IsArray<T>, "operator[] can only be used when the underlying type is array");
+    static_assert(IsArray<T>, "operator[] can only as used when the underlying type is array");
     return ptr[i];
   }
 
@@ -320,6 +320,7 @@ shared_ptr<T> make_shared(Args&&... args) {
 
 template <typename T>
 struct ref {
+  using BaseType = T;
   ref(T& x) : ptr{&x} {
   }
 
@@ -343,11 +344,11 @@ template <typename T>
 ref(T& x) -> ref<T>;
 
 template <typename T>
-struct _IsReference<ref<T>> : TrueType {};
+struct _is_psl_ref : FalseType {};
 template <typename T>
-struct _RemoveReference<ref<T>> {
-  using Type = T;
-};
+struct _is_psl_ref<ref<T>> : TrueType {};
+template <typename T>
+constexpr bool is_psl_ref = _is_psl_ref<T>::value;
 
 template <typename T>
 struct Box {

@@ -49,41 +49,25 @@ public:
   using base = VectorBase<char, string_allocator<char>>;
   using base::base;
 
-  string() {
-    reserve(1);
-  }
-  string(const char* cstr) {
-    resize(psl::strlen(cstr));
-    psl::copy(begin(), range(cstr, size()));
-  }
-
-  string(const char* cstr, size_t len) {
-    resize(len);
-    psl::copy(begin(), range(cstr, size()));
-  }
-
-  string substr(size_t pos, size_t len = -1) const {
-    pos = clamp(pos, size_t{0}, size());
-    if (len == size_t(-1))
-      return string(data() + pos, size() - pos);
-    else
-      return string(data() + pos, min(len, size() - pos));
-  }
+  string();
+  string(const char* cstr);
+  string(const char* cstr, size_t len);
+  string substr(size_t pos, size_t len = -1) const;
   class string_view subview(size_t pos, size_t len = -1) const;
 
-  string& operator=(const char* str) {
-    resize(psl::strlen(str));
-    psl::copy(begin(), range(str, str + size()));
-    return *this;
-  }
+  string& operator=(const char* str);
   string& operator=(class string_view str);
 
   string& operator+=(const string& rhs);
   string& operator+=(class string_view rhs);
   string& operator+=(const char* rhs);
+  string& operator+=(char c);
 
   friend string operator+(string lhs, const string& rhs) {
     return lhs += rhs;
+  }
+  friend string operator+(string lhs, char c) {
+    return lhs += c;
   }
 
   const char* c_str() const {
@@ -252,7 +236,10 @@ string to_string(T x) {
 
   return str;
 }
-
+template <typename T, typename U>
+string to_string(pair<T, U> x) {
+  return "{" + to_string(x.first) + ", " + to_string(x.second) + "}";
+}
 template <Range ARange>
 string to_string(ARange&& range) {
   auto r = string{"["};
@@ -266,7 +253,7 @@ string to_string(ARange&& range) {
 
 template <typename T>
 string to_string(ref<T> x) {
-  return to_string(x);
+  return "ref{" + to_string(x) + "}";
 }
 
 template <typename... Ts>
