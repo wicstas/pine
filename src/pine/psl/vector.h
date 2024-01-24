@@ -154,7 +154,7 @@ public:
       ++last;
     }
 
-    resize(len - (last - first));
+    resize(size() - (last - first));
   }
 
   void resize(size_t nlen) {

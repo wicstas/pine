@@ -56,6 +56,9 @@ template <typename... Args>
 [[noreturn]] void Fatal(const Args&... args) {
   using psl::to_string;
   fatal_stream(to_string(args...) + "\n");
+#ifndef NDEBUG
+  psl::abort();
+#endif
   throw FatalException{};
 }
 template <typename... Args>

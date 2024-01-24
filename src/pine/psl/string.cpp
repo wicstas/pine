@@ -108,6 +108,20 @@ int stoi(string_view str) {
   return is_neg ? -number : number;
 }
 
+int64_t stoi64(string_view str) {
+  int64_t number = 0;
+  bool is_neg = false;
+  for (size_t j = 0; j < psl::size(str); j++) {
+    if (str[j] == '.')
+      break;
+    if (j == 0 && str[j] == '-')
+      is_neg = true;
+    else
+      number = number * 10 + str[j] - '0';
+  }
+  return is_neg ? -number : number;
+}
+
 float stof(string_view str) {
   float number = 0.0f;
   bool is_neg = false;

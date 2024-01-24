@@ -459,15 +459,15 @@ auto reverse_ranger(ARange&& range) {
         return *rit();
       }
       Iterator& operator++() {
-        --it;
+        ++it;
         return *this;
       }
       Iterator operator++(int) {
         auto copy = *this;
-        --it;
+        ++it;
         return copy;
       }
-      operator IteratorTypeT<ARange>() const {
+      IteratorTypeT<ARange> unwrap() const {
         return it;
       }
       auto operator->() {
@@ -480,7 +480,7 @@ auto reverse_ranger(ARange&& range) {
         return !(*this == b);
       }
 
-      auto rit() const {
+      IteratorTypeT<ARange> rit() const {
         return begin + (end - it - 1);
       }
 

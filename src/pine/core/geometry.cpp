@@ -518,13 +518,13 @@ TriangleMesh::TriangleMesh(psl::vector<vec3> vertices_, psl::vector<uint32_t> in
 };
 bool TriangleMesh::hit(const Ray& ray, int index) const {
   index *= 3;
-  DCHECK_LT(index + 2, indices.size());
+  DCHECK_LT(size_t(index + 2), indices.size());
   auto i0 = indices[index], i1 = indices[index + 1], i2 = indices[index + 2];
   return Triangle::hit(ray, vertices[i0], vertices[i1], vertices[i2]);
 }
 bool TriangleMesh::intersect(Ray& ray, Interaction& it, int index) const {
   index *= 3;
-  DCHECK_LT(index + 2, indices.size());
+  DCHECK_LT(size_t(index + 2), indices.size());
   auto i0 = indices[index], i1 = indices[index + 1], i2 = indices[index + 2];
   auto v0 = vertices[i0], v1 = vertices[i1], v2 = vertices[i2];
   bool hit = Triangle::intersect(ray, it, v0, v1, v2);

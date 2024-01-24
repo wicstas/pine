@@ -263,6 +263,7 @@ string to_string(Ts&&... xs) {
 }
 
 int stoi(string_view str);
+int64_t stoi64(string_view str);
 float stof(string_view str);
 
 string space_by(vector<string> input, string spacer);

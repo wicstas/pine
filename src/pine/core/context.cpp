@@ -6,7 +6,7 @@ namespace pine {
 
 Context::Context() {
   (*this).type<int, Context::Float>("int").to<float>();
-  // (*this)("^") = +[](int a, int b) { return static_cast<int>(psl::pow(a, b)); };
+  (*this)("^") = +[](int a, int b) { return psl::powi(a, b); };
   (*this)("++x") = +[](int& x) -> decltype(auto) { return ++x; };
   (*this)("--x") = +[](int& x) -> decltype(auto) { return --x; };
   (*this)("x++") = +[](int& x) -> decltype(auto) { return x++; };
@@ -105,9 +105,9 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       for (size_t i = 0; i < arg_type_ids.size(); i++) {
         if (param_type_ids[i].code == psl::type_id<Variable>()) {
         } else if (arg_type_ids[i] == param_type_ids[i].code) {
-        } else if (auto ci = converter_index(arg_type_ids[i], param_type_ids[i].code);
-                   !param_type_ids[i].is_ref && ci != size_t(-1)) {
-          converts.push_back({i, ci, param_type_ids[i].code});
+        } else if (auto idx = converter_index(arg_type_ids[i], param_type_ids[i].code);
+                   !param_type_ids[i].is_ref && idx != size_t(-1)) {
+          converts.push_back({i, idx, param_type_ids[i].code});
           difference += 1;
         } else {
           match = false;
@@ -183,6 +183,17 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
 void Context::add_f(psl::string name, Function func) {
   functions_map.insert({psl::move(name), functions.size()});
   functions.push_back(psl::move(func));
+}
+
+size_t Context::find_variable(psl::string_view name) const {
+  if (auto it = variables_map.find(name); it != variables_map.end())
+    return it->second;
+  else
+    return size_t(-1);
+}
+void Context::add_variable(psl::string name, Variable var) {
+  variables_map.insert({psl::move(name), variables.size()});
+  variables.push_back(psl::move(var));
 }
 
 }  // namespace pine

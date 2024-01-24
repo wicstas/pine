@@ -148,7 +148,8 @@ struct Declaration {
   Declaration(psl::string name, Expr expr) : name{psl::move(name)}, expr{psl::move(expr)} {
   }
   void emit(Context& context, Bytecodes& bytecodes) const {
-    expr.emit(context, bytecodes);
+    auto vi = expr.emit(context, bytecodes);
+    bytecodes.add_typed(Bytecode::Copy, vi, bytecodes.get_var_type(vi));
     bytecodes.name_top_var(name);
   }
 
@@ -341,8 +342,12 @@ psl::string to_string(const Context&, const Bytecodes&) {
   return result;
 }
 
-Bytecodes::Bytecodes(SourceLines sl, psl::vector<Function> functions)
-    : functions(psl::move(functions)), sl(psl::move(sl)) {
+Bytecodes::Bytecodes(const Context& context, SourceLines sl)
+    : functions(context.functions), variables(context.variables), sl(psl::move(sl)) {
+  for (const auto& var : context.variables)
+    stack.push_back(var.type_id());
+  for (const auto& var : context.variables_map)
+    variable_map.push_back({var.first, var.second});
 }
 
 size_t Bytecodes::add(Bytecode::Instruction instruction, size_t value0, size_t value1) {
@@ -366,7 +371,7 @@ size_t Bytecodes::get_var_type(size_t var_index) const {
 uint16_t Bytecodes::get_var_by_name(psl::string_view name) const {
   if (auto it = psl::find_if(psl::reverse_ranger(variable_map),
                              [&name](const auto& p) { return p.first == name; });
-      it != variable_map.end())
+      it.unwrap() != variable_map.end())
     return it->second;
   else
     return uint16_t(-1);
@@ -396,7 +401,9 @@ void Bytecodes::enter_scope() {
 }
 void Bytecodes::exit_scope() {
   DCHECK(scope_stack.size() != 0);
+  // Log(stack.size(), ' ', stack.end() - (stack.begin() + scope_stack.back().type_stack_position));
   stack.erase(stack.begin() + scope_stack.back().type_stack_position, stack.end());
+  // Log(stack.size());
   variable_map.erase(variable_map.begin() + scope_stack.back().variable_map_position,
                      variable_map.end());
   scope_stack.pop_back();
@@ -471,10 +478,10 @@ uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
       arg_type_ids[convert.position] = convert.to_type_id;
     }
     bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
+    return bytecodes.last_var();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
   }
-  return bytecodes.last_var();
 }
 MemberAccess::MemberAccess(size_t row, size_t column, PExpr pexpr, Id id)
     : ASTNode(row, column), pexpr(psl::move(pexpr)), id(psl::move(id)) {
@@ -547,8 +554,22 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
         case Negate: inst = Bytecode::IntNegate; break;
       }
       bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
-    } else
+    } else if (arg_type_ids[0] == psl::type_id<float>() && (op == Positive || op == Negate)) {
+      auto inst = Bytecode::Instruction();
+      switch (op) {
+        case None: CHECK(false); break;
+        case Invert: CHECK(false); break;
+        case PreInc: CHECK(false); break;
+        case PreDec: CHECK(false); break;
+        case PostInc: CHECK(false); break;
+        case PostDec: CHECK(false); break;
+        case Positive: inst = Bytecode::FloatPositive; break;
+        case Negate: inst = Bytecode::FloatNegate; break;
+      }
+      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
+    } else {
       bytecodes.add_typed(Bytecode::Call, fr.function_index, fr.return_type_id, arg_indices);
+    }
     return bytecodes.last_var();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -624,6 +645,34 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
         case DivE: inst = Bytecode::IntDivE; break;
         case ModE: inst = Bytecode::IntModE; break;
         case Assi: inst = Bytecode::IntAssi; break;
+      }
+      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
+    } else if (arg_type_ids[0] == psl::type_id<float>() &&
+               arg_type_ids[1] == psl::type_id<float>() && op != And && op != Or && op != Mod &&
+               op != ModE) {
+      auto inst = Bytecode::Instruction();
+      switch (op) {
+        case None: CHECK(false); break;
+        case And: CHECK(false); break;
+        case Or: CHECK(false); break;
+        case Mul: inst = Bytecode::FloatMul; break;
+        case Div: inst = Bytecode::FloatDiv; break;
+        case Mod: CHECK(false); break;
+        case Pow: inst = Bytecode::FloatPow; break;
+        case Add: inst = Bytecode::FloatAdd; break;
+        case Sub: inst = Bytecode::FloatSub; break;
+        case Lt: inst = Bytecode::FloatLt; break;
+        case Gt: inst = Bytecode::FloatGt; break;
+        case Le: inst = Bytecode::FloatLe; break;
+        case Ge: inst = Bytecode::FloatGe; break;
+        case Eq: inst = Bytecode::FloatEq; break;
+        case Ne: inst = Bytecode::FloatNe; break;
+        case AddE: inst = Bytecode::FloatAddE; break;
+        case SubE: inst = Bytecode::FloatSubE; break;
+        case MulE: inst = Bytecode::FloatMulE; break;
+        case DivE: inst = Bytecode::FloatDivE; break;
+        case ModE: CHECK(false); break;
+        case Assi: inst = Bytecode::FloatAssi; break;
       }
       bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
     } else {
@@ -877,6 +926,10 @@ struct Parser {
       stmt = Stmt(BreakStmt());
     } else if (accept("continue")) {
       stmt = Stmt(ContinueStmt());
+    } else if (accept("var")) {
+      auto id_ = id();
+      consume("=");
+      stmt = Stmt(declaration(id_));
     } else {
       if (auto n = next(); psl::isalpha(*n) || *n == '_') {
         backup();
@@ -1084,11 +1137,16 @@ struct Parser {
     while (true) {
       str.push_back(*next());
       proceed();
-      if (str.back() == '.')
+      if (str.back() == '.') {
         pass_decimal_point = true;
+      }
       auto n = next();
       if (!n || !((psl::isdigit(*n) || (!pass_decimal_point && *n == '.'))))
         break;
+    }
+    if (!pass_decimal_point) {
+      if (str.size() > 15 || psl::stoi64(str) > psl::numeric_limits<int>::max())
+        error("This number is too large, need to be < ", psl::numeric_limits<int>::max());
     }
     consume_spaces();
     return NumberLiteral{psl::move(str)};
@@ -1261,7 +1319,7 @@ psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
 }
 Bytecodes compile(Context& context, psl::string source) {
   auto [block, sl] = parse_as_block(psl::move(source));
-  auto bytecodes = Bytecodes(psl::move(sl), context.functions);
+  auto bytecodes = Bytecodes(context, psl::move(sl));
   block.emit(context, bytecodes);
   return bytecodes;
 }
@@ -1308,6 +1366,8 @@ struct VirtualMachine {
 void execute(const Bytecodes& bytecodes) {
   auto vm = VirtualMachine();
   vm.stack.reserve(1024);
+  for (const auto& var : bytecodes.variables)
+    vm.stack.push(var);
 
   auto register_ = Variable();
 
@@ -1322,7 +1382,8 @@ void execute(const Bytecodes& bytecodes) {
     switch (code.instruction) {
       case Bytecode::Break: break;
       case Bytecode::Continue: break;
-      case Bytecode::Load: push(vm.stack.top(code.value)); break;
+      case Bytecode::Load: push(vm.stack[code.value]); break;
+      case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
       case Bytecode::LoadFloatConstant:
         push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
         break;
@@ -1368,7 +1429,7 @@ void execute(const Bytecodes& bytecodes) {
         push(vm.stack[code.args[0]].as<int>() / vm.stack[code.args[1]].as<int>());
         break;
       case Bytecode::IntPow:
-        // push((int)psl::pow(vm.stack[code.args[0]].as<int>(), vm.stack[code.args[1]].as<int>()));
+        push(psl::powi(vm.stack[code.args[0]].as<int>(), vm.stack[code.args[1]].as<int>()));
         break;
       case Bytecode::IntMod:
         push(vm.stack[code.args[0]].as<int>() % vm.stack[code.args[1]].as<int>());
@@ -1390,6 +1451,56 @@ void execute(const Bytecodes& bytecodes) {
         break;
       case Bytecode::IntAssi:
         push(vm.stack[code.args[0]].as<int&>() = vm.stack[code.args[1]].as<int>());
+        break;
+      case Bytecode::FloatPositive: push(vm.stack[code.args[0]].as<float>()); break;
+      case Bytecode::FloatNegate: push(-vm.stack[code.args[0]].as<float>()); break;
+      case Bytecode::FloatEq:
+        push(vm.stack[code.args[0]].as<float>() == vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatNe:
+        push(vm.stack[code.args[0]].as<float>() != vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatLt:
+        push(vm.stack[code.args[0]].as<float>() < vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatGt:
+        push(vm.stack[code.args[0]].as<float>() > vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatLe:
+        push(vm.stack[code.args[0]].as<float>() <= vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatGe:
+        push(vm.stack[code.args[0]].as<float>() >= vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatAdd:
+        push(vm.stack[code.args[0]].as<float>() + vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatSub:
+        push(vm.stack[code.args[0]].as<float>() - vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatMul:
+        push(vm.stack[code.args[0]].as<float>() * vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatDiv:
+        push(vm.stack[code.args[0]].as<float>() / vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatPow:
+        push(psl::powi(vm.stack[code.args[0]].as<float>(), vm.stack[code.args[1]].as<float>()));
+        break;
+      case Bytecode::FloatAddE:
+        push(vm.stack[code.args[0]].as<float&>() += vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatSubE:
+        push(vm.stack[code.args[0]].as<float&>() -= vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatMulE:
+        push(vm.stack[code.args[0]].as<float&>() *= vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatDivE:
+        push(vm.stack[code.args[0]].as<float&>() /= vm.stack[code.args[1]].as<float>());
+        break;
+      case Bytecode::FloatAssi:
+        push(vm.stack[code.args[0]].as<float&>() = vm.stack[code.args[1]].as<float>());
         break;
       case Bytecode::Call: {
         auto f = [&]<int... I>(psl::IntegerSequence<int, I...>) {

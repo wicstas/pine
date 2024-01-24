@@ -44,6 +44,7 @@ auto overloaded(R (*f)(Args...)) {
 
 struct VariableConcept {
   virtual ~VariableConcept() = default;
+  virtual psl::shared_ptr<VariableConcept> clone() const = 0;
   virtual void* ptr() = 0;
   const void* ptr() const {
     return const_cast<VariableConcept*>(this)->ptr();
@@ -55,6 +56,9 @@ struct Variable {
   template <typename R, typename T>
   struct VariableModel : VariableConcept {
     VariableModel(T base) : base{psl::move(base)} {};
+    psl::shared_ptr<VariableConcept> clone() const override {
+      return psl::make_shared<VariableModel<R, T>>(*this);
+    }
     void* ptr() override {
       return reinterpret_cast<void*>(&static_cast<R&>(base));
     }
@@ -72,6 +76,12 @@ struct Variable {
   }
   template <typename T>
   Variable(psl::ref<T> x) : model(psl::make_shared<VariableModel<T, psl::ref<T>>>(psl::move(x))) {
+  }
+  Variable clone() const {
+    DCHECK(model);
+    auto copy = Variable();
+    copy.model = model->clone();
+    return copy;
   }
   size_t type_id() const {
     DCHECK(model);
@@ -152,8 +162,8 @@ struct Function {
   private:
     T base;
   };
-  template <typename R, typename... Args>
-  FunctionModel(R (*)(Args...)) -> FunctionModel<R (*)(Args...), R, Args...>;
+  // template <typename R, typename... Args>
+  // FunctionModel(R (*)(Args...)) -> FunctionModel<R (*)(Args...), R, Args...>;
 
   Function() = default;
   template <typename R, typename... Args>
@@ -244,6 +254,10 @@ struct Context {
     void add(Lambda<T, R, Args...> f) const {
       ctx.add_f(psl::move(name), Function{psl::move(f)});
     }
+    template <typename T>
+    void add(T value) const {
+      ctx.add_variable(psl::move(name), psl::move(value));
+    }
     void operator=(auto x) const {
       add(psl::move(x));
     }
@@ -327,43 +341,8 @@ struct Context {
   }
   template <typename T, TypeClass type_class = TypeClass::None>
   auto type(psl::string alias) {
-    if (alias == "")
-      Fatal("Can't set the empty string as type alias");
     types[psl::type_id<T>()].alias = psl::move(alias);
-    if constexpr (type_class == TypeClass::Float) {
-      add_f(
-          "+", +[](T a, T b) { return a + b; });
-      add_f(
-          "-", +[](T a, T b) { return a - b; });
-      add_f(
-          "*", +[](T a, T b) { return a * b; });
-      add_f(
-          "/", +[](T a, T b) { return a / b; });
-      add_f(
-          "+=", +[](T& a, T b) -> T& { return a += b; });
-      add_f(
-          "-=", +[](T& a, T b) -> T& { return a -= b; });
-      add_f(
-          "*=", +[](T& a, T b) -> T& { return a *= b; });
-      add_f(
-          "/=", +[](T& a, T b) -> T& { return a /= b; });
-      add_f(
-          "-x", +[](T x) -> T { return -x; });
-      add_f(
-          "<", +[](T a, T b) -> bool { return a < b; });
-      add_f(
-          ">", +[](T a, T b) -> bool { return a > b; });
-      add_f(
-          "<=", +[](T a, T b) -> bool { return a <= b; });
-      add_f(
-          ">=", +[](T a, T b) -> bool { return a >= b; });
-      add_f(
-          "==", +[](T a, T b) -> bool { return a == b; });
-      add_f(
-          "!=", +[](T a, T b) -> bool { return a != b; });
-      add_f(
-          "=", +[](T& a, T b) -> T& { return a = b; });
-    } else if constexpr (type_class == TypeClass::Complex) {
+    if constexpr (type_class == TypeClass::Float || type_class == TypeClass::Complex) {
       add_f(
           "+", +[](T a, T b) { return a + b; });
       add_f(
@@ -388,6 +367,16 @@ struct Context {
           "!=", +[](T a, T b) -> bool { return a != b; });
       add_f(
           "=", +[](T& a, T b) -> T& { return a = b; });
+      if constexpr (type_class == TypeClass::Float) {
+        add_f(
+            "<", +[](T a, T b) -> bool { return a < b; });
+        add_f(
+            ">", +[](T a, T b) -> bool { return a > b; });
+        add_f(
+            "<=", +[](T a, T b) -> bool { return a <= b; });
+        add_f(
+            ">=", +[](T a, T b) -> bool { return a >= b; });
+      }
     }
     return TypeProxy<T>(*this, types[psl::type_id<T>()]);
   }
@@ -406,9 +395,13 @@ struct Context {
   };
   FindFResult find_f(psl::string_view name, psl::span<size_t> arg_type_ids) const;
   void add_f(psl::string name, Function func);
+  size_t find_variable(psl::string_view name) const;
+  void add_variable(psl::string name, Variable var);
 
   psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Function> functions;
+  psl::multimap<psl::string, size_t> variables_map;
+  psl::vector<Variable> variables;
   psl::unordered_map<size_t, TypeTrait> types;
 };
 

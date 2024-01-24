@@ -1,7 +1,6 @@
 #pragma once
 
 #include <pine/core/context.h>
-#include <pine/core/vecmath.h>
 
 #include <pine/psl/optional.h>
 #include <pine/psl/memory.h>
@@ -45,6 +44,7 @@ struct ASTNode {
 struct Bytecode {
   enum Instruction {
     Load,
+    Copy,
     LoadFloatConstant,
     LoadIntConstant,
     LoadBoolConstant,
@@ -74,6 +74,24 @@ struct Bytecode {
     IntDivE,
     IntModE,
     IntAssi,
+    FloatPositive,
+    FloatNegate,
+    FloatEq,
+    FloatNe,
+    FloatLt,
+    FloatGt,
+    FloatLe,
+    FloatGe,
+    FloatAdd,
+    FloatSub,
+    FloatMul,
+    FloatDiv,
+    FloatPow,
+    FloatAddE,
+    FloatSubE,
+    FloatMulE,
+    FloatDivE,
+    FloatAssi,
     Break,
     Continue,
     Jump,
@@ -96,7 +114,7 @@ struct Bytecode {
 };
 
 struct Bytecodes {
-  Bytecodes(SourceLines sl, psl::vector<Function> functions);
+  Bytecodes(const Context& context, SourceLines sl);
 
   size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
   void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
@@ -141,6 +159,7 @@ struct Bytecodes {
   }
 
   psl::vector<Function> functions;
+  psl::vector<Variable> variables;
 
 private:
   struct ScopeInfo {

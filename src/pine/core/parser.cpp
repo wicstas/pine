@@ -15,25 +15,8 @@ namespace pine {
 
 Context get_default_context() {
   auto ctx = Context{};
-  // ctx("pi") = pi;
-  // ctx("E") = psl::E;
-  ctx("%") = +[](int a, int b) { return a % b; };
-  ctx("+") = +[](int a, float b) { return a + b; };
-  ctx("+") = +[](float a, int b) { return a + b; };
-  ctx("-") = +[](int a, float b) { return a - b; };
-  ctx("-") = +[](float a, int b) { return a - b; };
-  ctx("*") = +[](int a, float b) { return a * b; };
-  ctx("*") = +[](float a, int b) { return a * b; };
-  ctx("/") = +[](int a, float b) { return a / b; };
-  ctx("/") = +[](float a, int b) { return a / b; };
-  ctx("+=") = +[](float& a, int b) -> float& { return a += b; };
-  ctx("-=") = +[](float& a, int b) -> float& { return a -= b; };
-  ctx("*=") = +[](float& a, int b) -> float& { return a *= b; };
-  ctx("/=") = +[](float& a, int b) -> float& { return a /= b; };
-  ctx("=") = +[](float& a, int b) -> float& { return a = b; };
-  ctx.type<psl::string>("string");
-  ctx("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
-  ctx("+") = +[](psl::string a, psl::string b) { return a + b; };
+  ctx("pi") = pi;
+  ctx("E") = psl::E;
   ctx("min") = psl::min<float>;
   ctx("max") = psl::max<float>;
   ctx("abs") = psl::abs<float>;
