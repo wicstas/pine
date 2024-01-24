@@ -248,7 +248,7 @@ template <typename I, I...>
 struct IntegerSequence {};
 
 template <typename T, int N, int... Is>
-struct _MakeIntegerSequence : _MakeIntegerSequence<T, N - 1, Is..., N - 1> {};
+struct _MakeIntegerSequence : _MakeIntegerSequence<T, N - 1, N - 1, Is...> {};
 template <typename T, int... Is>
 struct _MakeIntegerSequence<T, 0, Is...> : IntegerSequence<T, Is...> {};
 

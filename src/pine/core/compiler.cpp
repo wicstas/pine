@@ -401,9 +401,7 @@ void Bytecodes::enter_scope() {
 }
 void Bytecodes::exit_scope() {
   DCHECK(scope_stack.size() != 0);
-  // Log(stack.size(), ' ', stack.end() - (stack.begin() + scope_stack.back().type_stack_position));
   stack.erase(stack.begin() + scope_stack.back().type_stack_position, stack.end());
-  // Log(stack.size());
   variable_map.erase(variable_map.begin() + scope_stack.back().variable_map_position,
                      variable_map.end());
   scope_stack.pop_back();
@@ -449,15 +447,34 @@ uint16_t StringLiteral::emit(Context&, Bytecodes& bytecodes) const {
   return bytecodes.last_var();
 }
 uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
-  if (args.size() == 2) {
-    return FunctionCall(row, column, "vec2", args).emit(context, bytecodes);
-  } else if (args.size() == 3) {
-    return FunctionCall(row, column, "vec3", args).emit(context, bytecodes);
-  } else if (args.size() == 4) {
-    return FunctionCall(row, column, "vec4", args).emit(context, bytecodes);
+  psl::Array<uint16_t, 8> arg_indices;
+  if (args.size() >= 2 && args.size() <= 4) {
+    auto arg_type_ids = psl::vector<size_t>(args.size());
+    for (size_t i = 0; i < args.size(); i++) {
+      arg_indices[i] = args[i].emit(context, bytecodes);
+      arg_type_ids[i] = bytecodes.get_var_type(arg_indices[i]);
+    }
+    auto float_ = false;
+    for (auto id : arg_type_ids)
+      if (id == psl::type_id<float>()) {
+        float_ = true;
+        break;
+      }
+    auto [fi, rtid, converts] =
+        context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), arg_type_ids);
+    for (auto convert : converts) {
+      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+                          {arg_indices[convert.position]});
+      arg_indices[convert.position] = bytecodes.last_var();
+      arg_type_ids[convert.position] = convert.to_type_id;
+    }
+    bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
+    return bytecodes.last_var();
   } else {
     bytecodes.error(*this, "Only 2, 3, or 4 items should exist inside []");
   }
+
+  return bytecodes.last_var();
 }
 uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
   try {
@@ -1517,6 +1534,7 @@ void execute(const Bytecodes& bytecodes) {
           case 6: f(psl::make_integer_sequence<int, 6>()); break;
           case 7: f(psl::make_integer_sequence<int, 7>()); break;
           case 8: f(psl::make_integer_sequence<int, 8>()); break;
+          case 9: CHECK(false); break;
         }
       } break;
       case Bytecode::Jump:

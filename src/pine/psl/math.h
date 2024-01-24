@@ -18,12 +18,10 @@ inline constexpr float Sqrt2 = 1.41421356237309504880f;
 
 template <typename T>
 inline constexpr T min(T a, T b) {
-  return std::min(a, b);
   return a < b ? a : b;
 }
 template <typename T>
 inline constexpr T max(T a, T b) {
-  return std::max(a, b);
   return a > b ? a : b;
 }
 

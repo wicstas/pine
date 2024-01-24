@@ -29,12 +29,12 @@ int main(int argc, char* argv[]) {
       if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
         break;
     }
-    Log("");
+    // Log("");
 
   } catch (const Exception& e) {
     Fatal("Pine exception: ", e.what());
   } catch (...) {
-    Fatal("Uncaught exception");
+    Fatal("Uncaught unknown exception");
   }
 
   Profiler::Finalize();

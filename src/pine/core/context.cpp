@@ -5,31 +5,48 @@
 namespace pine {
 
 Context::Context() {
-  (*this).type<int, Context::Float>("int").to<float>();
-  (*this)("^") = +[](int a, int b) { return psl::powi(a, b); };
-  (*this)("++x") = +[](int& x) -> decltype(auto) { return ++x; };
-  (*this)("--x") = +[](int& x) -> decltype(auto) { return --x; };
-  (*this)("x++") = +[](int& x) -> decltype(auto) { return x++; };
-  (*this)("x--") = +[](int& x) -> decltype(auto) { return x--; };
-  (*this)("%") = +[](int a, int b) { return a % b; };
-  (*this)("%=") = +[](int& a, int b) -> int& { return a %= b; };
+  auto& context = *this;
+  context.type<int, Context::Float>("int").to<float>();
+  context("^") = +[](int a, int b) { return psl::powi(a, b); };
+  context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
+  context("--x") = +[](int& x) -> decltype(auto) { return --x; };
+  context("x++") = +[](int& x) -> decltype(auto) { return x++; };
+  context("x--") = +[](int& x) -> decltype(auto) { return x--; };
+  context("%") = +[](int a, int b) { return a % b; };
+  context("%=") = +[](int& a, int b) -> int& { return a %= b; };
+  context("+") = +[](int a, float b) { return a + b; };
+  context("-") = +[](int a, float b) { return a - b; };
+  context("*") = +[](int a, float b) { return a * b; };
+  context("/") = +[](int a, float b) { return a / b; };
+  context("+") = +[](float a, int b) { return a + b; };
+  context("-") = +[](float a, int b) { return a - b; };
+  context("*") = +[](float a, int b) { return a * b; };
+  context("/") = +[](float a, int b) { return a / b; };
+  context("+=") = +[](int& a, float b) -> int& { return a += b; };
+  context("-=") = +[](int& a, float b) -> int& { return a -= b; };
+  context("*=") = +[](int& a, float b) -> int& { return a *= b; };
+  context("/=") = +[](int& a, float b) -> int& { return a /= b; };
+  context("+=") = +[](float& a, int b) -> float& { return a += b; };
+  context("-=") = +[](float& a, int b) -> float& { return a -= b; };
+  context("*=") = +[](float& a, int b) -> float& { return a *= b; };
+  context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  (*this).type<float, Context::Float>("float").to<int>();
-  (*this)("^") = +[](float a, float b) { return psl::pow(a, b); };
+  context.type<float, Context::Float>("float").to<int>();
+  context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
-  (*this).type<bool>("bool");
+  context.type<bool>("bool");
   add_f(
       "==", +[](bool a, bool b) -> bool { return a == b; });
   add_f(
       "!=", +[](bool a, bool b) -> bool { return a != b; });
   add_f(
       "=", +[](bool& a, bool b) -> bool& { return a = b; });
-  (*this).type<bool>("bool");
+  context.type<bool>("bool");
 
-  (*this).type<psl::string>("string");
-  (*this)("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
-  (*this)("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
-  (*this)("+") = +[](psl::string a, psl::string b) { return a + b; };
+  context.type<psl::string>("string");
+  context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
+  context("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
+  context("+") = +[](psl::string a, psl::string b) { return a + b; };
 }
 
 size_t Context::TypeTrait::find_member_accessor_index(psl::string_view member_name) const {
@@ -194,6 +211,61 @@ size_t Context::find_variable(psl::string_view name) const {
 void Context::add_variable(psl::string name, Variable var) {
   variables_map.insert({psl::move(name), variables.size()});
   variables.push_back(psl::move(var));
+}
+
+static bool match_prefix(psl::string_view base, psl::string_view candidate) {
+  if (candidate.size() < base.size())
+    return false;
+  for (size_t i = 0; i < base.size(); i++)
+    if (base[i] != candidate[i])
+      return false;
+  return true;
+}
+
+psl::vector<psl::string> Context::candidates(psl::string part) const {
+  auto result = psl::vector<psl::string>();
+  for (const auto& f : functions_map) {
+    if (match_prefix(part, f.first)) {
+      auto signature = f.first + "(";
+      for (auto param_type_id : functions[f.second].parameter_type_ids()) {
+        if (auto it = types.find(param_type_id.code); it != types.end())
+          signature += it->second.alias + ", ";
+        else
+          Fatal("Some type trait is not set");
+      }
+      if (functions[f.second].n_parameters() != 0) {
+        signature.pop_back();
+        signature.pop_back();
+      }
+      result.push_back(signature + ")");
+    }
+  }
+
+  return result;
+}
+
+psl::string Context::complete(psl::string part) const {
+  auto result = psl::string();
+
+  for (const auto& f : functions_map) {
+    if (match_prefix(part, f.first)) {
+      if (result == "")
+        result = f.first;
+
+      auto i = part.size();
+      for (;; i++) {
+        if (i >= result.size())
+          break;
+        if (i >= f.first.size())
+          break;
+        if (result[i] != f.first[i])
+          break;
+      }
+      result.resize(i);
+    }
+  }
+
+  return result.substr(part.size());
 }
 
 }  // namespace pine

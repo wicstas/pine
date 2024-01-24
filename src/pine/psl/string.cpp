@@ -34,7 +34,13 @@ int strcmp(const char* lhs, const char* rhs) {
 }
 
 string::string() {
-  reserve(1);
+  resize(0);
+}
+string::string(size_t len) {
+  resize(len);
+}
+string::string(size_t len, char x) : string{len} {
+  psl::fill(*this, x);
 }
 string::string(const char* cstr) {
   resize(psl::strlen(cstr));
@@ -45,7 +51,11 @@ string::string(const char* cstr, size_t len) {
   resize(len);
   psl::copy(begin(), range(cstr, size()));
 }
-
+void string::resize(size_t len) {
+  reserve(len + 1);
+  base::resize(len);
+  data()[len] = '\0';
+}
 string string::substr(size_t pos, size_t len) const {
   pos = clamp(pos, size_t{0}, size());
   if (len == size_t(-1))
@@ -54,9 +64,9 @@ string string::substr(size_t pos, size_t len) const {
     return string(data() + pos, min(len, size() - pos));
 }
 
-string& string::operator=(const char* str) {
-  resize(psl::strlen(str));
-  psl::copy(begin(), range(str, str + size()));
+string& string::operator=(const char* cstr) {
+  resize(psl::strlen(cstr));
+  psl::copy(begin(), range(cstr, size()));
   return *this;
 }
 string_view string::subview(size_t pos, size_t len) const {
@@ -64,7 +74,7 @@ string_view string::subview(size_t pos, size_t len) const {
 }
 
 string& string::operator=(string_view str) {
-  resize(psl::size(str));
+  resize(str.size());
   psl::copy(begin(), str);
   return *this;
 }
@@ -90,13 +100,10 @@ string& string::operator+=(char c) {
   push_back(c);
   return *this;
 }
-string operator+(string lhs, string_view rhs) {
-  return lhs += rhs;
-}
 
 int stoi(string_view str) {
-  int number = 0;
-  bool is_neg = false;
+  auto number = 0;
+  auto is_neg = false;
   for (size_t j = 0; j < psl::size(str); j++) {
     if (str[j] == '.')
       break;
@@ -109,8 +116,8 @@ int stoi(string_view str) {
 }
 
 int64_t stoi64(string_view str) {
-  int64_t number = 0;
-  bool is_neg = false;
+  auto number = 0;
+  auto is_neg = false;
   for (size_t j = 0; j < psl::size(str); j++) {
     if (str[j] == '.')
       break;
@@ -123,10 +130,10 @@ int64_t stoi64(string_view str) {
 }
 
 float stof(string_view str) {
-  float number = 0.0f;
-  bool is_neg = false;
-  bool pass_decimal_point = false;
-  float scale = 0.1f;
+  auto number = 0.0f;
+  auto is_neg = false;
+  auto pass_decimal_point = false;
+  auto scale = 0.1f;
   for (size_t j = 0; j < psl::size(str); j++) {
     if (j == 0 && str[j] == '-')
       is_neg = true;

@@ -26,14 +26,15 @@ int strcmp(const char* lhs, const char* rhs);
 template <typename T>
 struct string_allocator {
   T* alloc(size_t size) const {
-    return ::new T[size + 1]{};
+    auto ptr = ::new T[size]{};
+    return ptr;
   }
   void free(T* ptr) const {
     ::delete[] ptr;
   }
 
   void construct_at(T* ptr) const {
-    *ptr = 0;
+    *ptr = ' ';
   }
   void construct_at(T* ptr, T c) const {
     *ptr = c;
@@ -47,11 +48,22 @@ struct string_allocator {
 class string : public VectorBase<char, string_allocator<char>> {
 public:
   using base = VectorBase<char, string_allocator<char>>;
-  using base::base;
 
   string();
+  explicit string(size_t len);
+  string(size_t len, char x);
+  template <Range ARange>
+  explicit string(ARange&& range) : string(psl::size(range)) {
+    psl::copy(begin(), range);
+  }
+  template <ForwardIterator It>
+  string(It first, It last) : string(psl::range(first, last)) {
+  }
   string(const char* cstr);
   string(const char* cstr, size_t len);
+
+  void resize(size_t len);
+
   string substr(size_t pos, size_t len = -1) const;
   class string_view subview(size_t pos, size_t len = -1) const;
 
@@ -63,6 +75,9 @@ public:
   string& operator+=(const char* rhs);
   string& operator+=(char c);
 
+  friend string operator+(string lhs, const char* rhs) {
+    return lhs += rhs;
+  }
   friend string operator+(string lhs, const string& rhs) {
     return lhs += rhs;
   }
@@ -78,13 +93,37 @@ public:
     return strcmp(lhs.c_str(), rhs.c_str()) == 0;
   }
   friend bool operator!=(const string& lhs, const string& rhs) {
-    return strcmp(lhs.c_str(), rhs.c_str()) != 0;
+    return !(lhs == rhs);
   }
   friend bool operator<(const string& lhs, const string& rhs) {
     return strcmp(lhs.c_str(), rhs.c_str()) < 0;
   }
   friend bool operator>(const string& lhs, const string& rhs) {
     return strcmp(lhs.c_str(), rhs.c_str()) > 0;
+  }
+  friend bool operator==(const string& lhs, const char* rhs) {
+    return strcmp(lhs.c_str(), rhs) == 0;
+  }
+  friend bool operator!=(const string& lhs, const char* rhs) {
+    return !(lhs == rhs);
+  }
+  friend bool operator<(const string& lhs, const char* rhs) {
+    return strcmp(lhs.c_str(), rhs) < 0;
+  }
+  friend bool operator>(const string& lhs, const char* rhs) {
+    return strcmp(lhs.c_str(), rhs) > 0;
+  }
+  friend bool operator==(const char* lhs, const string& rhs) {
+    return strcmp(lhs, rhs.c_str()) == 0;
+  }
+  friend bool operator!=(const char* lhs, const string& rhs) {
+    return !(lhs == rhs);
+  }
+  friend bool operator<(const char* lhs, const string& rhs) {
+    return strcmp(lhs, rhs.c_str()) < 0;
+  }
+  friend bool operator>(const char* lhs, const string& rhs) {
+    return strcmp(lhs, rhs.c_str()) > 0;
   }
 
   inline static const size_t npos = static_cast<size_t>(-1);
@@ -103,6 +142,8 @@ public:
   }
   string_view(const string& str) : str(str.c_str()), len(psl::size(str)) {
   }
+  string_view(Range auto&& range) : string_view(psl::begin(range), psl::end(range)) {
+  }
   string_view substr(size_t pos, iterator end) const {
     return substr(pos, distance(begin(), end) - pos);
   }
@@ -117,8 +158,8 @@ public:
   friend string operator+(string_view lhs, const string& rhs) {
     return string(lhs) + rhs;
   }
-  friend string operator+(const string& lhs, string_view rhs) {
-    return lhs + string(rhs);
+  friend string operator+(string lhs, string_view rhs) {
+    return lhs += rhs;
   }
   friend string operator+(string_view lhs, const char* rhs) {
     return string(lhs) + rhs;
@@ -153,7 +194,7 @@ public:
     return len;
   }
 
-  friend bool operator==(const string_view& lhs, const string_view& rhs) {
+  friend bool operator==(string_view lhs, string_view rhs) {
     if (lhs.size() != rhs.size())
       return false;
     for (size_t i = 0; i < lhs.size(); i++)
@@ -161,14 +202,30 @@ public:
         return false;
     return true;
   }
-  friend bool operator!=(const string_view& lhs, const string_view& rhs) {
+  friend bool operator!=(string_view lhs, string_view rhs) {
     return !(lhs == rhs);
   }
-  friend bool operator<(const string_view& lhs, const string_view& rhs) {
-    return strcmp(lhs.c_str(), rhs.c_str()) < 0;
+  friend bool operator<(string_view lhs, string_view rhs) {
+    for (size_t i = 0; i < rhs.size(); i++) {
+      if (i == lhs.size())
+        return true;
+      if (lhs[i] < rhs[i])
+        return true;
+      else if (lhs[i] > rhs[i])
+        return false;
+    }
+    return false;
   }
-  friend bool operator>(const string_view& lhs, const string_view& rhs) {
-    return strcmp(lhs.c_str(), rhs.c_str()) > 0;
+  friend bool operator>(string_view lhs, string_view rhs) {
+    for (size_t i = 0; i < lhs.size(); i++) {
+      if (i == rhs.size())
+        return true;
+      if (lhs[i] > rhs[i])
+        return true;
+      else if (lhs[i] < rhs[i])
+        return false;
+    }
+    return false;
   }
 
   const char* str = nullptr;

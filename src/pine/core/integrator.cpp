@@ -43,14 +43,16 @@ void PixelIntegrator::render(Scene& scene) {
     });
     set_progress(static_cast<float>(i) / samplesPerPixel);
   }
+
+  set_progress(1);
 }
 
 void RayIntegrator::pixel_color(Scene& scene, vec2i p, Sampler& sampler) {
   auto p_film = vec2{p + sampler.Get2D()} / scene.camera.film().size();
   auto ray = scene.camera.gen_ray(p_film, sampler.Get2D());
   auto L = radiance(scene, ray, sampler);
-  CHECK(!L.has_nan());
-  CHECK(!L.has_inf());
+  // CHECK(!L.has_nan());
+  // CHECK(!L.has_inf());
   scene.camera.film().add_sample(p, L);
 }
 

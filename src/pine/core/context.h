@@ -50,6 +50,7 @@ struct VariableConcept {
     return const_cast<VariableConcept*>(this)->ptr();
   }
   virtual size_t type_id() const = 0;
+  virtual const psl::string& type_name() const = 0;
 };
 
 struct Variable {
@@ -64,6 +65,9 @@ struct Variable {
     }
     size_t type_id() const override {
       return psl::type_id<R>();
+    }
+    const psl::string& type_name() const override {
+      return psl::type_name<R>();
     }
 
   private:
@@ -87,6 +91,10 @@ struct Variable {
     DCHECK(model);
     return model->type_id();
   }
+  const psl::string& type_name() const {
+    DCHECK(model);
+    return model->type_name();
+  }
   template <typename T>
   bool is() const {
     DCHECK(model);
@@ -96,8 +104,10 @@ struct Variable {
   T as() const {
     DCHECK(model);
     using Base = psl::Decay<T>;
-    DCHECK(is<Base>());
-    // Fatal("Trying to interpret ", model->type_name(), " as ", type_name<T>());
+#ifndef NDEBUG
+    if (!is<Base>())
+      Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
+#endif
     return *reinterpret_cast<Base*>(model->ptr());
   }
 
@@ -117,6 +127,8 @@ struct FunctionConcept {
 struct Function {
   template <typename T, typename R, typename... Args>
   struct FunctionModel : FunctionConcept {
+    static_assert(sizeof...(Args) <= 8, "Function can only have up to 8 parameters");
+
     FunctionModel(T base) : base(psl::move(base)){};
 
     Variable call(psl::span<const Variable*> args) override {
@@ -289,6 +301,16 @@ struct Context {
       ctx.functions.push_back(tag<psl::ref<U>, T&>([ptr](T& x) { return psl::ref<U>(x.*ptr); }));
       return *this;
     }
+    template <typename Base, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (Base::*f)(Args...)) {
+      ctx.add_f(psl::move(name), derived<T>(f));
+      return *this;
+    }
+    template <typename Base, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (Base::*f)(Args...) const) {
+      ctx.add_f(psl::move(name), derived<T>(f));
+      return *this;
+    }
     template <typename F>
     TypeProxy& method(psl::string name, F f) {
       ctx.add_f(psl::move(name), Function(std::move(f)));
@@ -341,7 +363,8 @@ struct Context {
   }
   template <typename T, TypeClass type_class = TypeClass::None>
   auto type(psl::string alias) {
-    types[psl::type_id<T>()].alias = psl::move(alias);
+    types[psl::type_id<T>()].alias = alias;
+    types[psl::type_id<T*>()].alias = alias + "*";
     if constexpr (type_class == TypeClass::Float || type_class == TypeClass::Complex) {
       add_f(
           "+", +[](T a, T b) { return a + b; });
@@ -397,6 +420,9 @@ struct Context {
   void add_f(psl::string name, Function func);
   size_t find_variable(psl::string_view name) const;
   void add_variable(psl::string name, Variable var);
+
+  psl::vector<psl::string> candidates(psl::string part) const;
+  psl::string complete(psl::string part) const;
 
   psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Function> functions;

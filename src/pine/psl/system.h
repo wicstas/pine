@@ -33,7 +33,7 @@ struct TypeId {
 template <typename T>
 TypeId type_id_full() {
   static auto id =
-      TypeId{typeid(T).hash_code(), psl::IsConst<T>, psl::IsReference<T> || psl::IsRvReference<T>};
+      TypeId{type_id<T>(), psl::IsConst<T>, psl::IsReference<T> || psl::IsRvReference<T>};
   return id;
 }
 

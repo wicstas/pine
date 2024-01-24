@@ -139,12 +139,6 @@ Context get_default_context() {
   ctx.type<ImageSky>("ImageSky")
       .ctor<psl::shared_ptr<Image>>()
       .ctor<psl::shared_ptr<Image>, vec3>();
-  // ctx("ImageSky") = tag<ImageSky, psl::string>([&](psl::string filename) {
-  //   return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
-  // });
-  // ctx("ImageSky") = tag<ImageSky, psl::string, vec3>([&](psl::string filename, vec3 tint) {
-  //   return ImageSky{ctx.call("load_image", filename).as<psl::shared_ptr<Image>>(), tint};
-  // });
   ctx.type<EnvironmentLight>("EnvironmentLight").ctor_variant<Atmosphere, Sky, ImageSky>();
   ctx.type<NodePosition>("Position").ctor<>();
   ctx.type<NodeNormal>("Normal").ctor<>();
@@ -178,9 +172,6 @@ Context get_default_context() {
   ctx.type<NodeCheckerboard>("Checkerboard").ctor<Node3f>().ctor<Node3f, float>();
   ctx.type<psl::shared_ptr<Image>>("Image");
   ctx.type<NodeImage>("Texture").ctor<Node3f, psl::shared_ptr<Image>>();
-  //   ctx("Texture") = tag<NodeImage, Node3f, psl::string>([&](Node3f p, psl::string filename) {
-  //     return NodeImage{p, ctx.call("load_image", filename).as<psl::shared_ptr<Image>>()};
-  //   });
   ctx("load_image") =
       +[](psl::string filepath) { return psl::make_shared<Image>(read_image(filepath)); };
   ctx("+") = +[](Nodef a, Nodef b) { return NodeBinary<float, '+'>{psl::move(a), psl::move(b)}; };
