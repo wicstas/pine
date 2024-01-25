@@ -84,6 +84,8 @@ static DistributionSample sample(const Distribution2D::Node* node, vec2 u2, floa
 }
 
 static float pdf(const Distribution2D::Node* node, vec2i p, float pdf_) {
+  if (node->weight == 0)
+    return 0;
   if (!node->left)
     return pdf_ / area(node->upper - node->lower);
 

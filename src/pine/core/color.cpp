@@ -91,7 +91,7 @@ vec3 atmosphere_color(vec3 direction, vec3 sun_dir, int nSamples, bool simulate_
 
   auto color = sumR * beta_r * phaseR + sumM * beta_m * phaseM;
 
-  auto multiplier = vec3{10.0f};
+  auto multiplier = vec3{5.0f};
   if (simulate_real_sun && dot(direction, sun_dir) > 0.998f)
     multiplier *= 1000.0f * vec3{1.0f, 0.9f, 0.8f};
   return color * multiplier;

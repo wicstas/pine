@@ -6,7 +6,7 @@ namespace pine {
 
 Context::Context() {
   auto& context = *this;
-  context.type<int, Context::Float>("int").to<float>();
+  context.type<int, Context::Float>("int").to<float>().ctor_variant<float>(true);
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
   context("--x") = +[](int& x) -> decltype(auto) { return --x; };
@@ -31,7 +31,7 @@ Context::Context() {
   context("*=") = +[](float& a, int b) -> float& { return a *= b; };
   context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  context.type<float, Context::Float>("float").to<int>();
+  context.type<float, Context::Float>("float");
   context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
   context.type<bool>("bool");
@@ -202,6 +202,14 @@ void Context::add_f(psl::string name, Function func) {
   functions.push_back(psl::move(func));
 }
 
+Variable Context::call(psl::string_view name, psl::span<const Variable*> args) const {
+  auto arg_type_ids = psl::to<psl::vector<size_t>>(
+      psl::transform(args, [](const Variable* x) { return x->type_id(); }));
+  auto fr = find_f(name, arg_type_ids);
+  CHECK(fr.converts.size() == 0);
+  return functions[fr.function_index].call(args);
+}
+
 size_t Context::find_variable(psl::string_view name) const {
   if (auto it = variables_map.find(name); it != variables_map.end())
     return it->second;
@@ -265,6 +273,8 @@ psl::string Context::complete(psl::string part) const {
     }
   }
 
+  if (result.size() == 0)
+    return result;
   return result.substr(part.size());
 }
 

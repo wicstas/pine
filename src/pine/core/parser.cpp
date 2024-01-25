@@ -73,10 +73,14 @@ Context get_default_context() {
   ctx("translate") = overloaded<vec3>(translate);
   ctx("scale") = overloaded<vec3>(scale);
   ctx("look_at") = look_at;
-  ctx("*") = overloads_set<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<float>>(psl::mul_);
-  ctx("/") = overloads_set<Overloads<vec2i, vec3i, vec2, vec3, vec4>, Overloads<float>>(psl::div_);
-  ctx("*") = overloads_set<Overloads<float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(psl::mul_);
-  ctx("/") = overloads_set<Overloads<float>, Overloads<vec2i, vec3i, vec2, vec3, vec4>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<int>, Overloads<vec2i, vec3i>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<int>, Overloads<vec2i, vec3i>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<float>, Overloads<vec2, vec3, vec4>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<float>, Overloads<vec2, vec3, vec4>>(psl::div_);
   ctx("*=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mule_);
   ctx("/=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::dive_);
   ctx("*=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::mule_);
@@ -266,8 +270,36 @@ Context get_default_context() {
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx("save") = tag<void, psl::string, Film>(save_film_as_image);
-  ctx("print") = overloads<bool, int, float, vec2i, vec3i, vec2, vec3, psl::string>(
-      [](const auto& x) { Log(x); });
+  ctx("print") = +[](psl::span<const Variable*> args) {
+    auto ctx = Context();
+    ctx("to_string") =
+        overloads<bool, int, float, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4, psl::string>(
+            [](const auto& x) {
+              using psl::to_string;
+              return to_string(x);
+            });
+    auto str = psl::string();
+    for (auto arg : args)
+      str += ctx.call("to_string", {&arg, &arg + 1}).as<psl::string>() + ' ';
+    if (str.size())
+      str.pop_back();
+    Logr(str);
+  };
+  ctx("println") = +[](psl::span<const Variable*> args) {
+    auto ctx = Context();
+    ctx("to_string") =
+        overloads<bool, int, float, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4, psl::string>(
+            [](const auto& x) {
+              using psl::to_string;
+              return to_string(x);
+            });
+    auto str = psl::string();
+    for (auto arg : args)
+      str += ctx.call("to_string", {&arg, &arg + 1}).as<psl::string>() + ' ';
+    if (str.size())
+      str.pop_back();
+    Log(str);
+  };
 
   return ctx;
 }

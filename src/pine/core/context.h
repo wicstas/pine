@@ -293,6 +293,8 @@ struct Context {
 
   template <typename T>
   struct TypeProxy {
+    TypeProxy(Context& ctx, TypeTrait& type_trait) : ctx(ctx), type_trait(type_trait) {
+    }
     template <typename U>
     TypeProxy& member(psl::string name, U T::*ptr) {
       if (type_trait.member_accessors.find(name) != type_trait.member_accessors.end())
@@ -340,18 +342,34 @@ struct Context {
       return *this;
     }
 
+  private:
     Context& ctx;
     TypeTrait& type_trait;
   };
   template <typename T>
   requires(!std::is_class_v<T>)
   struct TypeProxy<T> {
+    TypeProxy(Context& ctx, TypeTrait& type_trait) : ctx(ctx), type_trait(type_trait) {
+    }
     template <typename R>
     TypeProxy& to() {
       type_trait.convert_tos[psl::type_id<R>()] = ctx.functions.size();
       ctx.functions.push_back(+[](const T& x) { return R(x); });
       return *this;
     }
+    template <typename... Args>
+    TypeProxy& ctor_variant(bool explicit_ = false) {
+      if (!explicit_)
+        [&]<int... I>(psl::IntegerSequence<int, I...>) {
+          ((type_trait.convert_froms[psl::type_id<Args>()] = ctx.functions.size() + I), ...);
+        }(psl::make_integer_sequence<int, sizeof...(Args)>());
+      (ctx.add_f(
+           type_trait.alias, +[](Args arg) { return T(psl::move(arg)); }),
+       ...);
+      return *this;
+    }
+
+  private:
     Context& ctx;
     TypeTrait& type_trait;
   };
@@ -418,6 +436,8 @@ struct Context {
   };
   FindFResult find_f(psl::string_view name, psl::span<size_t> arg_type_ids) const;
   void add_f(psl::string name, Function func);
+  Variable call(psl::string_view name, psl::span<const Variable*> args) const;
+
   size_t find_variable(psl::string_view name) const;
   void add_variable(psl::string name, Variable var);
 

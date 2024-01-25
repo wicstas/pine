@@ -24,12 +24,13 @@ int main(int argc, char* argv[]) {
 
     auto task = std::async(std::launch::async, [&]() { interpretFile(context, argv[1]); });
     while (true) {
-      // Logr(get_progress(), "\r");
+      if (get_progress() != 0)
+        Logr(get_progress(), "\r");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
         break;
     }
-    // Log("");
+    Log("");
 
   } catch (const Exception& e) {
     Fatal("Pine exception: ", e.what());

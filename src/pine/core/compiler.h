@@ -103,14 +103,17 @@ struct Bytecode {
   Bytecode(Instruction inst, size_t value, size_t value1 = 0)
       : instruction(inst), value(value), value1(value1) {
   }
-  Bytecode(Instruction inst, size_t value, size_t value1, psl::Array<uint16_t, 8> args)
-      : instruction(inst), value(value), value1(value1), args{args} {
+  Bytecode(Instruction inst, size_t value, size_t value1, psl::span<uint16_t> args)
+      : instruction(inst), value(value), value1(value1) {
+    psl::copy(this->args.begin(), args);
+    nargs = int(args.size());
   }
 
   Instruction instruction;
   size_t value = size_t(-1);
   size_t value1 = size_t(-1);
   psl::Array<uint16_t, 8> args;
+  int nargs = 0;
 };
 
 struct Bytecodes {
@@ -118,7 +121,16 @@ struct Bytecodes {
 
   size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
   void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
-                 psl::Array<uint16_t, 8> args = {});
+                 psl::span<uint16_t> args = {});
+  void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id, uint16_t arg0) {
+    uint16_t args[]{arg0};
+    add_typed(instruction, value, type_id, args);
+  }
+  void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id, uint16_t arg0,
+                 uint16_t arg1) {
+    uint16_t args[]{arg0, arg1};
+    add_typed(instruction, value, type_id, args);
+  }
 
   void name_top_var(psl::string name);
   size_t get_var_type(size_t var_index) const;

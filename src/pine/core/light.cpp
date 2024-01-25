@@ -90,7 +90,7 @@ float Atmosphere::pdf(vec3, vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image_size);
-  return distr.pdf(ic) / (2 * pi * pi);
+  return distr.pdf(ic) / (4 * pi);
 }
 
 ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint)

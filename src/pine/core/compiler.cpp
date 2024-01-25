@@ -355,7 +355,7 @@ size_t Bytecodes::add(Bytecode::Instruction instruction, size_t value0, size_t v
   return codes.size() - 1;
 }
 void Bytecodes::add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
-                          psl::Array<uint16_t, 8> args) {
+                          psl::span<uint16_t> args) {
   codes.push_back({instruction, value, type_id, args});
   stack.push_back(type_id);
 }
@@ -447,7 +447,7 @@ uint16_t StringLiteral::emit(Context&, Bytecodes& bytecodes) const {
   return bytecodes.last_var();
 }
 uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
-  psl::Array<uint16_t, 8> arg_indices;
+  auto arg_indices = psl::vector<uint16_t>(args.size());
   if (args.size() >= 2 && args.size() <= 4) {
     auto arg_type_ids = psl::vector<size_t>(args.size());
     for (size_t i = 0; i < args.size(); i++) {
@@ -464,7 +464,7 @@ uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
         context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), arg_type_ids);
     for (auto convert : converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
-                          {arg_indices[convert.position]});
+                          arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.last_var();
       arg_type_ids[convert.position] = convert.to_type_id;
     }
@@ -478,7 +478,9 @@ uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
 }
 uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
   try {
-    psl::Array<uint16_t, 8> arg_indices;
+    if (args.size() > 8)
+      bytecodes.error(*this, "Functions can accept no more than 8 arguments");
+    auto arg_indices = psl::vector<uint16_t>(args.size());
     auto arg_type_ids = psl::vector<size_t>(args.size());
 
     for (size_t i = 0; i < args.size(); i++) {
@@ -490,7 +492,7 @@ uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
     auto [fi, rtid, converts] = context.find_f(name, arg_type_ids);
     for (auto convert : converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
-                          {arg_indices[convert.position]});
+                          arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.last_var();
       arg_type_ids[convert.position] = convert.to_type_id;
     }
@@ -507,7 +509,7 @@ uint16_t MemberAccess::emit(Context& context, Bytecodes& bytecodes) const {
   auto vi = pexpr->emit(context, bytecodes);
   try {
     auto fi = context.types[bytecodes.get_var_type(vi)].find_member_accessor_index(id.value);
-    bytecodes.add_typed(Bytecode::Call, fi, context.functions[fi].return_type_id(), {vi});
+    bytecodes.add_typed(Bytecode::Call, fi, context.functions[fi].return_type_id(), vi);
     return bytecodes.last_var();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -525,7 +527,7 @@ uint16_t Subscript::emit(Context& context, Bytecodes& bytecodes) const {
     if (converts.size())
       bytecodes.error(*this, "Automatic conversion is not supported for subscript operator");
 
-    bytecodes.add_typed(Bytecode::Call, fi, rtid, {vi0, vi1});
+    bytecodes.add_typed(Bytecode::Call, fi, rtid, vi0, vi1);
     return bytecodes.last_var();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -537,7 +539,7 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
     return x.emit(context, bytecodes);
 
   auto vi = x.emit(context, bytecodes);
-  psl::Array<uint16_t, 8> arg_indices{vi};
+  uint16_t arg_indices[]{vi};
   size_t arg_type_ids[]{bytecodes.get_var_type(vi)};
   auto fr = Context::FindFResult();
   try {
@@ -554,7 +556,7 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
     CHECK(fr.function_index != size_t(-1));
     for (auto convert : fr.converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
-                          {arg_indices[convert.position]});
+                          arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.last_var();
       arg_type_ids[convert.position] = convert.to_type_id;
     }
@@ -604,7 +606,7 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto a_index = a->emit(context, bytecodes);
     auto b_index = b->emit(context, bytecodes);
-    psl::Array<uint16_t, 8> arg_indices{a_index, b_index};
+    uint16_t arg_indices[]{a_index, b_index};
     size_t arg_type_ids[]{bytecodes.get_var_type(a_index), bytecodes.get_var_type(b_index)};
     auto fr = Context::FindFResult();
     switch (op) {
@@ -633,7 +635,7 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
     CHECK(fr.function_index != size_t(-1));
     for (auto convert : fr.converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
-                          {arg_indices[convert.position]});
+                          arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.last_var();
       arg_type_ids[convert.position] = convert.to_type_id;
     }
@@ -1524,7 +1526,7 @@ void execute(const Bytecodes& bytecodes) {
           const Variable* arr[]{&vm.stack[code.args[I]]...};
           push(bytecodes.functions[code.value].call(arr));
         };
-        switch (bytecodes.functions[code.value].n_parameters()) {
+        switch (code.nargs) {
           case 0: push(bytecodes.functions[code.value].call({})); break;
           case 1: f(psl::make_integer_sequence<int, 1>()); break;
           case 2: f(psl::make_integer_sequence<int, 2>()); break;
