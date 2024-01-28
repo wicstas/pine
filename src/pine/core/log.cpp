@@ -1,6 +1,6 @@
 #include <pine/core/log.h>
 
-#include <pine/psl/iostream.h>
+#include <psl/iostream.h>
 
 namespace pine {
 

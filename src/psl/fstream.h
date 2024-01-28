@@ -1,6 +1,6 @@
 #pragma once
 
-#include <pine/psl/string.h>
+#include <psl/string.h>
 
 namespace psl {
 
@@ -43,6 +43,34 @@ public:
 private:
   void* file = nullptr;
   mutable size_t size_ = -1;
+};
+
+struct ScopedFile {
+  ScopedFile(psl::string_view filename, psl::ios::OpenMode mode);
+
+  template <typename T>
+  T read() {
+    T value;
+    read(&value, sizeof(T));
+    return value;
+  }
+  template <typename T>
+  void write(const T& value) {
+    write(&value, sizeof(T));
+  }
+
+  void write(const void* data, size_t size);
+  void read(void* data, size_t size);
+
+  size_t size() const {
+    return file.size();
+  }
+  bool is_open() const {
+    return file.is_open();
+  }
+
+private:
+  psl::Fstream file;
 };
 
 }  // namespace psl

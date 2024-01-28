@@ -39,7 +39,7 @@ vec3 Sky::color(vec3 wo) const {
 LightSample Sky::sample(vec3 n, vec2 u2) const {
   auto ls = LightSample{};
   ls.wo = coordinate_system(n) * uniform_hemisphere(u2);
-  ls.distance = FloatMax;
+  ls.distance = float_max;
   ls.pdf = 1 / (2 * pi);
   ls.le = color(ls.wo);
   return ls;
@@ -81,7 +81,7 @@ LightSample Atmosphere::sample(vec3, vec2 u2) const {
   auto sc = ic2sc(ds.p, image_size);
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
-  ls.distance = FloatMax;
+  ls.distance = float_max;
   ls.pdf = ds.pdf / (4 * pi);
   ls.le = sun_color * atmosphere_color(ls.wo, sun_direction, 8, true);
   return ls;
@@ -113,7 +113,7 @@ LightSample ImageSky::sample(vec3, vec2 u2) const {
   auto sc = ic2sc(ds.p, image->size());
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
-  ls.distance = FloatMax;
+  ls.distance = float_max;
   ls.pdf = ds.pdf / (4 * pi);
   ls.le = tint * (*image)[ds.p];
   return ls;

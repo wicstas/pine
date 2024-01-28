@@ -1,12 +1,12 @@
 #include <pine/core/context.h>
 
-#include <pine/psl/algorithm.h>
+#include <psl/algorithm.h>
 
 namespace pine {
 
 Context::Context() {
   auto& context = *this;
-  context.type<int, Context::Float>("int").to<float>().ctor_variant<float>(true);
+  context.type<int, Context::Float>("int").ctor_variant<float>(true);
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
   context("--x") = +[](int& x) -> decltype(auto) { return --x; };
@@ -31,7 +31,7 @@ Context::Context() {
   context("*=") = +[](float& a, int b) -> float& { return a *= b; };
   context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  context.type<float, Context::Float>("float");
+  context.type<float, Context::Float>("float").ctor_variant<int>();
   context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
   context.type<bool>("bool");
@@ -172,8 +172,8 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       }
       if (candidates.size())
         candidates.pop_back();
-      exception("No function `", name, "` that accepts `", arg_type_aliases,
-                "` is found, candidates:\n", candidates);
+      exception("Function `", name, "(", arg_type_aliases,
+                ")` is not found, candidates:\n", candidates);
     } else {
       auto likely_func_name = psl::string();
       auto min_difference = 8;
@@ -189,10 +189,9 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       }
 
       if (likely_func_name != "")
-        exception("No function named `", name, "` is found, did you mean `", likely_func_name,
-                  "`?");
+        exception("Function `", name, "`is not found, did you mean `", likely_func_name, "`?");
       else
-        exception("No function named `", name, "` is found");
+        exception("Function `", name, "`is not found");
     }
   }
 }

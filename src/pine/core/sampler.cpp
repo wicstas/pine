@@ -27,7 +27,7 @@ static uint64_t multiplicativeInverse(int64_t a, int64_t n) {
 
 psl::vector<uint16_t> HaltonSampler::radicalInversePermutations;
 
-HaltonSampler::HaltonSampler(int samplesPerPixel, vec2i filmSize,
+HaltonSampler::HaltonSampler(int samplesPerPixel, vec2i filmsize,
                              RandomizeStrategy randomizeStrategy)
     : samplesPerPixel(samplesPerPixel), randomizeStrategy(randomizeStrategy) {
   if (radicalInversePermutations.size() == 0) {
@@ -38,7 +38,7 @@ HaltonSampler::HaltonSampler(int samplesPerPixel, vec2i filmSize,
   for (int i = 0; i < 2; i++) {
     int base = (i == 0) ? 2 : 3;
     int scale = 1, exp = 0;
-    while (scale < psl::min(filmSize[i], MaxHaltonResolution)) {
+    while (scale < psl::min(filmsize[i], MaxHaltonResolution)) {
       scale *= base;
       ++exp;
     }
@@ -118,13 +118,13 @@ struct FastOwenScramber {
   }
 
   uint32_t operator()(uint32_t v) const {
-    v = ReverseBits32(v);
+    v = reverse_bits32(v);
     v ^= v * 0x3d20adea;
     v += seed;
     v *= (seed >> 16) | 1;
     v ^= v * 0x05526c56;
     v ^= v * 0x53a22864;
-    return ReverseBits32(v);
+    return reverse_bits32(v);
   }
 
   uint32_t seed;
@@ -139,7 +139,7 @@ struct OwenScramber {
       v ^= 1u << 31;
     for (int b = 1; b < 32; b++) {
       uint32_t mask = (~0u) << (32 - b);
-      if ((uint32_t)MixBits((v & mask) ^ seed) & (1u << b))
+      if ((uint32_t)mix_bits((v & mask) ^ seed) & (1u << b))
         v ^= 1u << (31 - b);
     }
     return v;
@@ -148,7 +148,7 @@ struct OwenScramber {
   uint32_t seed;
 };
 
-void MltSampler::EnsureReady(int dim) {
+void MltSampler::Ensureready(int dim) {
   if (dim >= (int)X.size())
     X.resize(dim + 1);
   PrimarySample& Xi = X[dim];
@@ -163,7 +163,7 @@ void MltSampler::EnsureReady(int dim) {
     Xi.value = rng.uniformf();
   } else {
     int64_t nSmall = sampleIndex - Xi.lastModificationIndex;
-    float normalSample = psl::sqrt(2.0f) * ErfInv(2 * rng.uniformf() - 1);
+    float normalSample = psl::sqrt(2.0f) * erf_inv(2 * rng.uniformf() - 1);
     float effSigma = sigma * psl::sqrt((float)nSmall);
     Xi.value = psl::fract(Xi.value + normalSample * effSigma);
   }

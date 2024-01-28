@@ -26,7 +26,7 @@ struct Interaction {
         ray.d = w;
         ray.o = OffsetRayOrigin(p, face_same_hemisphere(n, ray.d));
         ray.tmin = 1e-6f;
-        ray.tmax = FloatMax;
+        ray.tmax = float_max;
         return ray;
     }
 

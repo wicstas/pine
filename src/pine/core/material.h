@@ -4,7 +4,7 @@
 #include <pine/core/scattering.h>
 #include <pine/core/bxdf.h>
 
-#include <pine/psl/variant.h>
+#include <psl/variant.h>
 
 namespace pine {
 

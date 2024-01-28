@@ -2,12 +2,12 @@
 
 #include <pine/core/log.h>
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/optional.h>
-#include <pine/psl/string.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/system.h>
-#include <pine/psl/map.h>
+#include <psl/type_traits.h>
+#include <psl/optional.h>
+#include <psl/string.h>
+#include <psl/vector.h>
+#include <psl/system.h>
+#include <psl/map.h>
 
 namespace pine {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <pine/psl/string.h>
+#include <psl/string.h>
 
 #include <typeinfo>
 
@@ -33,7 +33,7 @@ struct TypeId {
 template <typename T>
 TypeId type_id_full() {
   static auto id =
-      TypeId{type_id<T>(), psl::IsConst<T>, psl::IsReference<T> || psl::IsRvReference<T>};
+      TypeId{type_id<T>(), psl::is_const<T>, psl::is_reference<T> || psl::is_rv_reference<T>};
   return id;
 }
 

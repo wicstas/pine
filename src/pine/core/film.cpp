@@ -6,7 +6,7 @@ namespace pine {
 
 void save_film_as_image(psl::string_view filename, Film film) {
   film.finalize();
-  SaveImage(filename, film.size(), 4, &film.data()[0][0]);
+  save_image(psl::string(filename), film.pixels);
 }
 
 void Film::clear() {

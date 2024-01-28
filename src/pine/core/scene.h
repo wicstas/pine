@@ -4,9 +4,9 @@
 #include <pine/core/camera.h>
 #include <pine/core/light.h>
 
-#include <pine/psl/memory.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/map.h>
+#include <psl/memory.h>
+#include <psl/vector.h>
+#include <psl/map.h>
 
 namespace pine {
 

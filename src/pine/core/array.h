@@ -53,7 +53,9 @@ private:
   psl::vector<T> data_;
 };
 
-using Array2Df = Array2D<vec2>;
+using Array2D2f = Array2D<vec2>;
+using Array2D3f = Array2D<vec3>;
+using Array2D4f = Array2D<vec4>;
 
 template <typename F>
 void for_2d(vec2i lower, vec2i upper, F f, bool horizontal = false) {
@@ -81,10 +83,12 @@ void for_2d(vec2i size, F f, bool horizontal = false) {
   return for_2d(vec2i{}, size, f, horizontal);
 }
 
-inline Array2Df grid(vec2 a, vec2 b, vec2i size) {
-  auto arr = Array2Df{size};
+inline Array2D2f grid(vec2 a, vec2 b, vec2i size) {
+  auto arr = Array2D2f(size);
   for_2d(size, [&](vec2i p) { arr[p] = lerp((p + vec2{0.5f}) / size, a, b); });
   return arr;
 }
+
+void array2d_context(Context &context);
 
 }  // namespace pine

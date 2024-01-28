@@ -1,8 +1,8 @@
 #pragma once
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/stdint.h>
-#include <pine/psl/check.h>
+#include <psl/type_traits.h>
+#include <psl/stdint.h>
+#include <psl/check.h>
 
 namespace psl {
 

@@ -2,8 +2,8 @@
 
 #include <pine/core/log.h>
 
-#include <pine/psl/memory.h>
-#include <pine/psl/map.h>
+#include <psl/memory.h>
+#include <psl/map.h>
 
 namespace pine {
 

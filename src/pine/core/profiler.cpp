@@ -1,8 +1,8 @@
 #include <pine/core/profiler.h>
 
-#include <pine/psl/map.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/memory.h>
+#include <psl/map.h>
+#include <psl/vector.h>
+#include <psl/memory.h>
 
 #include <mutex>
 #include <atomic>
@@ -21,19 +21,19 @@ psl::string pad(T x, size_t max_len) {
   const auto len = str.size();
   str = str.substr(0, max_len);
   if (max_len > len)
-    str = str + psl::string(max_len - len, ' ');
+    str = str + psl::string_n_of(max_len - len, ' ');
   return str;
 }
 
 void Profiler::Finalize() {
   main.reset();
-  Log("[Profiler]========================================>");
+  Debug("[Profiler]========================================>");
   auto ReportRecord = [](auto& me, Record record, size_t indent, double totalTime) -> void {
     if (totalTime != 0.0f && record.time / totalTime < 0.005f)
       return;
     if (record.name != "") {
-      Log(psl::string(indent, ' '), pad(record.name, 24 - indent), " ", pad(record.sampleCount, 6),
-          pad(record.time, 8), "ms ",
+      Debug(psl::string_n_of(indent, ' '), pad(record.name, 24 - indent), " ",
+          pad(record.sampleCount, 6), pad(record.time, 8), "ms ",
           pad((totalTime == 0.0f) ? 100.0 : 100.0 * record.time / totalTime, 8), "%");
       indent += 2;
     }

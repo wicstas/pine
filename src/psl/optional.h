@@ -1,7 +1,7 @@
 #pragma once
 
-#include <pine/psl/utility.h>
-#include <pine/psl/memory.h>
+#include <psl/utility.h>
+#include <psl/memory.h>
 
 namespace psl {
 

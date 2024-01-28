@@ -2,7 +2,7 @@
 
 #include <pine/core/math.h>
 
-#include <pine/psl/string.h>
+#include <psl/string.h>
 
 namespace pine {
 
@@ -1319,5 +1319,7 @@ inline int min_axis(vec3 v) {
   else
     return v[1] < v[2] ? 1 : 2;
 }
+
+void vecmath_context(Context &ctx);
 
 }  // namespace pine

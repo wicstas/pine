@@ -4,7 +4,7 @@
 #include <pine/core/material.h>
 #include <pine/core/ray.h>
 
-#include <pine/psl/variant.h>
+#include <psl/variant.h>
 
 namespace pine {
 
@@ -12,12 +12,12 @@ struct RayOctant {
   RayOctant(const Ray& ray)
       : octantx3{psl::signbit(ray.d[0]) * 3, psl::signbit(ray.d[1]) * 3,
                  psl::signbit(ray.d[2]) * 3},
-        invDir(safe_rcp(ray.d)),
-        negOrgDivDir(-ray.o * invDir) {
+        dir_inv(safe_rcp(ray.d)),
+        neg_org_div_dir(-ray.o * dir_inv) {
   }
 
   int octantx3[3];
-  vec3 invDir, negOrgDivDir;
+  vec3 dir_inv, neg_org_div_dir;
 };
 
 struct AABB {
@@ -25,25 +25,18 @@ struct AABB {
   AABB(vec3 lower, vec3 upper) : lower(lower), upper(upper){};
   AABB(vec3 p) : lower(p), upper(p){};
 
-  int MaxDim() const {
-    vec3 diagonal = upper - lower;
-    if (diagonal.x > diagonal.y)
-      return diagonal.x > diagonal.z ? 0 : 2;
-    else
-      return diagonal.y > diagonal.z ? 1 : 2;
-  }
-  vec3 Centroid() const {
+  vec3 centroid() const {
     return (lower + upper) / 2;
   }
-  float Centroid(int dim) const {
+  float centroid(int dim) const {
     return (lower[dim] + upper[dim]) / 2;
   }
-  vec3 Diagonal() const {
+  vec3 diagonal() const {
     return max(upper - lower, vec3(0.0f));
   }
-  vec3 Offset(vec3 p) const;
-  float Offset(float p, int dim) const;
-  float SurfaceArea() const;
+  vec3 relative_position(vec3 p) const;
+  float relative_position(float p, int dim) const;
+  float surface_area() const;
   void extend(vec3 p);
   void extend(const AABB& aabb);
   psl::pair<AABB, AABB> split_half(int axis) const;
@@ -51,11 +44,11 @@ struct AABB {
     l.extend(r);
     return l;
   }
-  friend AABB Union(AABB l, const AABB& r) {
+  friend AABB union_(AABB l, const AABB& r) {
     l.extend(r);
     return l;
   }
-  friend AABB Intersection(const AABB& l, const AABB& r) {
+  friend AABB intersect(const AABB& l, const AABB& r) {
     AABB ret;
     ret.lower = max(l.lower, r.lower);
     ret.upper = min(l.upper, r.upper);
@@ -75,24 +68,22 @@ struct AABB {
     return hit(r, tmin, &tmax);
   }
   PINE_ALWAYS_INLINE bool hit(const RayOctant& r, float tmin, float* tmax) const {
-    const float* p = &lower[0];
-    float tmin0 = p[0 + r.octantx3[0]] * r.invDir[0] + r.negOrgDivDir[0];
-    float tmin1 = p[1 + r.octantx3[1]] * r.invDir[1] + r.negOrgDivDir[1];
-    float tmin2 = p[2 + r.octantx3[2]] * r.invDir[2] + r.negOrgDivDir[2];
+    auto p = &lower[0];
+    auto tmin0 = p[0 + r.octantx3[0]] * r.dir_inv[0] + r.neg_org_div_dir[0];
+    auto tmin1 = p[1 + r.octantx3[1]] * r.dir_inv[1] + r.neg_org_div_dir[1];
+    auto tmin2 = p[2 + r.octantx3[2]] * r.dir_inv[2] + r.neg_org_div_dir[2];
 
-    float tmax0 = p[3 - r.octantx3[0]] * r.invDir[0] + r.negOrgDivDir[0];
-    float tmax1 = p[4 - r.octantx3[1]] * r.invDir[1] + r.negOrgDivDir[1];
-    float tmax2 = p[5 - r.octantx3[2]] * r.invDir[2] + r.negOrgDivDir[2];
+    auto tmax0 = p[3 - r.octantx3[0]] * r.dir_inv[0] + r.neg_org_div_dir[0];
+    auto tmax1 = p[4 - r.octantx3[1]] * r.dir_inv[1] + r.neg_org_div_dir[1];
+    auto tmax2 = p[5 - r.octantx3[2]] * r.dir_inv[2] + r.neg_org_div_dir[2];
 
-    tmin = psl::max(psl::max(psl::max(tmin0, tmin1), tmin2), tmin);
-    *tmax = psl::min(psl::min(psl::min(tmax0, tmax1), tmax2), *tmax);
+    tmin = psl::max(tmin0, tmin1, tmin2, tmin);
+    *tmax = psl::min(tmax0, tmax1, tmax2, *tmax);
     return tmin <= *tmax;
   }
 
-  int face_hit_count(const Ray& ray) const;
-
-  vec3 lower = vec3{FloatMax};
-  vec3 upper = vec3{-FloatMax};
+  vec3 lower = vec3{float_max};
+  vec3 upper = vec3{-float_max};
 };
 
 struct ShapeSample {
@@ -116,7 +107,7 @@ struct Plane {
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
   float area() const {
-    return FloatMax;
+    return float_max;
   }
   ShapeSample sample(vec3 p, vec2 u) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
@@ -131,7 +122,7 @@ struct Sphere {
   Sphere() = default;
   Sphere(vec3 position, float radius) : c(position), r(radius){};
 
-  static float ComputeT(vec3 ro, vec3 rd, float tmin, vec3 p, float r);
+  static float compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r);
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
@@ -344,5 +335,7 @@ struct Geometry {
   Shape shape;
   psl::shared_ptr<Material> material;
 };
+
+void geometry_context(Context& ctx);
 
 }  // namespace pine

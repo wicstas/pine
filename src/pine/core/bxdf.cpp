@@ -26,7 +26,7 @@ vec3 DiffuseBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
 }
 float DiffuseBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx&) const {
   if (!SameHemisphere(wi, wo))
-    return Epsilon;
+    return epsilon;
   return AbsCosTheta(wo) / pi;
 }
 
@@ -165,7 +165,7 @@ psl::optional<BSDFSample> SpecularReflectionBSDF::sample(vec3 wi, float, vec2,
   auto bs = BSDFSample{};
   bs.f = albedo(nc);
   bs.wo = Reflect(wi, vec3{0, 0, 1});
-  bs.pdf = psl::max(AbsCosTheta(bs.wo), Epsilon);
+  bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
   return bs;
 }
 
@@ -191,7 +191,7 @@ psl::optional<BSDFSample> SpecularRefrectionBSDF::sample(vec3 wi, float u1, vec2
     bs.wo = Reflect(wi, vec3{0, 0, 1});
   else if (!Refract(wi, vec3{0, 0, 1}, etap, bs.wo))
     return psl::nullopt;
-  bs.pdf = psl::max(AbsCosTheta(bs.wo), Epsilon);
+  bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
   return bs;
 }
 

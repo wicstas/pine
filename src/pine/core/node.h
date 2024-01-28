@@ -4,9 +4,9 @@
 #include <pine/core/image.h>
 #include <pine/core/log.h>
 
-#include <pine/psl/optional.h>
-#include <pine/psl/variant.h>
-#include <pine/psl/math.h>
+#include <psl/optional.h>
+#include <psl/variant.h>
+#include <psl/math.h>
 
 namespace pine {
 

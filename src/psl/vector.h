@@ -1,10 +1,10 @@
 #pragma once
 
-#include <pine/psl/algorithm.h>
-#include <pine/psl/memory.h>
-#include <pine/psl/check.h>
-#include <pine/psl/math.h>
-#include <pine/psl/new.h>
+#include <psl/algorithm.h>
+#include <psl/memory.h>
+#include <psl/check.h>
+#include <psl/math.h>
+#include <psl/new.h>
 
 #include <initializer_list>
 
@@ -51,12 +51,14 @@ public:
   explicit VectorBase(size_t len) {
     resize(len);
   }
-  VectorBase(size_t len, const T& x) : VectorBase{len} {
-    psl::fill(*this, x);
-  }
   template <Range ARange>
-  explicit VectorBase(ARange&& range) : VectorBase(psl::size(range)) {
-    psl::copy(begin(), range);
+  explicit VectorBase(ARange&& range) {
+    if constexpr (psl::has_size<ARange>) {
+      resize(psl::size(range));
+      psl::copy(begin(), range);
+    } else {
+      psl::insert([this](const auto& x) { push_back(x); }, range);
+    }
   }
   template <ForwardIterator It>
   VectorBase(It first, It last) : VectorBase(psl::range(first, last)) {
@@ -265,6 +267,13 @@ protected:
 
 template <typename T>
 using vector = VectorBase<T, default_allocator<T>>;
+
+template <typename T>
+vector<T> vector_n_of(size_t n, const T& x) {
+  auto v = vector<T>(n);
+  psl::fill(v, x);
+  return v;
+}
 
 template <typename... Us, typename... Ts>
 requires same_type<Ts...>

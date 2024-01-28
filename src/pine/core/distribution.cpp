@@ -75,7 +75,7 @@ static DistributionSample sample(const Distribution2D::Node* node, vec2 u2, floa
   CHECK_RANGE(r, 0, 1);
   auto& u = node->split_x ? u2[0] : u2[1];
   if (u <= r) {
-    u = u / psl::max(r, Epsilon);
+    u = u / psl::max(r, epsilon);
     return sample(node->left.get(), u2, pdf * r);
   } else {
     u = (u - r) / (1 - r);

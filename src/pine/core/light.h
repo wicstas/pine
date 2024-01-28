@@ -4,8 +4,8 @@
 #include <pine/core/geometry.h>
 #include <pine/core/ray.h>
 
-#include <pine/psl/variant.h>
-#include <pine/psl/vector.h>
+#include <psl/variant.h>
+#include <psl/vector.h>
 
 namespace pine {
 

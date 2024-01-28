@@ -2,8 +2,8 @@
 
 #include <pine/core/node.h>
 
-#include <pine/psl/optional.h>
-#include <pine/psl/variant.h>
+#include <psl/optional.h>
+#include <psl/variant.h>
 
 namespace pine {
 

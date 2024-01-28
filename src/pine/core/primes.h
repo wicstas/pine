@@ -4,9 +4,9 @@
 
 namespace pine {
 
-static constexpr int PrimeTableSize = 1000;
-extern const int Primes[PrimeTableSize];
-extern const int PrimeSums[PrimeTableSize];
+static constexpr int PrimeTablesize = 1000;
+extern const int Primes[PrimeTablesize];
+extern const int PrimeSums[PrimeTablesize];
 
 }  // namespace pine
 

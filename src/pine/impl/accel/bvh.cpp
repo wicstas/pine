@@ -4,6 +4,7 @@
 #include <pine/core/rng.h>
 
 #include <queue>
+#include <algorithm>
 
 namespace pine {
 
@@ -41,8 +42,8 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
 
   AABB aabbCentroid;
   for (int i = 0; i < numPrimitives; i++)
-    aabbCentroid.extend(begin[i].aabb.Centroid());
-  float surfaceArea = aabb.SurfaceArea();
+    aabbCentroid.extend(begin[i].aabb.centroid());
+  float surfaceArea = aabb.surface_area();
 
   struct Bucket {
     int count = 0;
@@ -50,7 +51,7 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
   };
   const int nBuckets = 16;
 
-  float minCost = FloatMax;
+  float minCost = float_max;
   int bestAxis = -1;
   int splitBucket = -1;
 
@@ -61,7 +62,7 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     Bucket buckets[nBuckets];
 
     for (int i = 0; i < numPrimitives; i++) {
-      int b = psl::min(int(nBuckets * aabbCentroid.Offset(begin[i].aabb.Centroid(axis), axis)),
+      int b = psl::min(int(nBuckets * aabbCentroid.relative_position(begin[i].aabb.centroid(axis), axis)),
                        nBuckets - 1);
       buckets[b].count++;
       buckets[b].aabb.extend(begin[i].aabb);
@@ -74,7 +75,7 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     for (int i = 0; i < nBuckets - 1; i++) {
       bForward.extend(buckets[i].aabb);
       countForward += buckets[i].count;
-      cost[i] += countForward * bForward.SurfaceArea();
+      cost[i] += countForward * bForward.surface_area();
     }
 
     AABB bBackward;
@@ -82,14 +83,14 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     for (int i = nBuckets - 1; i >= 1; i--) {
       bBackward.extend(buckets[i].aabb);
       countBackward += buckets[i].count;
-      cost[i - 1] += countBackward * bBackward.SurfaceArea();
+      cost[i - 1] += countBackward * bBackward.surface_area();
     }
 
     for (int i = 0; i < nBuckets - 1; i++) {
       cost[i] = 1.0f + cost[i] / surfaceArea;
     }
 
-    float axisMinCost = FloatMax;
+    float axisMinCost = float_max;
     int axisSplitBucket = -1;
     for (int i = 0; i < nBuckets - 1; i++) {
       if (cost[i] < axisMinCost) {
@@ -110,7 +111,7 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     return MakeLeaf();
 
   Primitive* pmid = psl::partition(psl::range(begin, end), [=](const Primitive& prim) {
-    int b = nBuckets * aabbCentroid.Offset(prim.aabb.Centroid(bestAxis), bestAxis);
+    int b = nBuckets * aabbCentroid.relative_position(prim.aabb.centroid(bestAxis), bestAxis);
     if (b == nBuckets)
       b = nBuckets - 1;
     return b <= splitBucket;
@@ -158,13 +159,13 @@ struct pair {
 void BVHImpl::Optimize() {
   auto FindNodeForReinsertion = [&](int nodeIndex) {
     float eps = 1e-20f;
-    float costBest = FloatMax;
+    float costBest = float_max;
     int nodeBest = -1;
 
     auto& L = nodes[nodeIndex];
 
     std::priority_queue<Item> queue;
-    queue.push(Item(rootIndex, 0.0f, FloatMax));
+    queue.push(Item(rootIndex, 0.0f, float_max));
 
     while (queue.size()) {
       Item item = queue.top();
@@ -172,19 +173,19 @@ void BVHImpl::Optimize() {
       auto CiLX = item.costInduced;
       auto& X = nodes[item.nodeIndex];
 
-      if (CiLX + L.SurfaceArea() >= costBest)
+      if (CiLX + L.surface_area() >= costBest)
         break;
 
-      float CdLX = Union(X.get_aabb(), L.get_aabb()).SurfaceArea();
+      float CdLX = union_(X.get_aabb(), L.get_aabb()).surface_area();
       float CLX = CiLX + CdLX;
       if (CLX < costBest) {
         costBest = CLX;
         nodeBest = item.nodeIndex;
       }
 
-      float Ci = CLX - X.SurfaceArea();
+      float Ci = CLX - X.surface_area();
 
-      if (Ci + L.SurfaceArea() < costBest) {
+      if (Ci + L.surface_area() < costBest) {
         if (X.primitiveIndices.size() == 0) {
           queue.push(Item(X.children[0], Ci, 1.0f / (Ci + eps)));
           queue.push(Item(X.children[1], Ci, 1.0f / (Ci + eps)));
@@ -219,8 +220,8 @@ void BVHImpl::Optimize() {
 
       for (int i = 0; i < (int)nodes.size(); i++)
         inefficiencies[i] = {i, nodes[i].Inefficiency()};
-      psl::partial_sort(inefficiencies, inefficiencies.begin() + nodes.size() / 200,
-                        psl::less<pair>{});
+      std::partial_sort(inefficiencies.begin(), inefficiencies.end(),
+                        inefficiencies.begin() + nodes.size() / 200, psl::less<pair>{});
 
       for (int i = 0; i < (int)nodes.size() / 200; i++) {
         int nodeIndex = inefficiencies[i].index;
@@ -253,7 +254,7 @@ void BVHImpl::Optimize() {
       for (int i = 0; i < (int)nodes.size() / 100; i++) {
         int nodeIndex = -1;
         do {
-          nodeIndex = sampler.Uniform64u() % nodes.size();
+          nodeIndex = sampler.uniform64u() % nodes.size();
         } while ((nodes[nodeIndex].primitiveIndices.size() != 0 || nodes[nodeIndex].removed ||
                   nodes[nodeIndex].parent == -1 || nodes[nodes[nodeIndex].parent].removed ||
                   nodes[nodes[nodeIndex].parent].parent == -1 ||
@@ -281,7 +282,7 @@ void BVHImpl::Optimize() {
     }
 
     psl::sort(unusedNodes, [&](psl::pair<int, int> l, psl::pair<int, int> r) {
-      return nodes[l.first].SurfaceArea() > nodes[r.first].SurfaceArea();
+      return nodes[l.first].surface_area() > nodes[r.first].surface_area();
     });
 
     for (const auto& node : unusedNodes) {

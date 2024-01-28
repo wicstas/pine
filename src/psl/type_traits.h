@@ -1,8 +1,10 @@
 #pragma once
 
-#include <pine/psl/stdint.h>
+#include <psl/stdint.h>
 
 namespace psl {
+
+struct Empty {};
 
 struct TrueType {
   static constexpr bool value = true;
@@ -10,6 +12,19 @@ struct TrueType {
 struct FalseType {
   static constexpr bool value = false;
 };
+
+template <bool value, typename T, typename U>
+struct _Conditional;
+template <typename T, typename U>
+struct _Conditional<false, T, U> {
+  using Type = U;
+};
+template <typename T, typename U>
+struct _Conditional<true, T, U> {
+  using Type = T;
+};
+template <bool value, typename T, typename U>
+using Conditional = typename _Conditional<value, T, U>::Type;
 
 template <typename T>
 struct _TypeIdentity {
@@ -26,13 +41,19 @@ struct _SameAs : FalseType {};
 template <typename T>
 struct _SameAs<T, T> : TrueType {};
 template <typename T, typename U>
+constexpr bool same_as = _SameAs<T, U>::value;
+template <typename T, typename U>
 concept SameAs = _SameAs<T, U>::value;
 
 template <typename T>
-concept IsVoid = SameAs<T, void>;
+constexpr bool is_void = same_as<T, void>;
+template <typename T>
+concept IsVoid = same_as<T, void>;
 
 template <typename T, typename U>
-concept DifferentFrom = !SameAs<T, U>;
+constexpr bool different_from = !same_as<T, U>;
+template <typename T, typename U>
+concept DifferentFrom = !same_as<T, U>;
 
 template <typename T>
 struct _IsArray : FalseType {};
@@ -41,21 +62,21 @@ struct _IsArray<T[]> : TrueType {};
 template <typename T, int N>
 struct _IsArray<T[N]> : TrueType {};
 template <typename T>
-concept IsArray = _IsArray<T>::value;
+constexpr bool is_array = _IsArray<T>::value;
 
 template <typename T>
 struct _IsFunction : FalseType {};
 template <typename R, typename... Args>
 struct _IsFunction<R(Args...)> : TrueType {};
 template <typename T>
-concept IsFunction = _IsFunction<T>::value;
+constexpr bool is_function = _IsFunction<T>::value;
 
 template <typename T>
 struct _IsPointer : FalseType {};
 template <typename T>
 struct _IsPointer<T *> : TrueType {};
 template <typename T>
-constexpr bool IsPointer = _IsPointer<T>::value;
+constexpr bool is_pointer = _IsPointer<T>::value;
 
 template <typename T>
 struct _IsIntegral : FalseType {};
@@ -76,6 +97,8 @@ struct _IsIntegral<uint32_t> : TrueType {};
 template <>
 struct _IsIntegral<uint64_t> : TrueType {};
 template <typename T>
+constexpr bool is_integral = _IsIntegral<T>::value;
+template <typename T>
 concept Integral = _IsIntegral<T>::value;
 
 template <typename T>
@@ -85,12 +108,17 @@ struct _IsFloatingPoint<float> : TrueType {};
 template <>
 struct _IsFloatingPoint<double> : TrueType {};
 template <typename T>
+constexpr bool is_floating_point = _IsFloatingPoint<T>::value;
+template <typename T>
 concept FloatingPoint = _IsFloatingPoint<T>::value;
 
 template <typename T>
 concept FundamentalNumerical = Integral<T> || FloatingPoint<T>;
 template <typename T>
-concept FundamentalType = FundamentalNumerical<T> || IsArray<T> || IsPointer<T> || IsFunction<T>;
+constexpr bool is_fundamental =
+    FundamentalNumerical<T> || is_array<T> || is_pointer<T> || is_function<T>;
+template <typename T>
+concept FundamentalType = FundamentalNumerical<T> || is_array<T> || is_pointer<T> || is_function<T>;
 
 template <typename T>
 concept Arithmetic = requires(T x) {
@@ -110,21 +138,21 @@ struct _IsReference : FalseType {};
 template <typename T>
 struct _IsReference<T &> : TrueType {};
 template <typename T>
-concept IsReference = _IsReference<T>::value;
+constexpr bool is_reference = _IsReference<T>::value;
 
 template <typename T>
 struct _IsRvReference : FalseType {};
 template <typename T>
 struct _IsRvReference<T &&> : TrueType {};
 template <typename T>
-concept IsRvReference = _IsRvReference<T>::value;
+concept is_rv_reference = _IsRvReference<T>::value;
 
 template <typename T>
 struct _IsConst : FalseType {};
 template <typename T>
 struct _IsConst<const T> : TrueType {};
 template <typename T>
-constexpr bool IsConst = _IsConst<T>::value;
+constexpr bool is_const = _IsConst<T>::value;
 
 template <typename T>
 struct _RemoveConst {
@@ -167,7 +195,7 @@ struct _RemoveExtent<T[N]> {
 template <typename T>
 using RemoveExtent = typename _RemoveExtent<T>::Type;
 
-template <typename T, bool IsArray = IsArray<T>, bool IsFunction = IsFunction<T>>
+template <typename T, bool is_array_ = is_array<T>, bool is_function_ = is_function<T>>
 struct _DecaySelector;
 template <typename T>
 struct _DecaySelector<T, false, false> {
@@ -210,7 +238,12 @@ public:
   static constexpr bool value = decltype(check(psl::declval<From>()))::value;
 };
 template <typename From, typename To>
-concept IsConvertible = _IsConverible<From, To>::value;
+constexpr bool convertible = _IsConverible<From, To>::value;
+
+template <typename Derived, typename Base>
+constexpr bool derived_from = convertible<const Derived *, const Base *>;
+template <typename Derived, typename Base>
+concept DerivedFrom = convertible<const Derived *, const Base *>;
 
 template <typename T>
 struct _CorrespondingInt;
@@ -234,7 +267,7 @@ struct _IsDereferenceable<T, Voidify<decltype(*psl::declval<T>())>> {
   static constexpr bool value = true;
 };
 template <typename T>
-concept Dereferenceable = _IsDereferenceable<T>::value;
+constexpr bool dereferenceable = _IsDereferenceable<T>::value;
 
 template <bool value, typename... Ts>
 constexpr bool deferred_bool = value;
@@ -427,21 +460,21 @@ struct IteratorTraits<T> {
 
 template <typename T>
 concept ForwardIterator =
-    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       it++;
     };
 template <typename T>
 concept BackwardIterator =
-    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { --it } -> SameAs<T &>;
       it--;
     };
 template <typename T>
 concept BidirectionalIterator =
-    Copyable<T> && Dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
+    Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
       typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       { --it } -> SameAs<T &>;

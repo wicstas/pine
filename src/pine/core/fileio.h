@@ -3,72 +3,40 @@
 #include <pine/core/geometry.h>
 #include <pine/core/image.h>
 
-#include <pine/psl/fstream.h>
-#include <pine/psl/string.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/memory.h>
+#include <psl/fstream.h>
+#include <psl/string.h>
+#include <psl/vector.h>
+#include <psl/memory.h>
 
 namespace pine {
 
-struct ScopedFile {
-  ScopedFile(psl::string_view filename, psl::ios::OpenMode mode);
+psl::string read_string_file(psl::string_view filename);
 
-  template <typename T>
-  T Read() {
-    T val;
-    Read(&val, sizeof(T));
-    return val;
-  }
-  template <typename T>
-  void Write(const T& val) {
-    Write(&val, sizeof(T));
-  }
+void write_binary_file(psl::string_view filename, const void* ptr, size_t size);
+psl::vector<char> read_binary_file(psl::string_view filename);
 
-  void Write(const void* data, size_t size);
-  void Read(void* data, size_t size);
+psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data);
 
-  size_t Size() const {
-    return file.size();
-  }
-  bool Success() const {
-    return file.is_open();
-  }
+void save_image(psl::string filename, vec2i size, int nchannel, const float* data);
+void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t* data);
+inline void save_image(psl::string filename, const Array2D<vec2>& pixels) {
+  save_image(filename, pixels.size(), 2, &pixels.data()[0][0]);
+}
+inline void save_image(psl::string filename, const Array2D<vec3>& pixels) {
+  save_image(filename, pixels.size(), 3, &pixels.data()[0][0]);
+}
+inline void save_image(psl::string filename, const Array2D<vec4>& pixels) {
+  save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
+}
 
-  mutable psl::Fstream file;
-  mutable size_t size = -1;
-};
-
-bool IsFileExist(psl::string_view filename);
-psl::string GetFileDirectory(psl::string_view filename);
-psl::string GetFileExtension(psl::string_view filename);
-psl::string RemoveFileExtension(psl::string_view filename);
-psl::string ChangeFileExtension(psl::string_view filename, psl::string ext);
-psl::string AppendFileName(psl::string_view filename, psl::string content);
-
-psl::string ReadStringFile(psl::string_view filename);
-
-void WriteBinaryData(psl::string_view filename, const void* ptr, size_t size);
-psl::vector<char> ReadBinaryData(psl::string_view filename);
-
-psl::vector<uint8_t> ToUint8Image(vec2i size, int nchannel, const float* data);
-void SaveImage(psl::string_view filename, vec2i size, int nchannel, const float* data);
-void SaveImage(psl::string_view filename, vec2i size, int nchannel, const uint8_t* data);
 Image read_image(psl::string_view filename);
 Image read_image(void* data, size_t size);
 
 TriangleMesh load_mesh(void* data, size_t size);
 TriangleMesh load_mesh(psl::string_view filename);
 
-void interpretFile(Context& context,psl::string_view filename);
+void interpret_file(Context& context, psl::string_view filename);
 
-template <typename... Ts>
-void Serialize(psl::string_view filename, const Ts&... object) {
-  auto data = Archive(object...);
-  WriteBinaryData(filename, data.data(), data.size() * sizeof(data[0]));
-}
-template <typename... Ts>
-auto Deserialize(psl::string_view filename) {
-  return Unarchive<Ts...>(ReadBinaryData(filename));
-}
+void fileio_context(Context& ctx);
 
 }  // namespace pine

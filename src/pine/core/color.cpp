@@ -34,7 +34,7 @@ vec3 color_map(float v) {
   }
 }
 vec3 color_map_smooth(float v) {
-  v = 1 - 1 / psl::max(v, Epsilon);
+  v = 1 - 1 / psl::max(v, epsilon);
   return color_map(v);
 }
 
@@ -49,7 +49,7 @@ vec3 atmosphere_color(vec3 direction, vec3 sun_dir, int nSamples, bool simulate_
                        ((2.0f + g * g) * psl::pow(1.0f + g * g - 2.0f * g * mu, 1.5f));
 
   Ray ray = Ray(vec3(0.0f, planet_radius, 0.0f), direction);
-  ray.tmax = Sphere::ComputeT(ray.o, ray.d, 0.0f, vec3(0.0f), atomsphere_radius);
+  ray.tmax = Sphere::compute_t(ray.o, ray.d, 0.0f, vec3(0.0f), atomsphere_radius);
   float segmentLength = ray.tmax / nSamples, tCurrent = 0.0f;
   float opticalDepthR = 0.0f, opticalDepthM = 0.0f;
   vec3 sumR, sumM;
@@ -63,7 +63,7 @@ vec3 atmosphere_color(vec3 direction, vec3 sun_dir, int nSamples, bool simulate_
     opticalDepthR += hr;
     opticalDepthM += hm;
 
-    float ltmax = Sphere::ComputeT(samplePosition, sun_dir, 0.0f, vec3(0.0f), atomsphere_radius);
+    float ltmax = Sphere::compute_t(samplePosition, sun_dir, 0.0f, vec3(0.0f), atomsphere_radius);
     float segmentLengthLight = ltmax / nSamplesLight;
     float opticalDepthRLight = 0.0f, opticalDepthMLight = 0.0f;
 

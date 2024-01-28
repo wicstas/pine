@@ -1,9 +1,9 @@
 #pragma once
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/limits.h>
-#include <pine/psl/math.h>
+#include <psl/type_traits.h>
+#include <psl/vector.h>
+#include <psl/limits.h>
+#include <psl/math.h>
 
 namespace psl {
 
@@ -51,7 +51,6 @@ public:
 
   string();
   explicit string(size_t len);
-  string(size_t len, char x);
   template <Range ARange>
   explicit string(ARange&& range) : string(psl::size(range)) {
     psl::copy(begin(), range);
@@ -61,6 +60,11 @@ public:
   }
   string(const char* cstr);
   string(const char* cstr, size_t len);
+
+  string(string&& rhs) = default;
+  string(const string& rhs);
+
+  string& operator=(string rhs);
 
   void resize(size_t len);
 
@@ -144,16 +148,8 @@ public:
   }
   string_view(Range auto&& range) : string_view(psl::begin(range), psl::end(range)) {
   }
-  string_view substr(size_t pos, iterator end) const {
-    return substr(pos, distance(begin(), end) - pos);
-  }
-  string_view substr(size_t pos, size_t len = -1) const {
-    pos = clamp(pos, size_t{0}, size());
-    if (len == size_t(-1))
-      return string_view(data() + pos, size() - pos);
-    else
-      return string_view(data() + pos, min(len, size() - pos));
-  }
+  string_view substr(size_t pos, iterator end) const;
+  string_view substr(size_t pos, size_t len = -1) const;
 
   friend string operator+(string_view lhs, const string& rhs) {
     return string(lhs) + rhs;
@@ -234,30 +230,41 @@ public:
   inline static const size_t npos = (size_t)-1;
 };
 
+inline string string_n_of(size_t n, char x) {
+  auto str = string(n);
+  psl::fill(str, x);
+  return str;
+}
+
+template <typename T>
+string to_string_forward(const T& x);
+
 inline string to_string(const char* x) {
-  return string{x};
+  return string(x);
 }
 inline string to_string(string x) {
   return x;
 }
 inline string to_string(string_view x) {
-  return string{x};
+  return string(x);
 }
+// Not doing `to_string(bool x)` for overload resolution reasons
 template <SameAs<bool> T>
 string to_string(T x) {
   return x ? "true" : "false";
 }
+// Not doing `to_string(char x)` for overload resolution reasons
 template <SameAs<char> T>
 string to_string(T x) {
-  return string{1, x};
+  return string_n_of(1, x);
 }
 template <Integral T>
 string to_string(T x) {
-  constexpr int max_len = 16;
+  constexpr auto max_len = 16;
   char str[max_len] = {};
-  int i = max_len;
+  auto i = max_len;
 
-  bool negative = x < 0;
+  auto negative = x < 0;
   x = psl::abs(x);
   do {
     str[--i] = '0' + x % 10;
@@ -270,38 +277,18 @@ string to_string(T x) {
   return string(str + i, max_len - i);
 }
 
-template <FloatingPoint T>
-string to_string(T x) {
-  if (psl::isnan(x))
-    return "nan";
-  if (x > psl::numeric_limits<float>::max())
-    return "inf";
-  if (x < -psl::numeric_limits<float>::max())
-    return "-inf";
+string to_string(float x);
+string to_string(double x);
 
-  auto neg = x < 0;
-  auto str = psl::string(neg ? "-" : "");
-  x = psl::abs(x);
-  str += psl::to_string(static_cast<int64_t>(x)) + ".";
-  x = psl::fract(x);
-
-  for (int i = 0; i < 8; ++i) {
-    x *= 10;
-    str.push_back('0' + static_cast<char>(x));
-    x = psl::absfract(x);
-  }
-
-  return str;
-}
 template <typename T, typename U>
 string to_string(pair<T, U> x) {
-  return "{" + to_string(x.first) + ", " + to_string(x.second) + "}";
+  return "{" + to_string_forward(x.first) + ", " + to_string_forward(x.second) + "}";
 }
 template <Range ARange>
 string to_string(ARange&& range) {
   auto r = string{"["};
-  for (auto& x : range)
-    r += to_string(x) + " ";
+  for (auto&& x : range)
+    r += to_string_forward(x) + " ";
   if (psl::size(range))
     r.pop_back();
   r.push_back(']');
@@ -309,8 +296,16 @@ string to_string(ARange&& range) {
 }
 
 template <typename T>
-string to_string(ref<T> x) {
-  return "ref{" + to_string(x) + "}";
+string to_string(ref_wrapper<T> x) {
+  return "ref{" + to_string_forward(x) + "}";
+}
+template <typename T>
+string to_string(T* x) {
+  return "*{" + to_string_forward(*x) + "}";
+}
+template <typename T>
+string to_string_forward(const T& x) {
+  return to_string(x);
 }
 
 template <typename... Ts>
@@ -325,5 +320,7 @@ float stof(string_view str);
 
 string space_by(vector<string> input, string spacer);
 string space_by(string input, string spacer);
+
+string from_last_of(const string& str, char c);
 
 }  // namespace psl

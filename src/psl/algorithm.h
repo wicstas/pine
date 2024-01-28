@@ -1,10 +1,13 @@
 #pragma once
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/utility.h>
-#include <algorithm>
+#include <psl/type_traits.h>
+#include <psl/utility.h>
 
 namespace psl {
+
+auto composite(auto f, auto g) {
+  return [f = psl::move(f), g = psl::move(g)](auto&& x) { return f(g(FWD(x))); };
+}
 
 constexpr auto add_ = [](auto&& a, auto&& b) -> decltype(auto) { return a + b; };
 constexpr auto sub_ = [](auto&& a, auto&& b) -> decltype(auto) { return a - b; };
@@ -57,6 +60,9 @@ concept Range = requires(T& x) {
   psl::begin(x);
   psl::end(x);
 };
+
+template <typename T>
+constexpr bool has_size = requires(T& x) { psl::size(x); };
 
 template <Range T>
 struct IteratorType {
@@ -114,7 +120,7 @@ It next(It it, size_t n) {
   if constexpr (psl::RandomAccessIterator<It>) {
     return it + n;
   } else {
-    while (n--)
+    for (; n; --n)
       ++it;
     return it;
   }
@@ -130,63 +136,152 @@ It prev(It it, size_t n) {
   if constexpr (psl::RandomAccessIterator<It>) {
     return it - n;
   } else {
-    while (n--)
+    for (; n; --n)
       --it;
     return it;
   }
 }
 
-template <OutputIterator OutputIt, Range Input>
-void copy(OutputIt d_first, Input&& input) {
+void copy(OutputIterator auto d_first, Range auto&& input) {
   auto first = psl::begin(input);
   auto last = psl::end(input);
   for (; first != last; ++first, ++d_first)
     *d_first = *first;
 }
 
-template <OutputIterator OutputIt, Range Input>
-void move(OutputIt d_first, Input&& input) {
+void move(OutputIterator auto d_first, Range auto&& input) {
   auto first = psl::begin(input);
   auto last = psl::end(input);
   for (; first != last; ++first, ++d_first)
     *d_first = psl::move(*first);
 }
 
-template <Range Output, typename T>
-void fill(Output&& output, const T& value) {
+void fill(Range auto&& output, const auto& value) {
   auto first = psl::begin(output);
   auto last = psl::end(output);
   for (; first != last; ++first)
     *first = value;
 }
 
+void insert(auto&& f, Range auto&& input) {
+  auto first = psl::begin(input);
+  auto last = psl::end(input);
+  for (; first != last; ++first)
+    f(*first);
+}
+
+namespace range_equal {
+bool operator==(Range auto&& a, Range auto&& b) {
+  if (psl::size(a) != psl::size(b))
+    return false;
+  auto a_it = psl::begin(a);
+  auto b_it = psl::begin(b);
+  while (a_it != psl::end(a)) {
+    if (*a_it != *b_it)
+      return false;
+    ++a_it;
+    ++b_it;
+  }
+
+  return true;
+}
+}  // namespace range_equal
+
+struct StrictOrdering {};
+
 template <typename T = void>
-struct less {
+struct less : StrictOrdering {
   bool operator()(const T& l, const T& r) const {
     return l < r;
   }
 };
 template <>
-struct less<void> {
+struct less<void> : StrictOrdering {
   using is_transparent = void;
   bool operator()(const auto& l, const auto& r) const {
     return l < r;
   }
 };
 
-template <typename T>
-struct less_than {
-  less_than(T value) : value(psl::move(value)) {
+template <typename T = void>
+struct greater : StrictOrdering {
+  bool operator()(const T& l, const T& r) const {
+    return l > r;
   }
+};
+template <>
+struct greater<void> : StrictOrdering {
+  using is_transparent = void;
+  bool operator()(const auto& l, const auto& r) const {
+    return l > r;
+  }
+};
+
+template <typename T>
+struct _less_than {
   bool operator()(const auto& x) const {
     return x < value;
   }
   T value;
 };
+template <typename T>
+struct _equal_to {
+  bool operator()(const auto& x) const {
+    return x == value;
+  }
+  T value;
+};
+template <typename T>
+struct _not_equal_to {
+  bool operator()(const auto& x) const {
+    return x != value;
+  }
+  T value;
+};
+template <typename T>
+struct _less_or_equal_to {
+  bool operator()(const auto& x) const {
+    return x <= value;
+  }
+  T value;
+};
+template <typename T>
+struct _greater_than {
+  bool operator()(const auto& x) const {
+    return x > value;
+  }
+  T value;
+};
+template <typename T>
+struct _greater_or_equal_to {
+  bool operator()(const auto& x) const {
+    return x >= value;
+  }
+  T value;
+};
+template <typename T>
+auto less_than(T value) {
+  return _less_than{psl::move(value)};
+}
+template <typename T>
+auto greater_than(T value) {
+  return _greater_than{psl::move(value)};
+}
+template <typename T>
+auto equal_to(T value) {
+  return _equal_to{psl::move(value)};
+}
+template <typename T>
+auto less_or_equal_to(T value) {
+  return _less_or_equal_to{psl::move(value)};
+}
+template <typename T>
+auto greater_or_equal_to(T value) {
+  return _greater_or_equal_to{psl::move(value)};
+}
 
 // Return the iterator to the first element not satisfying `pred`
-template <Range ARange, typename Pred>
-auto lower_bound(ARange&& range, Pred&& pred) {
+auto lower_bound(Range auto&& range, auto&& pred) {
   auto first = psl::begin(range);
   auto last = psl::end(range);
   // If there is an element such that `pred` is not satisfied, it's always between first and
@@ -204,8 +299,7 @@ auto lower_bound(ARange&& range, Pred&& pred) {
   return first;
 }
 
-template <Range ARange, typename F>
-auto find_if(ARange&& range, F f) {
+auto find_if(Range auto&& range, auto&& f) {
   auto first = psl::begin(range);
   auto last = psl::end(range);
   for (; first != last; ++first)
@@ -214,53 +308,15 @@ auto find_if(ARange&& range, F f) {
   return last;
 }
 
-template <Range ARange, typename T>
-auto find(ARange&& range, const T& value) {
-  return psl::find_if(range, [&value](const auto& x) { return x == value; });
+auto find(Range auto&& range, const auto& value) {
+  return find_if(range, equal_to(value));
 }
 
-template <Range ARange, typename T>
-bool has(ARange&& range, const T& value) {
+bool contains(Range auto&& range, const auto& value) {
   return psl::find(range, value) != psl::end(range);
 }
 
-template <Range ARange, typename T>
-auto find_next(ARange&& range, const T& value, size_t n) {
-  auto it = psl::begin(range);
-  auto end = psl::end(range);
-  for (; n != 0; n--) {
-    it = find(psl::range(it, end), value);
-    if (it == end)
-      break;
-    else
-      ++it;
-  }
-  return it;
-}
-
-// template <Range ARange, typename T>
-// void insert_at(ARange&& range, const T& pivot, const T& value) {
-//   auto pos = size_t{0};
-//   while (true) {
-//     auto it = psl::find(psl::range(psl::begin(range) + pos, psl::end(range)), pivot);
-//     if (it == psl::end(range))
-//       return;
-//     pos = it - psl::begin(range);
-//   }
-// }
-
-template <Range ARange, typename T>
-auto find_last_of(ARange&& range, const T& value) {
-  auto first = psl::begin(range);
-  auto last = psl::prev(psl::end(range));
-  for (; last != first; --last)
-    if (*last == value)
-      return last;
-  return first;
-}
-
-template <Range ARange, typename T>
-void replace(ARange&& range, const T& old, const T& new_) {
+void replace(Range auto&& range, const auto& old, const auto& new_) {
   auto first = psl::begin(range);
   auto last = psl::end(range);
   for (; first != last; ++first)
@@ -268,89 +324,95 @@ void replace(ARange&& range, const T& old, const T& new_) {
       *first = new_;
 }
 
-template <Range ARange, typename T>
-size_t count(ARange&& range, const T& value) {
-  auto c = size_t{0};
+size_t count_if(Range auto&& range, auto&& pred) {
+  auto c = size_t(0);
   auto first = psl::begin(range);
   auto last = psl::end(range);
   for (; first != last; ++first)
-    if (*first == value)
+    if (pred(*first))
       ++c;
   return c;
 }
+size_t count(Range auto&& range, const auto& x) {
+  return count_if(range, equal_to(x));
+}
 
-// template <Range ARange, typename F>
-// auto remove_if(ARange&& range, F&& f) {
-//   auto first = psl::begin(range);
-//   auto last = psl::end(range);
-//   auto tail = first;
-//   for (; first != last; ++first)
-//     if (first != tail && !f(*first))
-//       *(tail++) = *first;
+bool all(Range auto&& range, auto&& pred) {
+  for (auto&& x : range)
+    if (!pred(x))
+      return false;
+  return true;
+}
+bool any(Range auto&& range, auto&& pred) {
+  for (auto&& x : range)
+    if (pred(x))
+      return true;
+  return false;
+}
+bool none(Range auto&& range, auto&& pred) {
+  for (auto&& x : range)
+    if (pred(x))
+      return false;
+  return true;
+}
 
-//   return tail;
-// }
+void iter_swap(auto a, auto b) {
+  if (a != b)
+    psl::swap(*a, *b);
+}
 
-template <Range ARange, typename Pred>
-void sort(ARange&& range, Pred&& pred) {
-  auto first = psl::begin(range);
+auto remove_if(Range auto&& range, auto&& pred) {
+  auto i = psl::begin(range);
   auto last = psl::end(range);
-
-  if (first == last)
-    return;
-  auto pivot = first;
-
-  auto i = first;
-  ++i;
-  if (i == last)
-    return;
-
+  auto tail = i;
   for (; i != last; ++i) {
-    if (pred(*i, *pivot)) {
-      auto prev = pivot;
-      ++pivot;
-
-      psl::swap(*prev, *i);
-      if (pivot != i)
-        psl::swap(*pivot, *i);
+    if (!pred(*i)) {
+      if (i != tail)
+        *(tail++) = psl::move(*i);
+      else
+        ++tail;
     }
   }
 
-  psl::sort(psl::range(first, pivot), pred);
-  ++pivot;
-  psl::sort(psl::range(pivot, last), pred);
+  return tail;
 }
 
-template <Range ARange, typename Pred>
-auto partition(ARange&& range, Pred&& pred) {
-  auto head = psl::begin(range);
+auto partition(Range auto&& range, auto&& pred) {
+  auto i = psl::begin(range);
   auto last = psl::end(range);
-  return std::partition(head, last, pred);
-  // auto tail = head;
-  // for (; head != last; ++head) {
-  //   if (pred(*head)) {
-  //     psl::swap(*(tail++), *head);
-  //   }
-  // }
+  auto tail = i;
+  for (; i != last; ++i)
+    if (pred(*i))
+      iter_swap(tail++, i);
 
-  // return tail;
+  return tail;
 }
 
-template <Range ARange, ForwardIterator It, typename F>
-void nth_element(ARange&& range, It it, F&& f) {
-  return std::nth_element(psl::begin(range), it, psl::end(range), f);
-  // sort(range, f);
-  // auto value = *it;
-  // return partition(range, [&](auto&& rhs) { return f(rhs, value); });
-}
-template <Range ARange, ForwardIterator It, typename F>
-void partial_sort(ARange&& range, It it, F&& f) {
-  return std::partial_sort(psl::begin(range), psl::end(range), it, f);
-  // sort(range, f);
+// `comp` must be a strict ordering, i.e. comp(x, x) = false for all valid x
+void sort(Range auto&& range, auto&& comp) {
+  auto first = psl::begin(range);
+  auto last = psl::end(range);
+  if (first == last)
+    return;
+  if (psl::next(first) == last)
+    return;
+
+  auto pivot = psl::partition(range, [rhs = *first, &comp](auto&& lhs) { return comp(lhs, rhs); });
+
+  psl::sort(psl::range(first, pivot), comp);
+  ++pivot;
+  psl::sort(psl::range(pivot, last), comp);
 }
 
-template <Range ARange>
-void reverse(ARange&& range) {
+// void nth_element(Range auto&& range, ForwardIterator auto it, auto&& f) {
+//   (void)it;
+//   sort(range, f);
+// }
+// void partial_sort(Range auto&& range, ForwardIterator auto it [[maybe_unused]], auto&& f) {
+//   sort(range, f);
+// }
+
+void reverse(Range auto&& range) {
   auto first = psl::begin(range);
   auto last = psl::end(range);
   if (first == last)
@@ -362,6 +424,12 @@ void reverse(ARange&& range) {
     --last;
   }
 }
+
+namespace pipe {
+auto operator|(Range auto&& range, auto&& adapter) {
+  return adapter(range);
+}
+}  // namespace pipe
 
 template <Range ARange, typename F>
 auto transform(ARange&& range, F f) {
@@ -375,9 +443,12 @@ auto transform(ARange&& range, F f) {
         return *this;
       }
       Iterator operator++(int) {
-        auto copy = *this;
-        ++it;
-        return copy;
+        auto old = *this;
+        ++(*this);
+        return old;
+      }
+      auto unwrap() const {
+        return it;
       }
       bool operator==(const Iterator& b) const {
         return it == b.it;
@@ -398,10 +469,15 @@ auto transform(ARange&& range, F f) {
     size_t size() {
       return psl::size(range);
     }
+
     F f;
     ARange range;
   };
   return Ranger{psl::move(f), psl::forward<ARange>(range)};
+}
+
+auto transform_(auto&& f) {
+  return [f](Range auto&& range) { return transform(FWD(range), f); };
 }
 
 template <Range ARange, typename F>
@@ -409,18 +485,21 @@ auto filter(ARange&& range, F f) {
   struct Ranger {
     struct Iterator {
       decltype(auto) operator*() const {
-        return;
+        return *it;
       }
       Iterator& operator++() {
         ++it;
-        while (!f(*it))
+        while (it != end && !f(*it))
           ++it;
         return *this;
       }
       Iterator operator++(int) {
-        auto copy = *this;
-        ++copy;
-        return copy;
+        auto old = *this;
+        ++(*this);
+        return old;
+      }
+      auto unwrap() const {
+        return it;
       }
       bool operator==(const Iterator& b) const {
         return it == b.it;
@@ -435,24 +514,26 @@ auto filter(ARange&& range, F f) {
     };
     Iterator begin() {
       auto it = psl::begin(range);
-      while (!f(*it))
+      auto last = psl::end(range);
+      while (it != last && !f(*it))
         ++it;
-      return {f, it, psl::end(range)};
+      return {f, it, last};
     }
     Iterator end() {
       return {f, psl::end(range), psl::end(range)};
     }
-    size_t size() {
-      return psl::size(range);
-    }
+
     F f;
     ARange range;
   };
   return Ranger{psl::move(f), psl::forward<ARange>(range)};
 }
+auto filter_(auto&& f) {
+  return [f](Range auto&& range) { return filter(FWD(range), f); };
+}
 
 template <Range ARange>
-auto reverse_ranger(ARange&& range) {
+auto reverse_adapter(ARange&& range) {
   struct Ranger {
     struct Iterator {
       decltype(auto) operator*() const {
@@ -463,12 +544,15 @@ auto reverse_ranger(ARange&& range) {
         return *this;
       }
       Iterator operator++(int) {
-        auto copy = *this;
-        ++it;
-        return copy;
+        auto old = *this;
+        ++(*this);
+        return old;
       }
-      IteratorTypeT<ARange> unwrap() const {
-        return it;
+      auto unwrap() const {
+        if (it == end)
+          return end;
+        else
+          return rit();
       }
       auto operator->() {
         return &(*rit());
@@ -501,23 +585,43 @@ auto reverse_ranger(ARange&& range) {
   };
   return Ranger{psl::forward<ARange>(range)};
 }
+inline auto reverse_() {
+  return [](Range auto&& range) { return reverse_adapter(FWD(range)); };
+}
 
 template <typename T, Range ARange>
 T to(ARange&& range) {
-  return T{psl::forward<ARange>(range)};
+  return T(psl::forward<ARange>(range));
 }
 
-template <Range ARange>
-auto trim(ARange&& range, size_t a, size_t b) {
-  return decltype(range){psl::begin(range) + a, psl::begin(range) + b};
+template <typename T>
+auto to_() {
+  return [](Range auto&& range) { return to<T>(FWD(range)); };
 }
 
-template <Range ARange>
-auto sum(ARange&& range) {
+auto trim(Range auto&& range, size_t offset, size_t len) {
+  return psl::range(psl::begin(range) + offset, psl::begin(range) + offset + len);
+}
+inline auto trim_(size_t offset, size_t len) {
+  return [offset, len](Range auto&& range) { return trim(FWD(range), offset, len); };
+}
+
+auto clip(Range auto&& range, RandomAccessIterator auto last) {
+  return psl::range(psl::begin(range), last);
+}
+inline auto clip_(RandomAccessIterator auto last) {
+  return [last](Range auto&& range) { return clip(FWD(range), last); };
+}
+
+auto sum(Range auto&& range) {
   auto s = psl::Decay<decltype(*psl::begin(range))>{0};
   for (auto&& x : range)
     s += x;
   return s;
+}
+
+auto find_last_of(Range auto&& range, const auto& value) {
+  return find_if(psl::reverse_adapter(range), equal_to(value)).unwrap();
 }
 
 }  // namespace psl

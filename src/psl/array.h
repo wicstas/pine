@@ -1,6 +1,6 @@
 #pragma once
 
-#include <pine/psl/algorithm.h>
+#include <psl/algorithm.h>
 
 #include <initializer_list>
 
@@ -14,7 +14,8 @@ struct Array {
   Array() = default;
   template <typename... Ts>
   requires same_type<T, Ts...>
-  Array(Ts... xs) : data{xs...} {};
+  Array(Ts... xs) : data{xs...} {
+  }
 
   T& operator[](size_t i) {
     return data[i];
@@ -55,8 +56,7 @@ struct Array {
         return false;
     return true;
   }
-  template <typename U, size_t M>
-  requires EqualityComparable<T, U>
+  template <EqualityComparable<T> U, size_t M>
   bool operator!=(const Array<U, M>& rhs) const {
     return !((*this) == rhs);
   }
@@ -64,8 +64,10 @@ struct Array {
 private:
   T data[N]{};
 };
+
 template <typename T, typename... Ts>
-requires same_type<T, Ts...>
-Array(T, Ts...) -> Array<T, 1 + sizeof...(Ts)>;
+auto array_of(T a, Ts... bs) {
+  return Array<T, 1 + sizeof...(Ts)>{a, bs...};
+}
 
 }  // namespace psl

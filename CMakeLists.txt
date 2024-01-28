@@ -10,13 +10,13 @@ add_compile_options(-Wall -Wextra -pedantic -fno-omit-frame-pointer)
 
 #psl Library
 add_library(psl
-src/pine/psl/iostream.cpp
-src/pine/psl/fstream.cpp
-src/pine/psl/string.cpp
-src/pine/psl/chrono.cpp
-src/pine/psl/memory.cpp
-src/pine/psl/system.cpp
-src/pine/psl/check.cpp
+src/psl/iostream.cpp
+src/psl/fstream.cpp
+src/psl/string.cpp
+src/psl/chrono.cpp
+src/psl/memory.cpp
+src/psl/system.cpp
+src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
 #target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
@@ -34,6 +34,7 @@ src/pine/core/profiler.cpp
 src/pine/core/parallel.cpp
 src/pine/core/compiler.cpp
 src/pine/core/context.cpp
+src/pine/core/vecmath.cpp
 src/pine/core/sampler.cpp
 src/pine/core/primes.cpp
 src/pine/core/fileio.cpp
@@ -43,10 +44,13 @@ src/pine/core/noise.cpp
 src/pine/core/scene.cpp
 src/pine/core/light.cpp
 src/pine/core/accel.cpp
+src/pine/core/array.cpp
 src/pine/core/color.cpp
 src/pine/core/node.cpp
 src/pine/core/film.cpp
 src/pine/core/bxdf.cpp
+src/pine/core/math.cpp
+src/pine/core/rng.cpp
 src/pine/core/log.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/visualizer.cpp
@@ -74,14 +78,6 @@ target_link_libraries(pinelib psl Threads::Threads assimp)
 add_executable(pine src/cli/main.cpp)
 target_link_libraries(pine pinelib)
 
-#volume Tool
-# add_executable(voltool src/cli/voltool.cpp)
-# target_link_libraries(voltool pinelib)
-
-#Pine Test
-# add_executable(pine_test test/pine_test.cpp)
-# target_link_libraries(pine_test pinelib)
-
 #psl Test
-#add_executable(psl_test test/psl_test.cpp)
-#target_link_libraries(psl_test psl)
+add_executable(psl_test test/psl_test.cpp)
+target_link_libraries(psl_test psl)

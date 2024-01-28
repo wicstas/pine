@@ -1,6 +1,6 @@
 #pragma once
 
-#include <pine/psl/type_traits.h>
+#include <psl/type_traits.h>
 
 namespace psl {
 
@@ -14,6 +14,8 @@ template <typename T>
 T&& forward(TypeIdentity<T>& x) {
   return static_cast<T&&>(x);
 }
+
+#define FWD(x) psl::forward<decltype(x)>(x)
 
 template <typename T>
 void swap(T& x, T& y) {
@@ -38,6 +40,9 @@ struct pair {
   T first;
   U second;
 };
+
+constexpr auto first_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).first; };
+constexpr auto second_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).second; };
 
 template <typename T, typename... Ts>
 struct tuple {

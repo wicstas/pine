@@ -42,7 +42,7 @@ inline vec3 uniform_sphere(vec2 u) {
 }
 inline vec2 inverse_uniform_sphere(vec3 d) {
     auto [phi, theta] = cartesian_to_spherical(d);
-    return {phi / Pi2, (1.0f - psl::cos(theta)) / 2.0f};
+    return {phi / pi2, (1.0f - psl::cos(theta)) / 2.0f};
 }
 
 inline vec3 uniform_hemisphere(vec2 u) {
@@ -50,7 +50,7 @@ inline vec3 uniform_hemisphere(vec2 u) {
 }
 inline vec2 inverse_uniform_hemisphere(vec3 d) {
     auto [phi, theta] = cartesian_to_spherical(d);
-    return {phi / Pi2, psl::cos(theta)};
+    return {phi / pi2, psl::cos(theta)};
 }
 
 inline float balance_heuristic(int nF, float pF, int nG, float pG) {

@@ -1,8 +1,9 @@
 #include <pine/core/geometry.h>
+#include <pine/core/context.h>
 
 namespace pine {
 
-vec3 AABB::Offset(vec3 p) const {
+vec3 AABB::relative_position(vec3 p) const {
   vec3 o = p - lower;
   if (upper.x > lower.x)
     o.x /= upper.x - lower.x;
@@ -12,13 +13,13 @@ vec3 AABB::Offset(vec3 p) const {
     o.z /= upper.z - lower.z;
   return o;
 }
-float AABB::Offset(float p, int dim) const {
+float AABB::relative_position(float p, int dim) const {
   float o = p - lower[dim];
   float d = upper[dim] - lower[dim];
   return d > 0.0f ? o / d : o;
 }
-float AABB::SurfaceArea() const {
-  vec3 d = Diagonal();
+float AABB::surface_area() const {
+  vec3 d = diagonal();
   return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
 }
 void AABB::extend(vec3 p) {
@@ -41,8 +42,8 @@ psl::pair<AABB, AABB> AABB::split_half(int axis) const {
   CHECK_RANGE(axis, 0, 2);
   auto left = *this;
   auto right = *this;
-  left.upper[axis] = Centroid(axis);
-  right.lower[axis] = Centroid(axis);
+  left.upper[axis] = centroid(axis);
+  right.lower[axis] = centroid(axis);
   return {left, right};
 }
 bool AABB::hit(const Ray& ray) const {
@@ -98,20 +99,8 @@ psl::optional<vec3> extend_to(Ray ray, int axis, float p) {
 vec2 project(vec3 v, int axis) {
   return {v[(axis + 1) % 3], v[(axis + 2) % 3]};
 }
-int AABB::face_hit_count(const Ray& ray) const {
-  auto count = 0;
-  for (int axis = 0; axis < 3; axis++) {
-    auto p0 = extend_to(ray, axis, lower[axis]);
-    auto p1 = extend_to(ray, axis, upper[axis]);
-    if (p0 && inside(project(*p0, axis), project(lower, axis), project(upper, axis)))
-      count++;
-    if (p1 && inside(project(*p1, axis), project(lower, axis), project(upper, axis)))
-      count++;
-  }
-  return count;
-}
 
-float Sphere::ComputeT(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
+float Sphere::compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
   float a = dot(rd, rd);
   float b = 2 * dot(ro - p, rd);
   float c = dot(ro, ro) + dot(p, p) - 2 * dot(ro, p) - r * r;
@@ -125,11 +114,11 @@ float Sphere::ComputeT(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
   return t;
 }
 bool Sphere::hit(const Ray& ray) const {
-  float t = ComputeT(ray.o, ray.d, ray.tmin, c, r);
+  float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   return t > ray.tmin && t < ray.tmax;
 }
 bool Sphere::intersect(Ray& ray, Interaction& it) const {
-  float t = ComputeT(ray.o, ray.d, ray.tmin, c, r);
+  float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   if (t < ray.tmin)
     return false;
   if (t > ray.tmax)
@@ -333,7 +322,7 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   ss.uv = u;
   ss.w = normalize(ss.p - o, ss.distance);
   ss.pdf =
-      psl::max(psl::sqr(ss.distance), Epsilon) / (psl::max(absdot(ss.w, ss.n), Epsilon) * area());
+      psl::max(psl::sqr(ss.distance), epsilon) / (psl::max(absdot(ss.w, ss.n), epsilon) * area());
   return ss;
 
   auto p = position - ex * lx / 2 - ey * ly / 2;
@@ -374,7 +363,7 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   auto h0 = y0 / psl::sqrt(d * d + y0 * y0);
   auto h1 = y1 / psl::sqrt(d * d + y1 * y1);
   auto hv = h0 + u[1] * (h1 - h0), hv2 = hv * hv;
-  auto yv = (hv2 < 1 - Epsilon) ? (hv * d) / psl::sqrt(1 - hv2) : y1;
+  auto yv = (hv2 < 1 - epsilon) ? (hv * d) / psl::sqrt(1 - hv2) : y1;
   ss.p = o + xu * ex + yv * ey + z0 * ez;
   ss.n = n;
   ss.uv = u;
@@ -383,7 +372,7 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   return ss;
 }
 float Rect::pdf(const Interaction& it, const Ray& ray, vec3) const {
-  return psl::max(psl::sqr(ray.tmax), Epsilon) / psl::max(area() * absdot(it.n, -ray.d), Epsilon);
+  return psl::max(psl::sqr(ray.tmax), epsilon) / psl::max(area() * absdot(it.n, -ray.d), epsilon);
 
   auto p = position - ex * lx / 2 - ey * ly / 2;
   auto ez = cross(ex, ey);
@@ -411,7 +400,7 @@ float Rect::pdf(const Interaction& it, const Ray& ray, vec3) const {
   auto g3 = psl::acos(-dot(n3, n0));
   auto k = 2 * pi - g2 - g3;
   auto S = g0 + g1 - k;
-  S = psl::max(S, Epsilon);
+  S = psl::max(S, epsilon);
   return 1.0f / S;
 }
 AABB Rect::get_aabb() const {
@@ -562,6 +551,17 @@ ShapeSample Geometry::sample(vec3 p, vec2 u) const {
 }
 float Geometry::pdf(const Interaction& it, const Ray& ray, vec3 n) const {
   return shape.pdf(it, ray, n);
+}
+
+void geometry_context(Context& ctx) {
+  ctx.type<Sphere>("Sphere").ctor<vec3, float>();
+  ctx.type<Plane>("Plane").ctor<vec3, vec3>();
+  ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();
+  ctx.type<Line>("Line").ctor<vec3, vec3, float>();
+  ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>();
+  ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
+  ctx.type<TriangleMesh>("TriangleMesh").method("apply", &TriangleMesh::apply);
+  ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
 }
 
 }  // namespace pine

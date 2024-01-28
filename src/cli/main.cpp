@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
   try {
     auto context = get_default_context();
 
-    auto task = std::async(std::launch::async, [&]() { interpretFile(context, argv[1]); });
+    auto task = std::async(std::launch::async, [&]() { interpret_file(context, argv[1]); });
     while (true) {
       if (get_progress() != 0)
         Logr(get_progress(), "\r");

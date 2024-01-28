@@ -3,7 +3,7 @@
 #include <pine/core/vecmath.h>
 #include <pine/core/log.h>
 
-#include <pine/psl/vector.h>
+#include <psl/vector.h>
 #include <thread>
 #include <atomic>
 

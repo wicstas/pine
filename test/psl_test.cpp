@@ -1,12 +1,12 @@
-#include <pine/psl/algorithm.h>
-#include <pine/psl/iostream.h>
-#include <pine/psl/optional.h>
-#include <pine/psl/variant.h>
-#include <pine/psl/memory.h>
-#include <pine/psl/string.h>
-#include <pine/psl/array.h>
-#include <pine/psl/math.h>
-#include <pine/psl/map.h>
+#include <psl/algorithm.h>
+#include <psl/iostream.h>
+#include <psl/optional.h>
+#include <psl/variant.h>
+#include <psl/memory.h>
+#include <psl/string.h>
+#include <psl/array.h>
+#include <psl/math.h>
+#include <psl/map.h>
 
 #include <pine/core/log.h>
 
@@ -22,6 +22,9 @@ void (*pine::fatal_stream)(psl::string_view data) = +[](psl::string_view data) {
   printf("%s", psl::string(data).c_str());
 };
 
+#define SCOPE_BEGIN {
+#define SCOPE_END }
+
 struct Emitter {
   void expect(psl::vector<psl::string> exps) {
     backup_received.clear();
@@ -34,8 +37,8 @@ struct Emitter {
     if (expectations.size() == 0)
       pine::Fatal("Expect null, get ", value, "\nHistory(inclusive): ", history);
     if (expectations.front() != value)
-      pine::Fatal("Expect ", expectations.front(), ", get ", value,
-                  "\nHistory(inclusive): ", history);
+      pine::Fatal("Expect `", expectations.front(), "`, get `", value,
+                  "`\nHistory(inclusive): ", history);
     expectations.pop_front();
   }
 
@@ -46,7 +49,7 @@ private:
 static Emitter emitter{};
 
 void test_vector() {
-  auto xs = psl::vector<int>(2, 1);
+  auto xs = psl::vector_n_of(2, 1);
   auto ys = psl::vector_of(10, 20, 30, 40);
   CHECK_EQ(xs.size(), 2);
   CHECK_EQ(xs[0], 1);
@@ -255,7 +258,7 @@ void test_string() {
   CHECK_NE(x.substr(0, 2), "HE");
   CHECK_NE(x.subview(0, 2), "HE");
   CHECK_EQ(psl::string("Hello", 3), "Hel");
-  CHECK_EQ(psl::string(5, 'k'), "kkkkk");
+  CHECK_EQ(psl::string_n_of(5, 'k'), "kkkkk");
   CHECK_EQ(x + " ", "Hello ");
   CHECK_EQ(" " + x, " Hello");
   CHECK_EQ(x + " World", "Hello World");
@@ -303,7 +306,7 @@ struct MockDeleter {
 
   MockDeleter() = default;
   template <typename U>
-  requires psl::is_convertible<U*, T*>
+  requires psl::convertible<U*, T*>
   MockDeleter(const MockDeleter<U>&) {
   }
 
@@ -368,14 +371,14 @@ void test_memory() {
   }
   {
     auto x = 10;
-    auto y = psl::ref{x};
+    auto y = psl::ref(x);
     y = 20;
-    CHECK_EQ(y, 20);
+    CHECK_EQ(*y, 20);
     CHECK_EQ(x, 20);
     auto z = y;
     z = 30;
     CHECK_EQ(x, 30);
-    CHECK_EQ(y, 30);
+    CHECK_EQ(*y, 30);
   }
   {
     auto x = psl::Box{1};
@@ -437,7 +440,7 @@ void test_optional() {
 }
 
 void test_array() {
-  auto xs = psl::Array{1, 5, 3};
+  auto xs = psl::array_of(1, 5, 3);
   auto ys = xs;
   CHECK_EQ(ys[0], 1);
   CHECK_EQ(ys[1], 5);
@@ -445,98 +448,115 @@ void test_array() {
 }
 
 void test_algorithm() {
-  {
-    auto xs = psl::Array{1, 2, 3};
-    auto ys = psl::Array{10, 20, 30};
-    auto first = psl::begin(xs);
-    auto last = psl::end(xs);
-    CHECK_EQ(psl::distance(first, last), 3);
+  using psl::pipe::operator|;
+  SCOPE_BEGIN
+  auto xs = psl::array_of(1, 2, 3);
+  auto ys = psl::array_of(10, 20, 30);
+  auto first = psl::begin(xs);
+  auto last = psl::end(xs);
+  CHECK_EQ(psl::distance(first, last), 3);
 
-    psl::copy(first, ys);
-    CHECK_EQ(xs, ys);
+  psl::copy(first, ys);
+  CHECK_EQ(xs, ys);
 
-    xs = {1, 2, 3};
-    psl::move(first, ys);
-    CHECK_EQ(xs, ys);
+  xs = {1, 2, 3};
+  psl::move(first, ys);
+  CHECK_EQ(xs, ys);
 
-    auto it = psl::lower_bound(xs, psl::less_than{15});
-    CHECK(it != xs.end());
-    CHECK_EQ(*it, 20);
+  psl::fill(xs, 1);
+  CHECK_EQ(xs, psl::array_of(1, 1, 1));
 
-    it = psl::lower_bound(xs, psl::less_than{10});
-    CHECK(it != xs.end());
-    CHECK_EQ(*it, 10);
+  psl::move(first, ys);
+  auto it = psl::lower_bound(xs, psl::less_than(15));
+  CHECK_EQ(it, psl::next(first, 1));
 
-    it = psl::lower_bound(xs, psl::less_than{-10});
-    CHECK(it != xs.end());
-    CHECK_EQ(*it, 10);
+  it = psl::lower_bound(xs, psl::less_than(10));
+  CHECK_EQ(it, psl::next(first, 0));
 
-    it = psl::lower_bound(xs, psl::less_than{40});
-    CHECK(it == xs.end());
+  it = psl::lower_bound(xs, psl::less_than(-10));
+  CHECK_EQ(it, psl::next(first, 0));
 
-    it = psl::find(xs, 20);
-    CHECK(it != xs.end());
-    CHECK_EQ(*it, 20);
+  it = psl::lower_bound(xs, psl::less_than(40));
+  CHECK_EQ(it, psl::next(first, 3));
 
-    it = psl::find(xs, 21);
-    CHECK(it == xs.end());
-  }
-  {
-    auto xs = psl::Array{1, 3, 2, 2, 4};
-    auto ys = xs;
+  it = psl::find(xs, 20);
+  CHECK_EQ(it, psl::next(first, 1));
 
-    auto it = psl::find_last_of(xs, 2);
-    CHECK(it == psl::prev(xs.end(), 2));
+  it = psl::find(xs, 21);
+  CHECK(it == xs.end());
 
-    psl::replace(xs, 3, 5);
-    CHECK_EQ(xs, psl::Array(1, 5, 2, 2, 4));
-    CHECK_EQ(psl::count(xs, 2), 2);
+  CHECK(psl::contains(xs, 10));
+  CHECK(psl::contains(xs, 30));
+  CHECK(!psl::contains(xs, 0));
+  CHECK(!psl::contains(xs, 40));
+  SCOPE_END
+  auto _xs_ = psl::array_of(1, 3, 2, 2, 4);
 
-    psl::sort(xs, psl::less<>{});
-    CHECK_EQ(xs, psl::Array(1, 2, 2, 4, 5));
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  psl::replace(xs, 3, 5);
+  CHECK_EQ(xs, psl::array_of(1, 5, 2, 2, 4));
+  SCOPE_END
 
-    xs = ys;
-    it = psl::partition(xs, psl::less_than{3});
-    CHECK(it == psl::prev(xs.end(), 2));
-    CHECK_LT(psl::max(xs[0], xs[1], xs[2]), 3);
-    CHECK_GE(psl::min(xs[3], xs[4]), 3);
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  CHECK_EQ(psl::count(xs, 2), 2);
+  SCOPE_END
 
-    xs = ys;
-    it = psl::partition(xs, psl::less_than{2});
-    CHECK(it == psl::next(xs.begin()));
-    CHECK_LT(xs[0], 2);
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto it = psl::partition(xs, psl::greater_or_equal_to(3));
+  CHECK(psl::all(psl::range(psl::begin(xs), it), psl::greater_or_equal_to(3)));
+  CHECK(psl::none(psl::range(it, psl::end(xs)), psl::greater_or_equal_to(3)));
+  SCOPE_END
 
-    xs = ys;
-    it = psl::partition(xs, psl::less_than{3});
-    CHECK(it == psl::next(xs.begin(), 3));
-    CHECK_EQ(xs[4], 4);
+  SCOPE_BEGIN
+  auto xs = psl::array_of(7, 1, 6, 2, 1, 4, 12);
+  auto it = psl::partition(xs, psl::less_than(6));
+  CHECK(psl::all(psl::range(psl::begin(xs), it), psl::less_than(6)));
+  CHECK(psl::none(psl::range(it, psl::end(xs)), psl::less_than(6)));
+  SCOPE_END
 
-    xs = ys;
-    psl::nth_element(xs, psl::next(xs.begin()), psl::less<>{});
-    // CHECK(it == psl::prev(xs.end(), 2));
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  psl::sort(xs, psl::less<>());
+  CHECK_EQ(xs, psl::array_of(1, 2, 2, 3, 4));
+  psl::sort(xs, psl::greater<>());
+  CHECK_EQ(xs, psl::array_of(4, 3, 2, 2, 1));
+  SCOPE_END
 
-    xs = ys;
-    psl::nth_element(xs, psl::next(xs.begin(), 2), psl::less<>{});
-    // CHECK(it == psl::next(xs.begin()) || it == psl::next(xs.begin(), 2));
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto it = psl::remove_if(xs, psl::equal_to(2));
+  using namespace psl::range_equal;
+  CHECK_EQ(xs | psl::clip_(it), psl::array_of(1, 3, 4));
+  SCOPE_END
 
-    xs = ys;
-    psl::partial_sort(xs, psl::next(xs.begin()), psl::less<>{});
-    CHECK_EQ(xs[0], 1);
-    CHECK_EQ(xs[1], 2);
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  psl::reverse(xs);
+  CHECK_EQ(xs, psl::array_of(4, 2, 2, 3, 1));
+  SCOPE_END
 
-    xs = ys;
-    psl::partial_sort(xs, psl::next(xs.begin(), 3), psl::less<>{});
-    CHECK_EQ(xs[0], 1);
-    CHECK_EQ(xs[1], 2);
-    CHECK_EQ(xs[2], 2);
-    CHECK_EQ(xs[3], 3);
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto ys = xs | psl::transform_([](int x) { return x * 2; }) | psl::to_<psl::vector<int>>();
+  CHECK_EQ(ys, psl::vector_of(2, 6, 4, 4, 8));
+  SCOPE_END
 
-    xs = ys;
-    psl::reverse(xs);
-    CHECK_EQ(xs, psl::Array(4, 2, 2, 3, 1));
-    auto zs = to<psl::vector<int>>(psl::transform(xs, [](int x) { return x * 2; }));
-    CHECK_EQ(zs, psl::vector_of(8, 4, 4, 6, 2));
-  }
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto ys = xs | psl::reverse_() | psl::to_<psl::vector<int>>();
+  CHECK_EQ(ys, psl::vector_of(4, 2, 2, 3, 1));
+  SCOPE_END
+
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto ys = xs | psl::filter_([](int x) { return x % 2 == 0; }) | psl::to_<psl::vector<int>>();
+  CHECK_EQ(ys, psl::vector_of(2, 2, 4));
+  ys = xs | psl::filter_([](int x) { return x % 2 == 1; }) | psl::to_<psl::vector<int>>();
+  CHECK_EQ(ys, psl::vector_of(1, 3));
+  SCOPE_END
 }
 
 int main() {

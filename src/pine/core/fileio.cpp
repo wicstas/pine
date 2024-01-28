@@ -5,7 +5,9 @@
 #include <pine/core/log.h>
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <ext/stb_image.h>
+#include <ext/stb_image_write.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -13,74 +15,32 @@
 
 namespace pine {
 
-ScopedFile::ScopedFile(psl::string_view filename_view, psl::ios::OpenMode mode) {
-  auto filename = (psl::string)filename_view;
-  psl::replace(filename, '\\', '/');
-  CHECK(filename != "");
-  file.open(filename.c_str(), mode);
-  if (file.is_open() == false)
-    Warning("[ScopedFile]Can not open file `", filename.c_str(), '`');
-}
-void ScopedFile::Write(const void *data, size_t size) {
-  if (file.is_open())
-    file.write((char *)data, size);
-}
-void ScopedFile::Read(void *data, size_t size) {
-  if (file.is_open())
-    file.read((char *)data, size);
-}
-
-psl::string ReadStringFile(psl::string_view filename) {
-  ScopedFile file(filename, psl::ios::in);
-  size_t size = file.Size();
+psl::string read_string_file(psl::string_view filename) {
+  auto file = psl::ScopedFile(filename, psl::ios::in);
+  if (!file.is_open())
+    Warning("Unable to open file `", filename, '`');
+  size_t size = file.size();
   psl::string str;
   str.resize(size);
-  file.Read(&str[0], size);
+  file.read(&str[0], size);
   return str;
 }
-void WriteBinaryData(psl::string_view filename, const void *ptr, size_t size) {
-  ScopedFile file(filename, psl::ios::binary | psl::ios::out);
-  file.Write((const char *)ptr, size);
+void write_binary_file(psl::string_view filename, const void *ptr, size_t size) {
+  auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::out);
+  if (!file.is_open())
+    Warning("Unable to open file `", filename, '`');
+  file.write((const char *)ptr, size);
 }
-psl::vector<char> ReadBinaryData(psl::string_view filename) {
-  ScopedFile file(filename, psl::ios::binary | psl::ios::in);
-  psl::vector<char> data(file.Size());
-  file.Read(&data[0], file.Size());
+psl::vector<char> read_binary_file(psl::string_view filename) {
+  auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::in);
+  if (!file.is_open())
+    Warning("Unable to open file `", filename, '`');
+  psl::vector<char> data(file.size());
+  file.read(&data[0], file.size());
   return data;
 }
 
-void WriteImageBMP(psl::string_view filename, vec2i size, int nchannel, const uint8_t *data) {
-  ScopedFile file(filename, psl::ios::out);
-
-  psl::vector<vec3u8> colors(size.x * size.y);
-  for (int x = 0; x < size.x; x++)
-    for (int y = 0; y < size.y; y++) {
-      vec3u8 c;
-      c.z = data[(x + y * size.x) * nchannel + 0];
-      c.y = data[(x + y * size.x) * nchannel + 1];
-      c.x = data[(x + y * size.x) * nchannel + 2];
-      colors[x + (size.y - 1 - y) * size.x] = c;
-    }
-
-  int filesize = 54 + 3 * size.x * size.y;
-  // clang-format off
-  uint8_t header[] = {'B','M',(uint8_t)(filesize),(uint8_t)(filesize >> 8),(uint8_t)(filesize >> 16),(uint8_t)(filesize >> 24),0,0,0,0,54,0,0,0,40,0,0,0,(uint8_t)(size.x),(uint8_t)(size.x >> 8),(uint8_t)(size.x >> 16),(uint8_t)(size.x >> 24),(uint8_t)(size.y),(uint8_t)(size.y >> 8),(uint8_t)(size.y >> 16),(uint8_t)(size.y >> 24),1,0,24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  // clang-format on
-  file.Write(header, sizeof(header));
-
-  uint8_t padding[3] = {0, 0, 0};
-  size_t paddingSize = (4 - (size.x * 3) % 4) % 4;
-  if (paddingSize == 0) {
-    file.Write(colors.data(), sizeof(colors[0]) * colors.size());
-  } else {
-    for (int y = 0; y < size.y; y++) {
-      file.Write(colors.data() + y * size.x, size.x * 3);
-      file.Write(padding, paddingSize);
-    }
-  }
-}
-
-psl::vector<uint8_t> ToUint8Image(vec2i size, int nchannel, const float *data) {
+psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data) {
   psl::vector<uint8_t> pixels(area(size) * nchannel);
   for (int x = 0; x < size.x; x++)
     for (int y = 0; y < size.y; y++)
@@ -89,17 +49,31 @@ psl::vector<uint8_t> ToUint8Image(vec2i size, int nchannel, const float *data) {
             psl::clamp(data[y * size.x * nchannel + x * nchannel + c] * 256.0f, 0.0f, 255.0f);
   return pixels;
 }
-void SaveImage(psl::string_view filename, vec2i size, int nchannel, const float *data) {
+void save_image(psl::string filename, vec2i size, int nchannel, const float *data) {
   Profiler _("[FileIO]Save image");
-  auto pixels = ToUint8Image(size, nchannel, data);
-  SaveImage(filename, size, nchannel, pixels.data());
+  auto pixels = to_uint8_array(size, nchannel, data);
+  save_image(filename, size, nchannel, pixels.data());
 }
-void SaveImage(psl::string_view filename, vec2i size, int nchannel, const uint8_t *data) {
-  WriteImageBMP(filename, size, nchannel, data);
+void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *data) {
+  auto ext = from_last_of(filename, '.');
+  if (ext == "bmp")
+    stbi_write_bmp(filename.c_str(), size.x, size.y, nchannel, data);
+  else if (ext == "png")
+    stbi_write_png(filename.c_str(), size.x, size.y, nchannel, data,
+                   size.x * nchannel * sizeof(uint8_t));
+  else if (ext == "jpg")
+    stbi_write_jpg(filename.c_str(), size.x, size.y, nchannel, data, 90);
+  else if (ext == "tga")
+    stbi_write_tga(filename.c_str(), size.x, size.y, nchannel, data);
+  else {
+    Warning("Unknown format `", ext, "` during saving `", filename, "`; assuming png");
+    stbi_write_png((filename + ".png").c_str(), size.x, size.y, nchannel, data,
+                   size.x * nchannel * sizeof(uint8_t));
+  }
 }
 Image read_image(psl::string_view filename) {
   Profiler _("[FileIO]Load image");
-  auto data = ReadBinaryData(filename);
+  auto data = read_binary_file(filename);
   return read_image(data.data(), data.size());
 }
 Image read_image(void *buffer, size_t size) {
@@ -180,14 +154,21 @@ TriangleMesh load_mesh(void *data, size_t size) {
 }
 TriangleMesh load_mesh(psl::string_view filename) {
   Profiler _("Loading mesh");
-  auto data = ReadBinaryData(filename);
+  auto data = read_binary_file(filename);
   return load_mesh(data.data(), data.size());
 }
 
-void interpretFile(Context &context, psl::string_view filename) {
-  Log("[FileIO]Loading ", filename);
-  auto source = ReadStringFile(filename);
+void interpret_file(Context &context, psl::string_view filename) {
+  Debug("[FileIO]Loading ", filename);
+  auto source = read_string_file(filename);
   interpret(context, source);
+}
+
+void fileio_context(Context &ctx) {
+  ctx("load_mesh") = +[](psl::string filename) { return load_mesh(filename); };
+  ctx("save_image") = overloaded<psl::string, const Array2D2f &>(save_image);
+  ctx("save_image") = overloaded<psl::string, const Array2D3f &>(save_image);
+  ctx("save_image") = overloaded<psl::string, const Array2D4f &>(save_image);
 }
 
 }  // namespace pine

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/utility.h>
-#include <pine/psl/memory.h>
+#include <psl/type_traits.h>
+#include <psl/utility.h>
+#include <psl/memory.h>
 
 namespace psl {
 
@@ -93,8 +93,7 @@ struct Union<T> {
 
 template <typename T, typename First, typename... Rest>
 constexpr int index() {
-  static_assert(SameAs<T, First> || sizeof...(Rest) != 0,
-                "type T is not in the parameter pack");
+  static_assert(SameAs<T, First> || sizeof...(Rest) != 0, "type T is not in the parameter pack");
 
   if constexpr (SameAs<T, First>)
     return 0;
@@ -108,7 +107,8 @@ constexpr decltype(auto) dispatch_helper(VariantType&& object, F&& f) {
 }
 
 template <typename... Ts, typename VariantType, typename F>
-decltype(auto) dispatch(VariantType&& object, int index, F&& f) {
+decltype(auto) dispatch(VariantType&& object [[maybe_unused]], int index [[maybe_unused]],
+                        F&& f [[maybe_unused]]) {
   using Fwt = decltype(+dispatch_helper<VariantType, F, FirstType<Ts...>>);
   constexpr static Fwt table[]{dispatch_helper<VariantType, F, Ts>...};
 
@@ -121,7 +121,7 @@ struct Variant {
   using Aggregate = detail::Union<Ts...>;
 
   template <typename T>
-  constexpr bool one_of() {
+  static constexpr bool one_of() {
     return (psl::SameAs<T, Ts> && ...);
   }
 

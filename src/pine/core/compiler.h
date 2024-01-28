@@ -2,11 +2,11 @@
 
 #include <pine/core/context.h>
 
-#include <pine/psl/optional.h>
-#include <pine/psl/memory.h>
-#include <pine/psl/vector.h>
-#include <pine/psl/string.h>
-#include <pine/psl/array.h>
+#include <psl/optional.h>
+#include <psl/memory.h>
+#include <psl/vector.h>
+#include <psl/string.h>
+#include <psl/array.h>
 
 namespace pine {
 

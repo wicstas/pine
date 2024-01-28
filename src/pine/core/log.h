@@ -2,9 +2,9 @@
 
 #include <pine/core/defines.h>
 
-#include <pine/psl/string.h>
-#include <pine/psl/system.h>
-#include <pine/psl/chrono.h>
+#include <psl/string.h>
+#include <psl/system.h>
+#include <psl/chrono.h>
 
 namespace pine {
 
@@ -75,7 +75,7 @@ template <typename... Args>
 
 #define CHECK_IMPL(name, op, a, b)                                                          \
   if (!((a)op(b)))                                                                          \
-    pine::Fatal("[" name " Failure]", #a, " = ", a, "  ", #b, " = ", b, '[', __FILE__, ':', \
+    pine::Fatal("[" name " Failure]", #a, " = ", a, ", ", #b, " = ", b, '[', __FILE__, ':', \
                 __LINE__, ':', __func__, "()]");
 
 #define CHECK_EQ(a, b) CHECK_IMPL("CHECK_EQ", ==, a, b)

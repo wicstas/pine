@@ -2,9 +2,9 @@
 
 #include <pine/core/light.h>
 
-#include <pine/psl/optional.h>
-#include <pine/psl/variant.h>
-#include <pine/psl/vector.h>
+#include <psl/optional.h>
+#include <psl/variant.h>
+#include <psl/vector.h>
 
 namespace pine {
 

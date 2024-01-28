@@ -2,7 +2,7 @@
 
 namespace pine {
 
-const int Primes[PrimeTableSize] = {
+const int Primes[PrimeTablesize] = {
     2,    3,    5,    7,    11,   13,   17,   19,   23,   29,   31,   37,   41,   43,   47,   53,
     59,   61,   67,   71,   73,   79,   83,   89,   97,   101,  103,  107,  109,  113,  127,  131,
     137,  139,  149,  151,  157,  163,  167,  173,  179,  181,  191,  193,  197,  199,  211,  223,
@@ -68,7 +68,7 @@ const int Primes[PrimeTableSize] = {
     7867, 7873, 7877, 7879, 7883, 7901, 7907, 7919,
 };
 
-extern const int PrimeSums[PrimeTableSize] = {
+extern const int PrimeSums[PrimeTablesize] = {
     0,       2,       5,       10,      17,      28,      41,      58,      77,      100,
     129,     160,     197,     238,     281,     328,     381,     440,     501,     568,
     639,     712,     791,     874,     963,     1060,    1161,    1264,    1371,    1480,

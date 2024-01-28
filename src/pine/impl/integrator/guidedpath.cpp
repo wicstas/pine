@@ -129,17 +129,17 @@ struct QuadNode {
           u[1] = u[1] / ry;
           return child(nodes, 0).sample(nodes, u, pdf * 4 * rx * ry);
         } else {
-          u[1] = (u[1] - ry) / psl::max(1 - ry, Epsilon);
+          u[1] = (u[1] - ry) / psl::max(1 - ry, epsilon);
           return child(nodes, 2).sample(nodes, u, pdf * 4 * rx * (1 - ry));
         }
       } else {
-        u[0] = (u[0] - rx) / psl::max(1 - rx, Epsilon);
+        u[0] = (u[0] - rx) / psl::max(1 - rx, epsilon);
         auto ry = child(nodes, 1).flux / (child(nodes, 1).flux + child(nodes, 3).flux);
         if (u[1] < ry) {
           u[1] = u[1] / ry;
           return child(nodes, 1).sample(nodes, u, pdf * 4 * (1 - rx) * ry);
         } else {
-          u[1] = (u[1] - ry) / psl::max(1 - ry, Epsilon);
+          u[1] = (u[1] - ry) / psl::max(1 - ry, epsilon);
           return child(nodes, 3).sample(nodes, u, pdf * 4 * (1 - rx) * (1 - ry));
         }
       }
@@ -263,11 +263,11 @@ using SpatialNodes = psl::vector<SpatialNode>;
 struct SpatialNode {
   SpatialNode() = default;
   SpatialNode(AABB aabb, QuadTree quad)
-      : aabb{aabb}, axis{aabb.MaxDim()}, guide{psl::move(quad)}, collector{guide} {
+      : aabb{aabb}, axis{max_axis(aabb.diagonal())}, guide{psl::move(quad)}, collector{guide} {
   }
 
   float get_footprint() {
-    return aabb.Diagonal()[axis] / 2;
+    return aabb.diagonal()[axis] / 2;
   }
   SpatialNode& add_sample(RadianceSample s) {
     CHECK_GE(s.l, 0);
@@ -595,7 +595,6 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   } else {
     if (auto bs = it.material->sample({it, -ray.d, sampler.Get1D(), sampler.Get2D()})) {
       auto sc = inverse_uniform_sphere(bs->wo);
-      auto mec = MaterialEvalCtx{it, -ray.d, bs->wo};
       auto le = quad.flux_estimate(sc) / (4);
       auto mis_factor = balance_heuristic(1, bs->pdf, 1, quad.pdf(sc)) / (1 - guide_select_prob);
       L += le * bs->f / bs->pdf * mis_factor;

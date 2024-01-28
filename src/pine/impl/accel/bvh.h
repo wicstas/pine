@@ -2,19 +2,19 @@
 
 #include <pine/core/scene.h>
 
-#include <pine/psl/memory.h>
-#include <pine/psl/vector.h>
+#include <psl/memory.h>
+#include <psl/vector.h>
 
 namespace pine {
 
 class BVHImpl {
 public:
   struct alignas(16) Node {
-    float SurfaceArea() const {
-      return Union(aabbs[0], aabbs[1]).SurfaceArea();
+    float surface_area() const {
+      return union_(aabbs[0], aabbs[1]).surface_area();
     }
     AABB get_aabb() const {
-      return Union(aabbs[0], aabbs[1]);
+      return union_(aabbs[0], aabbs[1]);
     }
     void UpdateAABB(Node* nodes) {
       aabbs[0] = nodes[children[0]].get_aabb();
@@ -24,14 +24,14 @@ public:
     }
     float ComputeCost(Node* nodes) {
       if (primitiveIndices.size())
-        return SurfaceArea();
-      return SurfaceArea() + nodes[children[0]].ComputeCost(nodes) +
+        return surface_area();
+      return surface_area() + nodes[children[0]].ComputeCost(nodes) +
              nodes[children[1]].ComputeCost(nodes);
     }
     float Inefficiency() const {
-      float mSum = SurfaceArea() / (2 * (aabbs[0].SurfaceArea() + aabbs[1].SurfaceArea()));
-      float mMin = SurfaceArea() / psl::min(aabbs[0].SurfaceArea(), aabbs[1].SurfaceArea());
-      float mArea = SurfaceArea();
+      float mSum = surface_area() / (2 * (aabbs[0].surface_area() + aabbs[1].surface_area()));
+      float mMin = surface_area() / psl::min(aabbs[0].surface_area(), aabbs[1].surface_area());
+      float mArea = surface_area();
       return mSum * mMin * mArea;
     }
 
@@ -60,7 +60,7 @@ public:
   template <typename F>
   bool Intersect(Ray& ray, Interaction& it, F&& f) const;
   AABB get_aabb() const {
-    return Union(nodes[rootIndex].aabbs[0], nodes[rootIndex].aabbs[1]);
+    return union_(nodes[rootIndex].aabbs[0], nodes[rootIndex].aabbs[1]);
   }
 
   int rootIndex = -1;

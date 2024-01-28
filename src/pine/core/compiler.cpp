@@ -1,7 +1,8 @@
 #include <pine/core/compiler.h>
+#include <pine/core/profiler.h>
 
-#include <pine/psl/algorithm.h>
-#include <pine/psl/variant.h>
+#include <psl/algorithm.h>
+#include <psl/variant.h>
 
 namespace pine {
 struct PExpr;
@@ -278,7 +279,7 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
   auto vicinity = psl::string{};
   for (size_t i = row - lines_padding; i <= row; i++)
     vicinity += " | " + lines[i] + "\n";
-  vicinity += "  -" + psl::string(column, '-') + "^\n";
+  vicinity += "  -" + psl::string_n_of(column, '-') + "^\n";
   for (size_t i = row + 1; i <= row + lines_padding; i++)
     vicinity += " | " + lines[i] + "\n";
 
@@ -369,8 +370,9 @@ size_t Bytecodes::get_var_type(size_t var_index) const {
   return stack[var_index];
 }
 uint16_t Bytecodes::get_var_by_name(psl::string_view name) const {
-  if (auto it = psl::find_if(psl::reverse_ranger(variable_map),
-                             [&name](const auto& p) { return p.first == name; });
+  using psl::pipe::operator|;
+  if (auto it = psl::find_if(variable_map | psl::reverse_(),
+                             psl::composite(psl::equal_to(name), psl::first_of_pair));
       it.unwrap() != variable_map.end())
     return it->second;
   else
@@ -418,7 +420,7 @@ namespace pine {
 uint16_t Id::emit(Context&, Bytecodes& bytecodes) const {
   auto var_index = bytecodes.get_var_by_name(value);
   if (var_index == uint16_t(-1))
-    bytecodes.error(*this, "No variable with name `", value, "` is found");
+    bytecodes.error(*this, "Variable `", value, "`is not found");
   return var_index;
 }
 
@@ -880,15 +882,33 @@ struct Parser {
   }
   For for_() {
     consume("for");
-    consume("(");
-    auto init = stmt();
-    auto r = row, c = column;
-    auto cond = expr();
-    consume(";");
-    auto inc = expr();
-    consume(")");
-    auto body = pblock();
-    return For{r, c, psl::move(init), psl::move(cond), psl::move(inc), psl::move(body)};
+
+    if (accept("(")) {
+      auto init = stmt();
+      auto r = row, c = column;
+      auto cond = expr();
+      consume(";");
+      auto inc = expr();
+      consume(")");
+      auto body = pblock();
+      return For{r, c, psl::move(init), psl::move(cond), psl::move(inc), psl::move(body)};
+    } else {
+      auto r = row, c = column;
+      auto id_ = id();
+      consume("in");
+      auto range_a = expr();
+      consume("..");
+      auto range_b = expr();
+      auto init = Stmt(Declaration(id_.value, range_a));
+      auto cond = Expr(Expr(r, c, Expr0(r, c, PExpr(id_), Expr0::None)), range_b, Expr::Lt);
+      auto body = pblock();
+      return For{r,
+                 c,
+                 psl::move(init),
+                 psl::move(cond),
+                 Expr(r, c, Expr0(r, c, PExpr(id_), Expr0::PreInc)),
+                 psl::move(body)};
+    }
   }
   IfElseChain if_else_chain() {
     auto if_clause = if_();
@@ -978,7 +998,8 @@ struct Parser {
       exprs.push_back(expr());
       accept(")");
     } else {
-      exprs.push_back(Expr{row, column, expr0()});
+      auto r = row, c = column;
+      exprs.push_back(Expr{r, c, expr0()});
     }
     while (true) {
       // clang-format off
@@ -1057,12 +1078,16 @@ struct Parser {
     auto pexpr_ = pexpr_base();
     while (true) {
       if (accept("[")) {
+        auto r = row, c = column;
         auto index = expr();
         consume("]");
-        pexpr_ = Subscript{row, column, psl::move(pexpr_), psl::move(index)};
+        pexpr_ = Subscript{r, c, psl::move(pexpr_), psl::move(index)};
+      } else if (expect("..")) {
+        break;
       } else if (accept(".")) {
+        auto r = row, c = column;
         auto id_ = id();
-        pexpr_ = MemberAccess{row, column, psl::move(pexpr_), psl::move(id_)};
+        pexpr_ = MemberAccess{r, c, psl::move(pexpr_), psl::move(id_)};
       } else if (accept("(")) {
         if (pexpr_.is<Id>()) {
           pexpr_ = FunctionCall{pexpr_.as<Id>().row, pexpr_.as<Id>().column, pexpr_.as<Id>().value,
@@ -1098,7 +1123,7 @@ struct Parser {
       auto pexpr = PExpr{expr()};
       consume(")");
       return pexpr;
-    } else if (expect(psl::isdigit, 0) || expect("-") || expect("."))
+    } else if ((expect(psl::isdigit, 0) || expect("-") || expect(".")) && !expect(".."))
       return PExpr{number()};
     else if (expect(psl::isalpha, 0) || expect("_"))
       return PExpr{id()};
@@ -1151,6 +1176,7 @@ struct Parser {
   NumberLiteral number() {
     if (!expect(psl::isdigit, 0) && !expect("-") && !expect("."))
       error("Expect a digit, `-`, or `.` to start a number");
+    CHECK(!expect(".."));
     auto pass_decimal_point = false;
     auto str = psl::string{};
     while (true) {
@@ -1159,6 +1185,8 @@ struct Parser {
       if (str.back() == '.') {
         pass_decimal_point = true;
       }
+      if (expect(".."))
+        break;
       auto n = next();
       if (!n || !((psl::isdigit(*n) || (!pass_decimal_point && *n == '.'))))
         break;
@@ -1346,6 +1374,7 @@ Bytecodes compile(Context& context, psl::string source) {
 template <typename T>
 struct Stack {
   void push(T x) {
+    CHECK(storage.capacity() > storage.size());
     storage.push_back(psl::move(x));
   }
   T& top() {
@@ -1373,6 +1402,9 @@ struct Stack {
   void reserve(size_t size) {
     storage.reserve(size);
   }
+  size_t size() const {
+    return storage.size();
+  }
 
 private:
   psl::vector<T> storage;
@@ -1383,177 +1415,182 @@ struct VirtualMachine {
 };
 
 void execute(const Bytecodes& bytecodes) {
-  auto vm = VirtualMachine();
-  vm.stack.reserve(1024);
-  for (const auto& var : bytecodes.variables)
-    vm.stack.push(var);
+  Profiler _("[Interpreter]Execute");
+  try {
+    auto vm = VirtualMachine();
+    vm.stack.reserve(1024);
+    for (const auto& var : bytecodes.variables)
+      vm.stack.push(var);
 
-  auto register_ = Variable();
+    auto register_ = Variable();
 
-  for (size_t p = 0; p < bytecodes.length();) {
-    const auto& code = bytecodes[p];
-    auto inc_p = true;
-    auto push = [&](auto x) {
-      if (code.value1 != size_t(-1))
-        vm.stack.push(psl::move(x));
-    };
+    for (size_t p = 0; p < bytecodes.length();) {
+      const auto& code = bytecodes[p];
+      auto inc_p = true;
+      const auto push = [&](auto x) {
+        if (code.value1 != size_t(-1))
+          vm.stack.push(psl::move(x));
+      };
 
-    switch (code.instruction) {
-      case Bytecode::Break: break;
-      case Bytecode::Continue: break;
-      case Bytecode::Load: push(vm.stack[code.value]); break;
-      case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
-      case Bytecode::LoadFloatConstant:
-        push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
-        break;
-      case Bytecode::LoadIntConstant:
-        push(psl::bitcast<int>(static_cast<uint32_t>(code.value)));
-        break;
-      case Bytecode::LoadBoolConstant: push(static_cast<bool>(code.value)); break;
-      case Bytecode::LoadStringConstant: push(bytecodes.get_string(code.value)); break;
-      case Bytecode::IntPreInc: push(++vm.stack[code.args[0]].as<int&>()); break;
-      case Bytecode::IntPreDec: push(--vm.stack[code.args[0]].as<int&>()); break;
-      case Bytecode::IntPostInc: push(vm.stack[code.args[0]].as<int&>()++); break;
-      case Bytecode::IntPostDec: push(vm.stack[code.args[0]].as<int&>()--); break;
-      case Bytecode::IntPositive: push(vm.stack[code.args[0]].as<int>()); break;
-      case Bytecode::IntNegate: push(-vm.stack[code.args[0]].as<int>()); break;
-      case Bytecode::IntEq:
-        push(vm.stack[code.args[0]].as<int>() == vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntNe:
-        push(vm.stack[code.args[0]].as<int>() != vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntLt:
-        push(vm.stack[code.args[0]].as<int>() < vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntGt:
-        push(vm.stack[code.args[0]].as<int>() > vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntLe:
-        push(vm.stack[code.args[0]].as<int>() <= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntGe:
-        push(vm.stack[code.args[0]].as<int>() >= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntAdd:
-        push(vm.stack[code.args[0]].as<int>() + vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntSub:
-        push(vm.stack[code.args[0]].as<int>() - vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntMul:
-        push(vm.stack[code.args[0]].as<int>() * vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntDiv:
-        push(vm.stack[code.args[0]].as<int>() / vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntPow:
-        push(psl::powi(vm.stack[code.args[0]].as<int>(), vm.stack[code.args[1]].as<int>()));
-        break;
-      case Bytecode::IntMod:
-        push(vm.stack[code.args[0]].as<int>() % vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntAddE:
-        push(vm.stack[code.args[0]].as<int&>() += vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntSubE:
-        push(vm.stack[code.args[0]].as<int&>() -= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntMulE:
-        push(vm.stack[code.args[0]].as<int&>() *= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntDivE:
-        push(vm.stack[code.args[0]].as<int&>() /= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntModE:
-        push(vm.stack[code.args[0]].as<int&>() %= vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::IntAssi:
-        push(vm.stack[code.args[0]].as<int&>() = vm.stack[code.args[1]].as<int>());
-        break;
-      case Bytecode::FloatPositive: push(vm.stack[code.args[0]].as<float>()); break;
-      case Bytecode::FloatNegate: push(-vm.stack[code.args[0]].as<float>()); break;
-      case Bytecode::FloatEq:
-        push(vm.stack[code.args[0]].as<float>() == vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatNe:
-        push(vm.stack[code.args[0]].as<float>() != vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatLt:
-        push(vm.stack[code.args[0]].as<float>() < vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatGt:
-        push(vm.stack[code.args[0]].as<float>() > vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatLe:
-        push(vm.stack[code.args[0]].as<float>() <= vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatGe:
-        push(vm.stack[code.args[0]].as<float>() >= vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatAdd:
-        push(vm.stack[code.args[0]].as<float>() + vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatSub:
-        push(vm.stack[code.args[0]].as<float>() - vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatMul:
-        push(vm.stack[code.args[0]].as<float>() * vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatDiv:
-        push(vm.stack[code.args[0]].as<float>() / vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatPow:
-        push(psl::powi(vm.stack[code.args[0]].as<float>(), vm.stack[code.args[1]].as<float>()));
-        break;
-      case Bytecode::FloatAddE:
-        push(vm.stack[code.args[0]].as<float&>() += vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatSubE:
-        push(vm.stack[code.args[0]].as<float&>() -= vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatMulE:
-        push(vm.stack[code.args[0]].as<float&>() *= vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatDivE:
-        push(vm.stack[code.args[0]].as<float&>() /= vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::FloatAssi:
-        push(vm.stack[code.args[0]].as<float&>() = vm.stack[code.args[1]].as<float>());
-        break;
-      case Bytecode::Call: {
-        auto f = [&]<int... I>(psl::IntegerSequence<int, I...>) {
-          const Variable* arr[]{&vm.stack[code.args[I]]...};
-          push(bytecodes.functions[code.value].call(arr));
-        };
-        switch (code.nargs) {
-          case 0: push(bytecodes.functions[code.value].call({})); break;
-          case 1: f(psl::make_integer_sequence<int, 1>()); break;
-          case 2: f(psl::make_integer_sequence<int, 2>()); break;
-          case 3: f(psl::make_integer_sequence<int, 3>()); break;
-          case 4: f(psl::make_integer_sequence<int, 4>()); break;
-          case 5: f(psl::make_integer_sequence<int, 5>()); break;
-          case 6: f(psl::make_integer_sequence<int, 6>()); break;
-          case 7: f(psl::make_integer_sequence<int, 7>()); break;
-          case 8: f(psl::make_integer_sequence<int, 8>()); break;
-          case 9: CHECK(false); break;
-        }
-      } break;
-      case Bytecode::Jump:
-        p = code.value;
-        inc_p = false;
-        break;
-      case Bytecode::JumpIfNot:
-        if (!vm.stack[code.value1].as<bool>()) {
+      switch (code.instruction) {
+        case Bytecode::Break: break;
+        case Bytecode::Continue: break;
+        case Bytecode::Load: push(vm.stack[code.value]); break;
+        case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
+        case Bytecode::LoadFloatConstant:
+          push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
+          break;
+        case Bytecode::LoadIntConstant:
+          push(psl::bitcast<int>(static_cast<uint32_t>(code.value)));
+          break;
+        case Bytecode::LoadBoolConstant: push(static_cast<bool>(code.value)); break;
+        case Bytecode::LoadStringConstant: push(bytecodes.get_string(code.value)); break;
+        case Bytecode::IntPreInc: push(++vm.stack[code.args[0]].as<int&>()); break;
+        case Bytecode::IntPreDec: push(--vm.stack[code.args[0]].as<int&>()); break;
+        case Bytecode::IntPostInc: push(vm.stack[code.args[0]].as<int&>()++); break;
+        case Bytecode::IntPostDec: push(vm.stack[code.args[0]].as<int&>()--); break;
+        case Bytecode::IntPositive: push(vm.stack[code.args[0]].as<int>()); break;
+        case Bytecode::IntNegate: push(-vm.stack[code.args[0]].as<int>()); break;
+        case Bytecode::IntEq:
+          push(vm.stack[code.args[0]].as<int>() == vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntNe:
+          push(vm.stack[code.args[0]].as<int>() != vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntLt:
+          push(vm.stack[code.args[0]].as<int>() < vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntGt:
+          push(vm.stack[code.args[0]].as<int>() > vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntLe:
+          push(vm.stack[code.args[0]].as<int>() <= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntGe:
+          push(vm.stack[code.args[0]].as<int>() >= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntAdd:
+          push(vm.stack[code.args[0]].as<int>() + vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntSub:
+          push(vm.stack[code.args[0]].as<int>() - vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntMul:
+          push(vm.stack[code.args[0]].as<int>() * vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntDiv:
+          push(vm.stack[code.args[0]].as<int>() / vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntPow:
+          push(psl::powi(vm.stack[code.args[0]].as<int>(), vm.stack[code.args[1]].as<int>()));
+          break;
+        case Bytecode::IntMod:
+          push(vm.stack[code.args[0]].as<int>() % vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntAddE:
+          push(vm.stack[code.args[0]].as<int&>() += vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntSubE:
+          push(vm.stack[code.args[0]].as<int&>() -= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntMulE:
+          push(vm.stack[code.args[0]].as<int&>() *= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntDivE:
+          push(vm.stack[code.args[0]].as<int&>() /= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntModE:
+          push(vm.stack[code.args[0]].as<int&>() %= vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::IntAssi:
+          push(vm.stack[code.args[0]].as<int&>() = vm.stack[code.args[1]].as<int>());
+          break;
+        case Bytecode::FloatPositive: push(vm.stack[code.args[0]].as<float>()); break;
+        case Bytecode::FloatNegate: push(-vm.stack[code.args[0]].as<float>()); break;
+        case Bytecode::FloatEq:
+          push(vm.stack[code.args[0]].as<float>() == vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatNe:
+          push(vm.stack[code.args[0]].as<float>() != vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatLt:
+          push(vm.stack[code.args[0]].as<float>() < vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatGt:
+          push(vm.stack[code.args[0]].as<float>() > vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatLe:
+          push(vm.stack[code.args[0]].as<float>() <= vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatGe:
+          push(vm.stack[code.args[0]].as<float>() >= vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatAdd:
+          push(vm.stack[code.args[0]].as<float>() + vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatSub:
+          push(vm.stack[code.args[0]].as<float>() - vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatMul:
+          push(vm.stack[code.args[0]].as<float>() * vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatDiv:
+          push(vm.stack[code.args[0]].as<float>() / vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatPow:
+          push(psl::powi(vm.stack[code.args[0]].as<float>(), vm.stack[code.args[1]].as<float>()));
+          break;
+        case Bytecode::FloatAddE:
+          push(vm.stack[code.args[0]].as<float&>() += vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatSubE:
+          push(vm.stack[code.args[0]].as<float&>() -= vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatMulE:
+          push(vm.stack[code.args[0]].as<float&>() *= vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatDivE:
+          push(vm.stack[code.args[0]].as<float&>() /= vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::FloatAssi:
+          push(vm.stack[code.args[0]].as<float&>() = vm.stack[code.args[1]].as<float>());
+          break;
+        case Bytecode::Call: {
+          auto f = [&]<int... I>(psl::IntegerSequence<int, I...>) {
+            const Variable* arr[]{&vm.stack[code.args[I]]...};
+            push(bytecodes.functions[code.value].call(arr));
+          };
+          switch (code.nargs) {
+            case 0: push(bytecodes.functions[code.value].call({})); break;
+            case 1: f(psl::make_integer_sequence<int, 1>()); break;
+            case 2: f(psl::make_integer_sequence<int, 2>()); break;
+            case 3: f(psl::make_integer_sequence<int, 3>()); break;
+            case 4: f(psl::make_integer_sequence<int, 4>()); break;
+            case 5: f(psl::make_integer_sequence<int, 5>()); break;
+            case 6: f(psl::make_integer_sequence<int, 6>()); break;
+            case 7: f(psl::make_integer_sequence<int, 7>()); break;
+            case 8: f(psl::make_integer_sequence<int, 8>()); break;
+            case 9: CHECK(false); break;
+          }
+        } break;
+        case Bytecode::Jump:
           p = code.value;
           inc_p = false;
-        }
-        break;
-      case Bytecode::UnwindStack: vm.stack.unwind(code.value); break;
-    }
+          break;
+        case Bytecode::JumpIfNot:
+          if (!vm.stack[code.value1].as<bool>()) {
+            p = code.value;
+            inc_p = false;
+          }
+          break;
+        case Bytecode::UnwindStack: vm.stack.unwind(code.value); break;
+      }
 
-    if (inc_p)
-      p++;
+      if (inc_p)
+        p++;
+    }
+  } catch (const Exception& e) {
+    Log(e.what());
   }
 }
 

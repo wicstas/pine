@@ -118,7 +118,7 @@ struct TrowbridgeReitzDistribution {
     }
 
     float pdf(vec3 w, vec3 wm) const {
-        return psl::max(D(w, wm), Epsilon);
+        return psl::max(D(w, wm), epsilon);
     }
 
     vec3 SampleWm(vec3 w, vec2 u) const {

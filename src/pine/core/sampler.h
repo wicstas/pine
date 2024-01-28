@@ -5,8 +5,8 @@
 #include <pine/core/primes.h>
 #include <pine/core/rng.h>
 
-#include <pine/psl/variant.h>
-#include <pine/psl/vector.h>
+#include <psl/variant.h>
+#include <psl/vector.h>
 
 namespace pine {
 
@@ -51,7 +51,7 @@ struct StratifiedSampler {
     dimension = 0;
   }
   float Get1D() {
-    int stratum = (sampleIndex + Hash(pixel, dimension)) % samplesPerPixel;
+    int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
     dimension += 1;
 
     float delta = jitter ? rng.uniformf() : 0.5f;
@@ -59,7 +59,7 @@ struct StratifiedSampler {
     return (stratum + delta) / SamplesPerPixel();
   }
   vec2 Get2D() {
-    int stratum = (sampleIndex + Hash(pixel, dimension)) % samplesPerPixel;
+    int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
     dimension += 2;
 
     int x = stratum % xPixelSamples, y = stratum / xPixelSamples;
@@ -80,7 +80,7 @@ struct StratifiedSampler {
 struct HaltonSampler {
   enum class RandomizeStrategy { None, PermuteDigits };
 
-  HaltonSampler(int samplesPerPixel, vec2i filmSize,
+  HaltonSampler(int samplesPerPixel, vec2i filmsize,
                 RandomizeStrategy randomizeStrategy = RandomizeStrategy::PermuteDigits);
 
   int SamplesPerPixel() const {
@@ -92,12 +92,12 @@ struct HaltonSampler {
     dimension = 2;
   }
   float Get1D() {
-    if (dimension >= PrimeTableSize)
+    if (dimension >= PrimeTablesize)
       dimension = 2;
     return SampleDimension(dimension++);
   }
   vec2 Get2D() {
-    if (dimension + 1 >= PrimeTableSize)
+    if (dimension + 1 >= PrimeTablesize)
       dimension = 2;
     int dim = dimension;
     dimension += 2;
@@ -176,7 +176,7 @@ struct MltSampler {
 
   float Get1D() {
     int dim = GetNextIndex();
-    EnsureReady(dim);
+    Ensureready(dim);
     return X[dim].value;
   }
 
@@ -197,7 +197,7 @@ struct MltSampler {
   }
 
 private:
-  void EnsureReady(int dim);
+  void Ensureready(int dim);
   int GetNextIndex() {
     return streamIndex + streamCount * dimension++;
   }

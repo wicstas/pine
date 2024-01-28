@@ -1,9 +1,9 @@
 #include <pine/core/earley.h>
 #include <pine/core/log.h>
 
-#include <pine/psl/type_traits.h>
-#include <pine/psl/optional.h>
-#include <pine/psl/map.h>
+#include <psl/type_traits.h>
+#include <psl/optional.h>
+#include <psl/map.h>
 
 namespace pine {
 

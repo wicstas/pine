@@ -3,7 +3,7 @@
 #include <pine/core/atomic.h>
 #include <pine/core/array.h>
 
-#include <pine/psl/string.h>
+#include <psl/string.h>
 
 namespace pine {
 

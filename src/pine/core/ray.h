@@ -13,7 +13,7 @@ struct Ray {
   };
 
   Ray() = default;
-  Ray(vec3 o, vec3 d, float tmin = 0.0f, float tmax = FloatMax)
+  Ray(vec3 o, vec3 d, float tmin = 0.0f, float tmax = float_max)
       : o(o), d(d), tmin(tmin), tmax(tmax){};
   vec3 operator()(float t) const {
     return o + t * d;
@@ -22,7 +22,7 @@ struct Ray {
   vec3 o;
   vec3 d;
   float tmin = 0.0f;
-  float tmax = FloatMax;
+  float tmax = float_max;
 };
 
 inline vec3 OffsetRayOrigin(vec3 p, vec3 n) {
@@ -50,7 +50,7 @@ inline Ray RayBetween(vec3 p0, vec3 p1) {
 inline psl::pair<float, float> TAfterTransform(const mat3& transform, const Ray& ray) {
   vec3 p0 = transform * ray.o;
   return {distance(p0, transform * ray(ray.tmin)),
-          ray.tmax > FloatMax ? FloatMax : distance(p0, transform * ray(ray.tmax))};
+          ray.tmax > float_max ? float_max : distance(p0, transform * ray(ray.tmax))};
 }
 
 inline Ray TransformRayOD(mat4 transform, Ray ray) {

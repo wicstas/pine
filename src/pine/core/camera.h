@@ -3,7 +3,7 @@
 #include <pine/core/film.h>
 #include <pine/core/ray.h>
 
-#include <pine/psl/variant.h>
+#include <psl/variant.h>
 
 namespace pine {
 

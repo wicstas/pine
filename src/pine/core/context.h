@@ -1,13 +1,15 @@
 #pragma once
 
 #include <pine/core/log.h>
+#include <pine/core/vecmath.h>
 
-#include <pine/psl/unordered_map.h>
-#include <pine/psl/type_traits.h>
-#include <pine/psl/system.h>
-#include <pine/psl/memory.h>
-#include <pine/psl/span.h>
-#include <pine/psl/map.h>
+#include <psl/unordered_map.h>
+#include <psl/type_traits.h>
+#include <psl/variant.h>
+#include <psl/system.h>
+#include <psl/memory.h>
+#include <psl/span.h>
+#include <psl/map.h>
 
 namespace pine {
 
@@ -26,7 +28,7 @@ auto derived(R (U::*f)(Args...)) {
   return static_cast<R (T::*)(Args...)>(f);
 }
 template <typename T, typename U, typename R, typename... Args>
-auto derived(R (U::*f)(Args...) const) {
+auto derived_const(R (U::*f)(Args...) const) {
   return static_cast<R (T::*)(Args...) const>(f);
 }
 template <typename... Args, typename R, typename T>
@@ -34,11 +36,15 @@ auto overloaded(R (T::*f)(Args...)) {
   return f;
 }
 template <typename... Args, typename R, typename T>
-auto overloaded(R (T::*f)(Args...) const) {
+auto overloaded_const(R (T::*f)(Args...) const) {
   return f;
 }
 template <typename... Args, typename R>
 auto overloaded(R (*f)(Args...)) {
+  return f;
+}
+template <typename R, typename... Args>
+auto overloadedr(R (*f)(Args...)) {
   return f;
 }
 
@@ -61,7 +67,10 @@ struct Variable {
       return psl::make_shared<VariableModel<R, T>>(*this);
     }
     void* ptr() override {
-      return reinterpret_cast<void*>(&static_cast<R&>(base));
+      if constexpr (psl::is_psl_ref<T>)
+        return &(*base);
+      else
+        return &base;
     }
     size_t type_id() const override {
       return psl::type_id<R>();
@@ -79,29 +88,49 @@ struct Variable {
   Variable(T x) : model(psl::make_shared<VariableModel<T, T>>(psl::move(x))) {
   }
   template <typename T>
-  Variable(psl::ref<T> x) : model(psl::make_shared<VariableModel<T, psl::ref<T>>>(psl::move(x))) {
+  Variable(psl::ref_wrapper<T> x)
+      : model(psl::make_shared<VariableModel<T, psl::ref_wrapper<T>>>(psl::move(x))) {
+  }
+
+  using PodTypes = psl::TypePack<bool, int, float, vec2i, vec2, vec3, vec4>;
+
+  template <typename T>
+  requires psl::one_of<T, PodTypes>
+  Variable(T x) : pod(x) {
   }
   Variable clone() const {
+    if (pod.is_valid())
+      return *this;
     DCHECK(model);
     auto copy = Variable();
     copy.model = model->clone();
     return copy;
   }
   size_t type_id() const {
+    if (pod.is_valid())
+      return pod.dispatch([](auto&& x) { return psl::type_id<decltype(x)>(); });
     DCHECK(model);
     return model->type_id();
   }
   const psl::string& type_name() const {
+    if (pod.is_valid())
+      return pod.dispatch([](auto&& x) -> decltype(auto) { return psl::type_name<decltype(x)>(); });
     DCHECK(model);
     return model->type_name();
   }
   template <typename T>
   bool is() const {
+    if (pod.is_valid())
+      return pod.is<psl::Decay<T>>();
     DCHECK(model);
     return model->type_id() == psl::type_id<T>();
   }
   template <typename T>
   T as() const {
+    if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
+      if (pod.is_valid())
+        return const_cast<Variable&>(*this).pod.as<psl::Decay<T>>();
+    }
     DCHECK(model);
     using Base = psl::Decay<T>;
 #ifndef NDEBUG
@@ -113,6 +142,7 @@ struct Variable {
 
 private:
   psl::shared_ptr<VariableConcept> model;
+  psl::CopyTemplateArguments<psl::Variant, PodTypes> pod;
 };
 
 struct FunctionConcept {
@@ -174,8 +204,6 @@ struct Function {
   private:
     T base;
   };
-  // template <typename R, typename... Args>
-  // FunctionModel(R (*)(Args...)) -> FunctionModel<R (*)(Args...), R, Args...>;
 
   Function() = default;
   template <typename R, typename... Args>
@@ -196,6 +224,32 @@ struct Function {
   Function(Lambda<T, R, Args...> f)
       : model(psl::make_shared<FunctionModel<T, R, Args...>>(psl::move(f.lambda))) {
   }
+
+  template <typename R, typename... Args>
+  Function(R& (*f)(Args...)) {
+    auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args>(args)...)); };
+    model = psl::make_shared<FunctionModel<decltype(lambda), R&, Args...>>(lambda);
+  }
+  template <typename T, typename R, typename... Args>
+  Function(R& (T::*f)(Args...)) {
+    auto lambda = [f](T& x, Args... args) { return psl::ref((x.*f)(psl::forward<Args>(args)...)); };
+    model = psl::make_shared<FunctionModel<decltype(lambda), R&, T&, Args...>>(lambda);
+  }
+  template <typename T, typename R, typename... Args>
+  Function(R& (T::*f)(Args...) const) {
+    auto lambda = [f](const T& x, Args... args) {
+      return psl::ref((x.*f)(psl::forward<Args>(args)...));
+    };
+    model = psl::make_shared<FunctionModel<decltype(lambda), R&, const T&, Args...>>(lambda);
+  }
+  template <typename T, typename R, typename... Args>
+  Function(Lambda<T, R&, Args...> f) {
+    auto lambda = [f = psl::move(f.lambda)](Args... args) {
+      return psl::ref(f(static_cast<Args>(args)...));
+    };
+    model = psl::make_shared<FunctionModel<decltype(lambda), R&, Args...>>(lambda);
+  }
+
   Variable call(psl::span<const Variable*> args) const {
     DCHECK(model);
     return model->call(args);
@@ -266,6 +320,7 @@ struct Context {
     void add(Lambda<T, R, Args...> f) const {
       ctx.add_f(psl::move(name), Function{psl::move(f)});
     }
+
     template <typename T>
     void add(T value) const {
       ctx.add_variable(psl::move(name), psl::move(value));
@@ -300,17 +355,7 @@ struct Context {
       if (type_trait.member_accessors.find(name) != type_trait.member_accessors.end())
         Fatal("Already set `", name, "` as one of the members of `", type_trait.alias, "`");
       type_trait.member_accessors[name] = ctx.functions.size();
-      ctx.functions.push_back(tag<psl::ref<U>, T&>([ptr](T& x) { return psl::ref<U>(x.*ptr); }));
-      return *this;
-    }
-    template <typename Base, typename R, typename... Args>
-    TypeProxy& method(psl::string name, R (Base::*f)(Args...)) {
-      ctx.add_f(psl::move(name), derived<T>(f));
-      return *this;
-    }
-    template <typename Base, typename R, typename... Args>
-    TypeProxy& method(psl::string name, R (Base::*f)(Args...) const) {
-      ctx.add_f(psl::move(name), derived<T>(f));
+      ctx.functions.push_back(tag<U&, T&>([ptr](T& x) -> U& { return x.*ptr; }));
       return *this;
     }
     template <typename F>
