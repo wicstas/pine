@@ -267,4 +267,6 @@ public:
   }
 };
 
+void material_context(Context& ctx);
+
 }  // namespace pine

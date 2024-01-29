@@ -1,4 +1,5 @@
 #include <pine/core/sampler.h>
+#include <pine/core/context.h>
 
 namespace pine {
 
@@ -27,18 +28,16 @@ static uint64_t multiplicativeInverse(int64_t a, int64_t n) {
 
 psl::vector<uint16_t> HaltonSampler::radicalInversePermutations;
 
-HaltonSampler::HaltonSampler(int samplesPerPixel, vec2i filmsize,
-                             RandomizeStrategy randomizeStrategy)
-    : samplesPerPixel(samplesPerPixel), randomizeStrategy(randomizeStrategy) {
+HaltonSampler::HaltonSampler(int samplesPerPixel) : samplesPerPixel(samplesPerPixel) {
   if (radicalInversePermutations.size() == 0) {
     RNG rng;
-    radicalInversePermutations = ComputeRadicalInversePermutations(rng);
+    radicalInversePermutations = compute_radical_inverse_permutations(rng);
   }
 
   for (int i = 0; i < 2; i++) {
     int base = (i == 0) ? 2 : 3;
     int scale = 1, exp = 0;
-    while (scale < psl::min(filmsize[i], MaxHaltonResolution)) {
+    while (scale < MaxHaltonResolution) {
       scale *= base;
       ++exp;
     }
@@ -52,12 +51,12 @@ HaltonSampler::HaltonSampler(int samplesPerPixel, vec2i filmsize,
   sampleStride = baseScales[0] * baseScales[1];
 }
 
-void HaltonSampler::StartPixel(vec2i p, int sampleIndex) {
+void HaltonSampler::start_pixel(vec2i p, int sampleIndex) {
   haltonIndex = 0;
   if (sampleStride > 1) {
     vec2i pm = {psl::mod(p[0], MaxHaltonResolution), psl::mod(p[1], MaxHaltonResolution)};
     for (int i = 0; i < 2; i++) {
-      uint64_t dimOffset = InverseRadicalInverse(pm[i], i == 0 ? 2 : 3, baseExponents[i]);
+      uint64_t dimOffset = inverse_radical_inverse(pm[i], i == 0 ? 2 : 3, baseExponents[i]);
       haltonIndex += dimOffset * baseScales[1 - i] * multInverse[1 - i];
     }
     haltonIndex %= sampleStride;
@@ -67,15 +66,14 @@ void HaltonSampler::StartPixel(vec2i p, int sampleIndex) {
   dimension = 2;
 }
 
-ZeroTwoSequenceSampler::ZeroTwoSequenceSampler(int spp, int nSampledDimensions)
-    : nSampledDimensions(nSampledDimensions) {
+ZeroTwoSequenceSampler::ZeroTwoSequenceSampler(int spp, int nSampledDimensions) {
   samplesPerPixel = psl::roundup2(spp);
   for (int i = 0; i < nSampledDimensions; i++) {
     samples1D.push_back(psl::vector<float>(samplesPerPixel));
     samples2D.push_back(psl::vector<vec2>(samplesPerPixel));
   }
 }
-void ZeroTwoSequenceSampler::StartPixel(vec2i, int sampleIndex) {
+void ZeroTwoSequenceSampler::start_pixel(vec2i, int sampleIndex) {
   currentSampleIndex = sampleIndex;
   current1DDimension = current2DDimension = 0;
   if (sampleIndex == 0) {
@@ -85,13 +83,13 @@ void ZeroTwoSequenceSampler::StartPixel(vec2i, int sampleIndex) {
       Sobol2D(samplesPerPixel, &s[0], rng);
   }
 }
-float ZeroTwoSequenceSampler::Get1D() {
+float ZeroTwoSequenceSampler::get1d() {
   if (current1DDimension < (int)samples1D.size())
     return samples1D[current1DDimension++][currentSampleIndex];
   else
     return rng.uniformf();
 }
-vec2 ZeroTwoSequenceSampler::Get2D() {
+vec2 ZeroTwoSequenceSampler::get2d() {
   if (current2DDimension < (int)samples2D.size())
     return samples2D[current2DDimension++][currentSampleIndex];
   else
@@ -148,7 +146,7 @@ struct OwenScramber {
   uint32_t seed;
 };
 
-void MltSampler::Ensureready(int dim) {
+void MltSampler::ensure_ready(int dim) {
   if (dim >= (int)X.size())
     X.resize(dim + 1);
   PrimarySample& Xi = X[dim];
@@ -158,7 +156,7 @@ void MltSampler::Ensureready(int dim) {
     Xi.lastModificationIndex = lastLargeStepIndex;
   }
 
-  Xi.Backup();
+  Xi.backup();
   if (largeStep) {
     Xi.value = rng.uniformf();
   } else {
@@ -168,6 +166,42 @@ void MltSampler::Ensureready(int dim) {
     Xi.value = psl::fract(Xi.value + normalSample * effSigma);
   }
   Xi.lastModificationIndex = sampleIndex;
+}
+
+void sampler_context(Context& ctx) {
+  ctx.type<UniformSampler>("UniformSampler")
+      .ctor<int>()
+      .method("spp", &UniformSampler::spp)
+      .method("start_pixel", &UniformSampler::start_pixel)
+      .method("start_next_sample", &UniformSampler::start_next_sample)
+      .method("get1d", &UniformSampler::get1d)
+      .method("get2d", &UniformSampler::get2d);
+  ctx.type<StratifiedSampler>("StratifiedSampler")
+      .ctor<int, int, bool>()
+      .method("spp", &StratifiedSampler::spp)
+      .method("start_pixel", &StratifiedSampler::start_pixel)
+      .method("start_next_sample", &StratifiedSampler::start_next_sample)
+      .method("get1d", &StratifiedSampler::get1d)
+      .method("get2d", &StratifiedSampler::get2d);
+  ctx.type<HaltonSampler>("HaltonSampler")
+      .ctor<int>()
+      .method("spp", &HaltonSampler::spp)
+      .method("start_pixel", &HaltonSampler::start_pixel)
+      .method("start_next_sample", &HaltonSampler::start_next_sample)
+      .method("get1d", &HaltonSampler::get1d)
+      .method("get2d", &HaltonSampler::get2d);
+  ctx.type<ZeroTwoSequenceSampler>("ZeroTwoSequenceSampler")
+      .ctor<int, int>()
+      .method("spp", &ZeroTwoSequenceSampler::spp)
+      .method("start_pixel", &ZeroTwoSequenceSampler::start_pixel)
+      .method("start_next_sample", &ZeroTwoSequenceSampler::start_next_sample)
+      .method("get1d", &ZeroTwoSequenceSampler::get1d)
+      .method("get2d", &ZeroTwoSequenceSampler::get2d);
+
+  ctx.type<Sampler>("Sampler")
+      .ctor_variant<UniformSampler, StratifiedSampler, HaltonSampler, ZeroTwoSequenceSampler>();
+
+  ctx("radical_inverse") = radical_inverse;
 }
 
 }  // namespace pine

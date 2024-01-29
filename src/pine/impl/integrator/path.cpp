@@ -44,8 +44,8 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       break;
 
     if (!it.material->is_delta())
-      if (auto ls = light_sampler.sample(it.p, it.n, sampler.Get1D(), sampler.Get2D())) {
-        if (!hit(it.SpawnRay(ls->wo, ls->distance))) {
+      if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
+        if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
           auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
           auto f = it.material->F(mec);
@@ -58,9 +58,9 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       }
 
     if (nee_env_light && scene.env_light && !it.material->is_delta()) {
-      auto ls = scene.env_light->sample(it.n, sampler.Get2D());
+      auto ls = scene.env_light->sample(it.n, sampler.get2d());
 
-      if (ls && !hit(it.SpawnRay(ls->wo, ls->distance))) {
+      if (ls && !hit(it.spawn_ray(ls->wo, ls->distance))) {
         auto cosine = absdot(ls->wo, it.n);
         auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
         auto f = it.material->F(mec);
@@ -70,7 +70,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       }
     }
 
-    auto msc = MaterialSampleCtx(it, -ray.d, sampler.Get1D(), sampler.Get2D());
+    auto msc = MaterialSampleCtx(it, -ray.d, sampler.get1d(), sampler.get2d());
 
     if (auto bs = it.material->sample(msc)) {
       beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
@@ -81,7 +81,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       // if (depth >= 1) {
       //   auto p = psl::min((beta[0] + beta[1] + beta[2]) / 3, 1.0f);
       //   if (p < 0.2f) {
-      //     if (sampler.Get1D() < p)
+      //     if (sampler.get1d() < p)
       //       beta /= p;
       //     else
       //       break;
@@ -90,7 +90,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
 
       if (beta.is_black())
         break;
-      ray = it.SpawnRay(bs->wo);
+      ray = it.spawn_ray(bs->wo);
     } else {
       break;
     }

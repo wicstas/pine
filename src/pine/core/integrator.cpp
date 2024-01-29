@@ -19,7 +19,7 @@ float get_progress() {
 RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel)} {
   for (int i = 0; i < n_threads(); i++)
     samplers.push_back(sampler.Clone());
-  samplesPerPixel = sampler.SamplesPerPixel();
+  samplesPerPixel = sampler.spp();
 }
 bool RTIntegrator::hit(Ray ray) const {
   return accel.hit(ray);
@@ -38,7 +38,7 @@ void PixelIntegrator::render(Scene& scene) {
   for (int i = 0; i < samplesPerPixel; i++) {
     ParallelFor(film.size(), [&](vec2i p) {
       Sampler& sampler = samplers[threadIdx];
-      sampler.StartPixel(p, i);
+      sampler.start_pixel(p, i);
       pixel_color(scene, p, sampler);
     });
     set_progress(static_cast<float>(i) / samplesPerPixel);
@@ -48,8 +48,8 @@ void PixelIntegrator::render(Scene& scene) {
 }
 
 void RayIntegrator::pixel_color(Scene& scene, vec2i p, Sampler& sampler) {
-  auto p_film = vec2{p + sampler.Get2D()} / scene.camera.film().size();
-  auto ray = scene.camera.gen_ray(p_film, sampler.Get2D());
+  auto p_film = vec2{p + sampler.get2d()} / scene.camera.film().size();
+  auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
   auto L = radiance(scene, ray, sampler);
   // CHECK(!L.has_nan());
   // CHECK(!L.has_inf());

@@ -45,9 +45,9 @@ struct string_allocator {
   }
 };
 
-class string : public VectorBase<char, string_allocator<char>> {
+class string : public vector<char, string_allocator<char>> {
 public:
-  using base = VectorBase<char, string_allocator<char>>;
+  using base = vector<char, string_allocator<char>>;
 
   string();
   explicit string(size_t len);

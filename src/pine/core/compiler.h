@@ -120,6 +120,7 @@ struct Bytecodes {
   Bytecodes(const Context& context, SourceLines sl);
 
   size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
+  void add_typed(psl::string name, size_t type_id);
   void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
                  psl::span<uint16_t> args = {});
   void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id, uint16_t arg0) {
@@ -170,9 +171,6 @@ struct Bytecodes {
     sl.error(node.row, node.column, args...);
   }
 
-  psl::vector<Function> functions;
-  psl::vector<Variable> variables;
-
 private:
   struct ScopeInfo {
     size_t type_stack_position;
@@ -183,12 +181,63 @@ private:
   psl::vector<size_t> stack;
   psl::vector<ScopeInfo> scope_stack;
   psl::vector<psl::string> string_region;
+
+public:
   SourceLines sl;
 };
-psl::string to_string(const Context& context, const Bytecodes& bcodes);
 
 Bytecodes compile(Context& context, psl::string source);
 
-void execute(const Bytecodes& bytecodes);
+template <typename T, typename Allocator = psl::default_allocator<T>>
+struct Stack {
+  void push(T x) {
+    storage.push_back(psl::move(x));
+  }
+  T& top() {
+    CHECK(storage.size() != 0);
+    return storage.back();
+  }
+  T& top(size_t index) {
+    CHECK_LE(index + 1, storage.size());
+    return storage[storage.size() - (1 + index)];
+  }
+  psl::span<T> top_n(int n) {
+    CHECK_GE(n, 0);
+    auto span = psl::span<T>(storage);
+    return span.subspan(span.size() - n, n);
+  }
+  void unwind(size_t position) {
+    if (position == size_t(-1) || position == storage.size())
+      return;
+    CHECK_LE(position, storage.size());
+    storage.resize_less(position);
+  }
+  T& operator[](size_t index) {
+    CHECK_LT(index, storage.size());
+    return storage[index];
+  }
+  void reserve(size_t size) {
+    storage.reserve(size);
+  }
+  size_t size() const {
+    return storage.size();
+  }
+
+private:
+  psl::vector<T, Allocator> storage;
+};
+
+struct VirtualMachine {
+  Stack<Variable, psl::static_allocator<Variable, 32>> stack;
+};
+
+void execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm);
+
+inline void execute(const Context& context, const Bytecodes& bytecodes) {
+  auto vm = VirtualMachine();
+  for (const auto& var : context.variables)
+    vm.stack.push(var);
+  execute(context, bytecodes, vm);
+}
 
 }  // namespace pine

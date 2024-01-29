@@ -23,11 +23,11 @@ vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
     if (depth + 1 == max_depth)
       break;
 
-    if (auto bs = it.material->sample({it, -ray.d, sampler.Get1D(), sampler.Get2D()})) {
+    if (auto bs = it.material->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
       beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
       if (beta.is_black())
         break;
-      ray = it.SpawnRay(bs->wo);
+      ray = it.spawn_ray(bs->wo);
     } else {
       break;
     }

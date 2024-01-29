@@ -1,6 +1,7 @@
-#include <pine/core/film.h>
-#include <pine/core/color.h>
+#include <pine/core/context.h>
 #include <pine/core/fileio.h>
+#include <pine/core/color.h>
+#include <pine/core/film.h>
 
 namespace pine {
 
@@ -59,6 +60,14 @@ Film combine(Film a, const Film& b, float weight_a, float weight_b) {
     index++;
   }
   return a;
+}
+
+void film_context(Context& ctx) {
+  ctx.type<Film>("Film")
+      .ctor<vec2i>()
+      .method("scale", &Film::scale)
+      .method("offset", &Film::offset);
+  ctx("save") = tag<void, psl::string, Film>(save_film_as_image);
 }
 
 }  // namespace pine

@@ -20,9 +20,9 @@ struct Distribution2D {
   };
 
   Distribution2D() = default;
-  Distribution2D(const Array2D<float>& density, int max_depth);
+  Distribution2D(const Array2d<float>& density, int max_depth);
 
-  Node* build(const Array2D<float>& density, vec2i lower, vec2i upper, double weight, int depth = 0);
+  Node* build(const Array2d<float>& density, vec2i lower, vec2i upper, double weight, int depth = 0);
 
   DistributionSample sample(vec2 u2) const;
   float pdf(vec2i p) const;

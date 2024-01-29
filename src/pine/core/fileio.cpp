@@ -6,8 +6,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <ext/stb_image.h>
-#include <ext/stb_image_write.h>
+#include <contrib/stb_image.h>
+#include <contrib/stb_image_write.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -84,7 +84,7 @@ Image read_image(void *buffer, size_t size) {
     if (!data)
       Fatal("Unable to load image");
     CHECK_EQ(channels, 3);
-    auto image = Array2D<vec3>{vec2i{width, height}, reinterpret_cast<const vec3 *>(data)};
+    auto image = Array2d<vec3>{vec2i{width, height}, reinterpret_cast<const vec3 *>(data)};
     STBI_FREE(data);
     return image;
   } else {
@@ -93,7 +93,7 @@ Image read_image(void *buffer, size_t size) {
     if (!data)
       Fatal("Unable to load image");
     CHECK_EQ(channels, 3);
-    auto image = Array2D<vec3u8>{vec2i{width, height}, reinterpret_cast<const vec3u8 *>(data)};
+    auto image = Array2d<vec3u8>{vec2i{width, height}, reinterpret_cast<const vec3u8 *>(data)};
     STBI_FREE(data);
     return image;
   }
@@ -111,7 +111,7 @@ TriangleMesh load_mesh(void *data, size_t size) {
     return TriangleMesh{};
   }
 
-  auto indices = psl::vector<uint32_t>{};
+  auto indices = psl::vector<vec3u32>{};
   auto vertices = psl::vector<vec3>{};
   auto normals = psl::vector<vec3>{};
   auto texcoords = psl::vector<vec2>{};
@@ -128,8 +128,8 @@ TriangleMesh load_mesh(void *data, size_t size) {
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
       auto face = mesh->mFaces[i];
       CHECK_EQ(face.mNumIndices, 3);
-      for (unsigned int j = 0; j < face.mNumIndices; ++j)
-        indices.push_back(index_offset + face.mIndices[j]);
+      indices.push_back(vec3i(index_offset + face.mIndices[0], index_offset + face.mIndices[1],
+                              index_offset + face.mIndices[2]));
     }
 
     index_offset = vertices.size();
@@ -166,9 +166,11 @@ void interpret_file(Context &context, psl::string_view filename) {
 
 void fileio_context(Context &ctx) {
   ctx("load_mesh") = +[](psl::string filename) { return load_mesh(filename); };
-  ctx("save_image") = overloaded<psl::string, const Array2D2f &>(save_image);
-  ctx("save_image") = overloaded<psl::string, const Array2D3f &>(save_image);
-  ctx("save_image") = overloaded<psl::string, const Array2D4f &>(save_image);
+  ctx("load_image") =
+      +[](psl::string filepath) { return psl::make_shared<Image>(read_image(filepath)); };
+  ctx("save_image") = overloaded<psl::string, const Array2d2f &>(save_image);
+  ctx("save_image") = overloaded<psl::string, const Array2d3f &>(save_image);
+  ctx("save_image") = overloaded<psl::string, const Array2d4f &>(save_image);
 }
 
 }  // namespace pine

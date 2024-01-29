@@ -134,7 +134,7 @@ string to_string(float x) {
   str += psl::to_string(static_cast<int64_t>(x)) + ".";
   x = psl::fract(x);
 
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < 4; ++i) {
     x *= 10;
     str.push_back('0' + static_cast<char>(x));
     x = psl::absfract(x);

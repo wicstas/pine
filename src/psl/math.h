@@ -196,6 +196,7 @@ inline constexpr T pow(T x, T e) {
 
 template <FloatingPoint T>
 inline T log2(T y) {
+  return std::log2(y);
   int log = psl::ieeeexp(y);
 
   T logl = 0;
@@ -223,11 +224,13 @@ inline T log2(T y) {
 
 template <FloatingPoint T>
 inline T log(T y) {
+  return std::log(y);
   return Ln2 * psl::log2(y);
 }
 
 template <FloatingPoint T>
 inline T log10(T y) {
+  return std::log10(y);
   return Ln2 / Ln10 * psl::log2(y);
 }
 
@@ -291,11 +294,13 @@ inline T cos(T x) {
 
 template <FloatingPoint T>
 inline T sin(T x) {
+  return std::sin(x);
   return psl::cos(x - pi / 2);
 }
 
 template <FloatingPoint T>
 inline T tan(T x) {
+  return std::tan(x);
   // TODO
   return psl::sin(x) / psl::cos(x);
 }

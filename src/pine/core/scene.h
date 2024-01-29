@@ -32,4 +32,6 @@ struct Scene {
 void add_box(Scene& scene, mat4 m, Material material);
 void add_box(Scene& scene, mat4 m, psl::string material_name);
 
+void scene_context(Context& context);
+
 }  // namespace pine

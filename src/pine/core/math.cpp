@@ -15,9 +15,12 @@ void math_context(Context &ctx) {
   ctx("sqrt") = psl::sqrt<float>;
   ctx("floor") = psl::floor<float>;
   ctx("ceil") = psl::ceil<float>;
+  ctx("powi") = psl::powi<int>;
   ctx("pow") = psl::pow<float>;
   ctx("exp") = psl::exp<float>;
+  ctx("log2") = psl::log2<float>;
   ctx("log") = psl::log<float>;
+  ctx("log10") = psl::log10<float>;
   ctx("sin") = psl::sin<float>;
   ctx("cos") = psl::cos<float>;
   ctx("tan") = psl::tan<float>;

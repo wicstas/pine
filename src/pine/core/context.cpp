@@ -6,6 +6,7 @@ namespace pine {
 
 Context::Context() {
   auto& context = *this;
+  context.type<psl::Empty>("void");
   context.type<int, Context::Float>("int").ctor_variant<float>(true);
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
@@ -172,8 +173,8 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       }
       if (candidates.size())
         candidates.pop_back();
-      exception("Function `", name, "(", arg_type_aliases,
-                ")` is not found, candidates:\n", candidates);
+      exception("Function `", name, "(", arg_type_aliases, ")` is not found, candidates:\n",
+                candidates);
     } else {
       auto likely_func_name = psl::string();
       auto min_difference = 8;
@@ -189,9 +190,9 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       }
 
       if (likely_func_name != "")
-        exception("Function `", name, "`is not found, did you mean `", likely_func_name, "`?");
+        exception("Function `", name, "` is not found, did you mean `", likely_func_name, "`?");
       else
-        exception("Function `", name, "`is not found");
+        exception("Function `", name, "` is not found");
     }
   }
 }
@@ -275,6 +276,14 @@ psl::string Context::complete(psl::string part) const {
   if (result.size() == 0)
     return result;
   return result.substr(part.size());
+}
+
+size_t Context::get_type_id(psl::string name) const {
+  for (const auto& type : types) {
+    if (type.second.alias == name)
+      return type.first;
+  }
+  exception("Type `", name, "` is not registered");
 }
 
 }  // namespace pine

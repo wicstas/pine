@@ -116,4 +116,6 @@ struct EnvironmentLight : psl::Variant<Atmosphere, Sky, ImageSky> {
   }
 };
 
+void light_context(Context& ctx);
+
 }  // namespace pine

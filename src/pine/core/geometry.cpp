@@ -133,7 +133,7 @@ bool Sphere::intersect(Ray& ray, Interaction& it) const {
 ShapeSample Sphere::sample(vec3 p, vec2 u) const {
   auto ss = ShapeSample{};
   ss.n = uniform_sphere(u);
-  ss.p = OffsetRayOrigin(c + r * ss.n, ss.n);
+  ss.p = offset_ray_origin(c + r * ss.n, ss.n);
   ss.uv = u;
   ss.w = normalize(ss.p - p, ss.distance);
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
@@ -231,37 +231,58 @@ AABB Disk::get_aabb() const {
 }
 
 bool Line::hit(const Ray& ray) const {
-  (void)ray;
-  return false;
+  auto r2o = look_at(ray.o, ray.o + ray.d);
+  auto o2r = inverse(r2o);
+  auto p0 = vec3{o2r * vec4(this->p0, 1.0f)};
+  auto p1 = vec3{o2r * vec4(this->p1, 1.0f)};
+
+  auto o = p0;
+  auto d = p1 - p0;
+  auto tz = inverse(mat2(dot(d, d), -d.z, -d.z, 1.0f)) * vec2(-dot(o, d), o.z);
+  auto t = psl::clamp(tz.x, 0.0f, 1.0f);
+  auto z = psl::clamp(o.z + t * d.z, ray.tmin + thickness, ray.tmax);
+
+  auto D = length(o + t * d - vec3(0.0f, 0.0f, z));
+
+  return D <= thickness;
 }
+Line::Line(vec3 p0, vec3 p1, float thickness)
+    : p0(p0),
+      p1(p1),
+      tbn(coordinate_system(normalize(p1 - p0))),
+      thickness(thickness),
+      len{length(p1 - p0)} {};
 bool Line::intersect(Ray& ray, Interaction& it) const {
-  mat4 r2o = look_at(ray.o, ray.o + ray.d);
-  mat4 o2r = inverse(r2o);
-  vec3 p0 = vec3{o2r * vec4(this->p0, 1.0f)};
-  vec3 p1 = vec3{o2r * vec4(this->p1, 1.0f)};
+  auto r2o = look_at(ray.o, ray.o + ray.d);
+  auto o2r = inverse(r2o);
+  auto p0 = vec3(o2r * vec4(this->p0, 1.0f));
+  auto p1 = vec3(o2r * vec4(this->p1, 1.0f));
 
-  vec3 o = p0;
-  vec3 d = p1 - p0;
-  vec2 tz = inverse(mat2(dot(d, d), -d.z, -d.z, 1.0f)) * vec2(-dot(o, d), o.z);
-  float t = psl::clamp(tz.x, 0.0f, 1.0f);
-  float z = psl::clamp(o.z + t * d.z, ray.tmin + thickness, ray.tmax);
+  auto o = p0;
+  auto d = p1 - p0;
+  auto tz = inverse(mat2(dot(d, d), -d.z, -d.z, 1.0f)) * vec2(-dot(o, d), o.z);
+  auto t = psl::clamp(tz.x, 0.0f, 1.0f);
+  auto z = psl::clamp(o.z + t * d.z, ray.tmin + thickness, ray.tmax);
 
-  float D = length(o + t * d - vec3(0.0f, 0.0f, z));
+  auto D = length(o + t * d - vec3(0.0f, 0.0f, z));
 
   if (D > thickness)
     return false;
 
   ray.tmax = z;
   it.p = ray(z);
-  it.n = -ray.d;
+  auto lt = dot(it.p - this->p0, tbn.z);
+  auto lp = lerp(lt, this->p0, this->p1);
+  it.n = normalize(it.p - lp);
 
   return true;
 }
 ShapeSample Line::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
   auto phi = u2[1] * 2 * pi;
-  ss.p = lerp(u2[0], p0, p1) + thickness * psl::cos(phi) * u + thickness * psl::sin(phi) * v;
-  ss.n = psl::cos(phi) * u + psl::sin(phi) * v;
+  ss.p =
+      lerp(u2[0], p0, p1) + thickness * psl::cos(phi) * tbn.x + thickness * psl::sin(phi) * tbn.y;
+  ss.n = psl::cos(phi) * tbn.x + psl::sin(phi) * tbn.y;
   ss.uv = u2;
   ss.w = normalize(ss.p - p, ss.distance);
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
@@ -279,6 +300,27 @@ AABB Line::get_aabb() const {
   return aabb;
 }
 
+Rect::Rect(vec3 position, vec3 ex, vec3 ey)
+    : position(position),
+      ex(normalize(ex)),
+      ey(normalize(ey)),
+      n(normalize(cross(ex, ey))),
+      lx(length(ex)),
+      ly(length(ey)){};
+Rect Rect::from_vertex(vec3 v0, vec3 v1, vec3 v2) {
+  auto ex = v1 - v0;
+  auto ey = v2 - v0;
+  return Rect{v0 + ex / 2 + ey / 2, ex, ey};
+}
+Rect Rect::apply(mat4 m) const {
+  auto v0 = position - ex * lx / 2 - ey * ly / 2;
+  auto v1 = v0 + ex * lx;
+  auto v2 = v0 + ey * ly;
+  v0 = vec3{m * vec4{v0, 1.0f}};
+  v1 = vec3{m * vec4{v1, 1.0f}};
+  v2 = vec3{m * vec4{v2, 1.0f}};
+  return from_vertex(v0, v1, v2);
+}
 bool Rect::hit(const Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
   if (t < ray.tmin)
@@ -486,49 +528,42 @@ AABB Triangle::get_aabb() const {
   return aabb;
 }
 
-TriangleMesh::TriangleMesh(psl::vector<vec3> vertices_, psl::vector<uint32_t> indices_,
+TriangleMesh::TriangleMesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> indices_,
                            psl::vector<vec2> texcoords_, psl::vector<vec3> normals_)
     : vertices{psl::move(vertices_)},
       normals{psl::move(normals_)},
       texcoords{psl::move(texcoords_)},
       indices{psl::move(indices_)} {
-  if (normals.size() != 0) {
+  if (normals.size() != 0)
     CHECK_EQ(vertices.size(), normals.size());
-  } else {
-    for (size_t i = 0; i < vertices.size(); i += 3) {
-      auto n = cross(vertices[i] - vertices[i + 1], vertices[i] - vertices[i + 2]);
-      normals.push_back(n);
-      normals.push_back(n);
-      normals.push_back(n);
-    }
-  }
   if (texcoords.size() != 0)
     CHECK_EQ(vertices.size(), texcoords.size());
 };
 bool TriangleMesh::hit(const Ray& ray, int index) const {
-  index *= 3;
-  DCHECK_LT(size_t(index + 2), indices.size());
-  auto i0 = indices[index], i1 = indices[index + 1], i2 = indices[index + 2];
-  return Triangle::hit(ray, vertices[i0], vertices[i1], vertices[i2]);
+  DCHECK_LT(size_t(index), indices.size());
+  auto face = indices[index];
+  return Triangle::hit(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
 }
 bool TriangleMesh::intersect(Ray& ray, Interaction& it, int index) const {
-  index *= 3;
-  DCHECK_LT(size_t(index + 2), indices.size());
-  auto i0 = indices[index], i1 = indices[index + 1], i2 = indices[index + 2];
-  auto v0 = vertices[i0], v1 = vertices[i1], v2 = vertices[i2];
-  bool hit = Triangle::intersect(ray, it, v0, v1, v2);
+  DCHECK_LT(size_t(index), indices.size());
+  auto face = indices[index];
+  auto v0 = vertices[face[0]], v1 = vertices[face[1]], v2 = vertices[face[2]];
+  auto hit = Triangle::intersect(ray, it, v0, v1, v2);
   if (hit) {
     it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
-    it.n = normalize(lerp(it.uv[0], it.uv[1], normals[i0], normals[i1], normals[i2]));
+    it.n = normalize(cross(v0 - v1, v0 - v2));
+    if (normals.size())
+      it.n =
+          normalize(lerp(it.uv[0], it.uv[1], normals[face[0]], normals[face[1]], normals[face[2]]));
     if (texcoords.size())
-      it.uv = lerp(it.uv[0], it.uv[1], texcoords[i0], texcoords[i1], texcoords[i2]);
+      it.uv = lerp(it.uv[0], it.uv[1], texcoords[face[0]], texcoords[face[1]], texcoords[face[2]]);
   }
   return hit;
 }
 AABB TriangleMesh::get_aabb(size_t index) const {
-  DCHECK_LT(index * 3 + 2, indices.size());
-  return Triangle{vertices[indices[index * 3 + 0]], vertices[indices[index * 3 + 1]],
-                  vertices[indices[index * 3 + 2]], normals[indices[index * 3 + 0]]}
+  DCHECK_LT(index, indices.size());
+  return Triangle(vertices[indices[index][0]], vertices[indices[index][1]],
+                  vertices[indices[index][2]], {})
       .get_aabb();
 }
 AABB TriangleMesh::get_aabb() const {
@@ -536,6 +571,34 @@ AABB TriangleMesh::get_aabb() const {
   for (size_t i = 0; i < num_triangles(); i++)
     aabb.extend(get_aabb(i));
   return aabb;
+}
+
+TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
+  auto width = height_map.size().x + 1;
+  auto p2i = [width](int x, int y) { return y * width + x; };
+  auto vertices = psl::vector<vec3>(width * (height_map.size().y + 1));
+  for (int x = 0; x <= height_map.size().x; x++)
+    for (int y = 0; y <= height_map.size().y; y++) {
+      auto n = 0;
+      vertices[p2i(x, y)].x = float(x - height_map.size().x / 2) / height_map.size().x;
+      vertices[p2i(x, y)].z = float(y - height_map.size().y / 2) / height_map.size().y;
+      for (int xi = -1; xi <= 1; xi++)
+        for (int yi = -1; yi <= 1; yi++) {
+          if (inside(vec2i(x + xi, y + yi), vec2i(0, 0), height_map.size())) {
+            vertices[p2i(x, y)].y += height_map[vec2i(x + xi, y + yi)];
+            n++;
+          }
+        }
+      vertices[p2i(x, y)].y /= n;
+    }
+
+  auto indices = psl::vector<vec3u32>();
+  for (int x = 0; x < height_map.size().x; x++)
+    for (int y = 0; y < height_map.size().y; y++) {
+      indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1)));
+      indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1)));
+    }
+  return TriangleMesh(vertices, indices);
 }
 
 bool Geometry::intersect(Ray& ray, Interaction& it) const {
@@ -562,6 +625,7 @@ void geometry_context(Context& ctx) {
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<TriangleMesh>("TriangleMesh").method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
+  ctx("height_map_to_mesh") = height_map_to_mesh;
 }
 
 }  // namespace pine

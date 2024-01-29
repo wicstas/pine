@@ -3,7 +3,7 @@
 
 namespace pine {
 
-Distribution2D::Distribution2D(const Array2D<float>& density, int max_depth)
+Distribution2D::Distribution2D(const Array2d<float>& density, int max_depth)
     : max_depth{max_depth} {
   Profiler _("Build Distribution2D");
   auto weight = 0.0;
@@ -15,7 +15,7 @@ Distribution2D::Distribution2D(const Array2D<float>& density, int max_depth)
   root = psl::shared_ptr<Node>{build(density, vec2i{0}, density.size(), weight)};
 }
 
-Distribution2D::Node* Distribution2D::build(const Array2D<float>& density, vec2i lower, vec2i upper,
+Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i lower, vec2i upper,
                                             double weight, int depth) {
   auto size = upper - lower;
 

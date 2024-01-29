@@ -73,13 +73,6 @@ void test_vector() {
   CHECK_EQ(xs[1], 2);
   CHECK_EQ(xs[2], 3);
 
-  xs.assign_from(ys);
-  CHECK_EQ(xs.size(), 4);
-  CHECK_EQ(xs[0], 10);
-  CHECK_EQ(xs[1], 20);
-  CHECK_EQ(xs[2], 30);
-  CHECK_EQ(xs[3], 40);
-
   xs = psl::vector_of(-1, -2, -3);
   xs = ys;
   CHECK_EQ(xs.size(), 4);

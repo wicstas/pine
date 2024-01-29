@@ -96,7 +96,6 @@ struct ShapeSample {
 };
 
 struct Plane {
-  Plane() = default;
   Plane(vec3 position, vec3 normal) : position(position), n(normal) {
     mat3 tbn = coordinate_system(normal);
     u = tbn.x;
@@ -119,7 +118,6 @@ private:
 };
 
 struct Sphere {
-  Sphere() = default;
   Sphere(vec3 position, float radius) : c(position), r(radius){};
 
   static float compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r);
@@ -138,7 +136,6 @@ private:
 };
 
 struct Disk {
-  Disk() = default;
   Disk(vec3 position, vec3 normal, float r) : position(position), n(normal), r(r) {
     mat3 tbn = coordinate_system(normal);
     u = tbn.x;
@@ -161,13 +158,7 @@ struct Disk {
 };
 
 struct Line {
-  Line() = default;
-  Line(vec3 p0, vec3 p1, float thickness)
-      : p0(p0), p1(p1), thickness(thickness), len{length(p1 - p0)} {
-    mat3 tbn = coordinate_system(normalize(p1 - p0));
-    u = tbn.x;
-    v = tbn.y;
-  };
+  Line(vec3 p0, vec3 p1, float thickness);
 
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
@@ -179,34 +170,15 @@ struct Line {
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
   vec3 p0, p1;
-  vec3 u, v;
+  mat3 tbn;
   float thickness;
   float len;
 };
 
 struct Rect {
-  Rect() = default;
-  Rect(vec3 position, vec3 ex, vec3 ey)
-      : position(position),
-        ex(normalize(ex)),
-        ey(normalize(ey)),
-        n(normalize(cross(ex, ey))),
-        lx(length(ex)),
-        ly(length(ey)){};
-  static Rect from_vertex(vec3 v0, vec3 v1, vec3 v2) {
-    auto ex = v1 - v0;
-    auto ey = v2 - v0;
-    return Rect{v0 + ex / 2 + ey / 2, ex, ey};
-  }
-  Rect apply(mat4 m) const {
-    auto v0 = position - ex * lx / 2 - ey * ly / 2;
-    auto v1 = v0 + ex * lx;
-    auto v2 = v0 + ey * ly;
-    v0 = vec3{m * vec4{v0, 1.0f}};
-    v1 = vec3{m * vec4{v1, 1.0f}};
-    v2 = vec3{m * vec4{v2, 1.0f}};
-    return from_vertex(v0, v1, v2);
-  }
+  Rect(vec3 position, vec3 ex, vec3 ey);
+  static Rect from_vertex(vec3 v0, vec3 v1, vec3 v2);
+  Rect apply(mat4 m) const;
 
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
@@ -248,7 +220,7 @@ struct Triangle {
 
 struct TriangleMesh {
   TriangleMesh() = default;
-  TriangleMesh(psl::vector<vec3> vertices, psl::vector<uint32_t> indices,
+  TriangleMesh(psl::vector<vec3> vertices, psl::vector<vec3u32> indices,
                psl::vector<vec2> texcoords = {}, psl::vector<vec3> normals = {});
 
   bool hit(const Ray&) const {
@@ -272,7 +244,7 @@ struct TriangleMesh {
   bool intersect(Ray& ray, Interaction& it, int index) const;
 
   size_t num_triangles() const {
-    return indices.size() / 3;
+    return indices.size();
   }
   AABB get_aabb(size_t index) const;
 
@@ -287,8 +259,10 @@ private:
   psl::vector<vec3> vertices;
   psl::vector<vec3> normals;
   psl::vector<vec2> texcoords;
-  psl::vector<uint32_t> indices;
+  psl::vector<vec3u32> indices;
 };
+
+TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
 
 struct Shape : psl::Variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using Variant::Variant;

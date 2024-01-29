@@ -43,4 +43,6 @@ struct Camera : psl::Variant<ThinLenCamera> {
   }
 };
 
+void camera_context(Context &context);
+
 }  // namespace pine

@@ -27,16 +27,18 @@ struct Film {
     return pixels.data();
   }
 
-  Array2D<vec4> pixels;
+  Array2d<vec4> pixels;
 
 private:
   void apply_tone_mapping();
   void apply_gamma_correction();
-   SpinLock spin_lock;
+  SpinLock spin_lock;
 };
 
 Film combine(Film a, const Film& b, float weight_a, float weight_b);
 
 void save_film_as_image(psl::string_view filename, Film film);
+
+void film_context(Context& ctx);
 
 }  // namespace pine

@@ -43,10 +43,6 @@ template <typename... Args, typename R>
 auto overloaded(R (*f)(Args...)) {
   return f;
 }
-template <typename R, typename... Args>
-auto overloadedr(R (*f)(Args...)) {
-  return f;
-}
 
 struct VariableConcept {
   virtual ~VariableConcept() = default;
@@ -83,7 +79,8 @@ struct Variable {
     T base;
   };
 
-  Variable() = default;
+  Variable(psl::shared_ptr<VariableConcept> model) : model(psl::move(model)) {
+  }
   template <typename T>
   Variable(T x) : model(psl::make_shared<VariableModel<T, T>>(psl::move(x))) {
   }
@@ -102,9 +99,7 @@ struct Variable {
     if (pod.is_valid())
       return *this;
     DCHECK(model);
-    auto copy = Variable();
-    copy.model = model->clone();
-    return copy;
+    return Variable(model->clone());
   }
   size_t type_id() const {
     if (pod.is_valid())
@@ -164,7 +159,7 @@ struct Function {
     Variable call(psl::span<const Variable*> args) override {
       if constexpr (psl::SameAs<psl::FirstType<Args..., void>, psl::span<const Variable*>>) {
         if constexpr (psl::SameAs<R, void>)
-          return (base(args), Variable());
+          return (base(args), Variable(psl::Empty()));
         else
           return Variable(base(args));
       } else {
@@ -177,7 +172,8 @@ struct Function {
               return var.template as<typename P::Type>();
           };
           if constexpr (psl::SameAs<R, void>)
-            return (base(cast.template operator()<Ps>(*args[Ps::index])...), Variable());
+            return (base(cast.template operator()<Ps>(*args[Ps::index])...),
+                    Variable(psl::Empty()));
           else
             return Variable{base(cast.template operator()<Ps>(*args[Ps::index])...)};
         }(psl::make_indexed_type_sequence<Args...>());
@@ -205,7 +201,6 @@ struct Function {
     T base;
   };
 
-  Function() = default;
   template <typename R, typename... Args>
   Function(R (*f)(Args...))
       : model(psl::make_shared<FunctionModel<R (*)(Args...), R, Args...>>(f)) {
@@ -251,7 +246,6 @@ struct Function {
   }
 
   Variable call(psl::span<const Variable*> args) const {
-    DCHECK(model);
     return model->call(args);
   }
   size_t n_parameters() const {
@@ -356,6 +350,16 @@ struct Context {
         Fatal("Already set `", name, "` as one of the members of `", type_trait.alias, "`");
       type_trait.member_accessors[name] = ctx.functions.size();
       ctx.functions.push_back(tag<U&, T&>([ptr](T& x) -> U& { return x.*ptr; }));
+      return *this;
+    }
+    template <typename Base, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (Base::*f)(Args...)) {
+      ctx.add_f(psl::move(name), derived<T>(f));
+      return *this;
+    }
+    template <typename Base, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (Base::*f)(Args...) const) {
+      ctx.add_f(psl::move(name), derived_const<T>(f));
       return *this;
     }
     template <typename F>
@@ -488,6 +492,8 @@ struct Context {
 
   psl::vector<psl::string> candidates(psl::string part) const;
   psl::string complete(psl::string part) const;
+
+  size_t get_type_id(psl::string name) const;
 
   psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Function> functions;

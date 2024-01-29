@@ -18,7 +18,7 @@ void BVHImpl::Build(psl::vector<Primitive> primitives) {
 
   nodes.reserve(primitives.size());
   BuildSAHBinned(primitives.data(), primitives.data() + primitives.size(), aabb);
-  rootIndex = (int)nodes.size() - 1;
+  rootIndex = int(nodes.size() - 1);
   // Optimize();
 }
 
@@ -62,8 +62,9 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     Bucket buckets[nBuckets];
 
     for (int i = 0; i < numPrimitives; i++) {
-      int b = psl::min(int(nBuckets * aabbCentroid.relative_position(begin[i].aabb.centroid(axis), axis)),
-                       nBuckets - 1);
+      int b = psl::min(
+          int(nBuckets * aabbCentroid.relative_position(begin[i].aabb.centroid(axis), axis)),
+          nBuckets - 1);
       buckets[b].count++;
       buckets[b].aabb.extend(begin[i].aabb);
     }
@@ -315,6 +316,8 @@ void BVHImpl::Optimize() {
 
 template <typename F>
 bool BVHImpl::hit(const Ray& ray, F&& f) const {
+  if (this->nodes.size() == 0)
+    return false;
   RayOctant rayOctant = RayOctant(ray);
   const Node* PINE_RESTRICT nodes = this->nodes.data();
 
@@ -384,6 +387,8 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 
 template <typename F>
 bool BVHImpl::Intersect(Ray& ray, Interaction& it, F&& f) const {
+  if (this->nodes.size() == 0)
+    return false;
   RayOctant rayOctant = RayOctant(ray);
   const Node* PINE_RESTRICT nodes = this->nodes.data();
 
@@ -461,6 +466,8 @@ void BVH::build(const Scene* scene_) {
   for (size_t i = 0; i < scene->geometries.size(); i++) {
     if (scene->geometries[i]->shape.is<TriangleMesh>()) {
       auto& mesh = scene->geometries[i]->shape.as<TriangleMesh>();
+      if (mesh.num_triangles() == 0)
+        continue;
       auto primitives = psl::vector<BVHImpl::Primitive>{};
       for (size_t it = 0; it < mesh.num_triangles(); it++) {
         auto primitive = BVHImpl::Primitive{};

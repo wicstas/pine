@@ -34,62 +34,83 @@ struct default_allocator {
   }
 };
 
-template <typename T, typename Allocator>
-class VectorBase {
+template <typename T, size_t capacity>
+struct static_allocator {
+  T* alloc(size_t size [[maybe_unused]]) const {
+    psl_check(size < capacity);
+    return reinterpret_cast<T*>(storage.ptr());
+  }
+  void free(T* ptr [[maybe_unused]]) const {
+    psl_check(ptr != nullptr);
+  }
+
+  template <typename... Args>
+  void construct_at(T* ptr, Args&&... args) const {
+    psl_check(ptr != nullptr);
+    psl::construct_at(ptr, psl::forward<Args>(args)...);
+  }
+
+  void destruct_at(T* ptr) const {
+    psl_check(ptr != nullptr);
+    psl::destruct_at(ptr);
+  }
+
+  psl::Storage<sizeof(T) * capacity, alignof(T)> storage;
+};
+
+template <typename T, typename Allocator = default_allocator<T>>
+class vector {
 public:
   using ValueType = T;
 
   using Iterator = T*;
   using ConstIterator = const T*;
 
-  ~VectorBase() {
+  ~vector() {
     clear();
   }
 
-  VectorBase() = default;
+  vector() = default;
 
-  explicit VectorBase(size_t len) {
+  explicit vector(size_t len) {
     resize(len);
   }
   template <Range ARange>
-  explicit VectorBase(ARange&& range) {
+  explicit vector(ARange&& range) {
     if constexpr (psl::has_size<ARange>) {
-      resize(psl::size(range));
-      psl::copy(begin(), range);
+      reserve(psl::size(range));
+      psl::inplace(begin(), range);
+      len = psl::size(range);
     } else {
       psl::insert([this](const auto& x) { push_back(x); }, range);
     }
   }
   template <ForwardIterator It>
-  VectorBase(It first, It last) : VectorBase(psl::range(first, last)) {
+  vector(It first, It last) : vector(psl::range(first, last)) {
   }
 
-  VectorBase(const VectorBase& rhs) : VectorBase{} {
+  vector(const vector& rhs) : vector{} {
     *this = rhs;
   }
-  VectorBase(VectorBase&& rhs) : VectorBase{} {
+  vector(vector&& rhs) : vector{} {
     *this = move(rhs);
   }
 
-  VectorBase& operator=(const VectorBase& rhs) {
+  vector& operator=(const vector& rhs) {
+    clear();
     allocator = rhs.allocator;
-    resize(rhs.size());
-    copy(begin(), rhs);
+    reserve(rhs.size());
+    psl::inplace(begin(), rhs);
+    len = rhs.size();
 
     return *this;
   }
-  VectorBase& operator=(VectorBase&& rhs) {
+  vector& operator=(vector&& rhs) {
     psl::swap(ptr, rhs.ptr);
     psl::swap(len, rhs.len);
     psl::swap(reserved, rhs.reserved);
     psl::swap(allocator, rhs.allocator);
     return *this;
-  }
-
-  template <Range ARange>
-  void assign_from(ARange&& input) {
-    resize(psl::size(input));
-    copy(begin(), input);
   }
 
   void push_back(T x) {
@@ -163,6 +184,12 @@ public:
     reserve(nlen);
     for (size_t i = size(); i < nlen; ++i)
       allocator.construct_at(&ptr[i]);
+    for (size_t i = nlen; i < size(); ++i)
+      allocator.destruct_at(&ptr[i]);
+    len = nlen;
+  }
+  void resize_less(size_t nlen) {
+    psl_check(nlen <= len);
     for (size_t i = nlen; i < size(); ++i)
       allocator.destruct_at(&ptr[i]);
     len = nlen;
@@ -243,7 +270,7 @@ public:
 
   template <typename U, typename UDeleter>
   requires EqualityComparable<T, U>
-  bool operator==(const VectorBase<U, UDeleter>& rhs) const {
+  bool operator==(const vector<U, UDeleter>& rhs) const {
     if (size() != rhs.size())
       return false;
     for (size_t i = 0; i < size(); i++)
@@ -253,7 +280,7 @@ public:
   }
   template <typename U, typename UDeleter>
   requires EqualityComparable<T, U>
-  bool operator!=(const VectorBase<U, UDeleter>& rhs) const {
+  bool operator!=(const vector<U, UDeleter>& rhs) const {
     return !((*this) == rhs);
   }
 
@@ -264,9 +291,6 @@ protected:
 
   Allocator allocator;
 };
-
-template <typename T>
-using vector = VectorBase<T, default_allocator<T>>;
 
 template <typename T>
 vector<T> vector_n_of(size_t n, const T& x) {

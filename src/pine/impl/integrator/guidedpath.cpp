@@ -470,10 +470,10 @@ void GuidedPathIntegrator::render(Scene& scene) {
       for (size_t si = 0; si < iter_n_pass; si++) {
         ParallelFor(iter_size, [&](vec2i p) {
           auto& sampler = samplers[threadIdx];
-          sampler.StartPixel(p, current_sample_index);
+          sampler.start_pixel(p, current_sample_index);
 
-          auto p_film = vec2{p + sampler.Get2D()} / iter_size;
-          auto ray = scene.camera.gen_ray(p_film, sampler.Get2D());
+          auto p_film = vec2{p + sampler.get2d()} / iter_size;
+          auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
           auto L = radiance(scene, ray, sampler, 0, 1.0f, vec3{0.0f}, true, false);
           // CHECK(!L.has_inf());
           // CHECK(!L.has_nan());
@@ -508,13 +508,13 @@ void GuidedPathIntegrator::render(Scene& scene) {
     for (int si = 0; si < estimate_samples; si++) {
       ParallelFor(film.size(), [&](vec2i p) {
         auto& sampler = samplers[threadIdx];
-        sampler.StartPixel(p, current_sample_index);
-        auto p_film = vec2{p + sampler.Get2D()} / film.size();
+        sampler.start_pixel(p, current_sample_index);
+        auto p_film = vec2{p + sampler.get2d()} / film.size();
         // film.add_sample(p,
         //                 color_map(sd_tree.traverse({-1, 1, 2}).guide->tree_depth(p_film)
         //                 / 10.0f));
         // return;
-        auto ray = scene.camera.gen_ray(p_film, sampler.Get2D());
+        auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
         auto L = radiance_estimate(scene, ray, sampler, 0);
         CHECK(!L.has_inf());
         CHECK(!L.has_nan());
@@ -552,9 +552,9 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
     it.n = -it.n;
 
   if (it.material->is_delta()) {
-    auto msc = MaterialSampleCtx{it, -ray.d, sampler.Get1D(), sampler.Get2D()};
+    auto msc = MaterialSampleCtx{it, -ray.d, sampler.get1d(), sampler.get2d()};
     if (auto bs = it.material->sample(msc)) {
-      auto li = radiance_estimate(scene, it.SpawnRay(bs->wo), sampler, depth + 1);
+      auto li = radiance_estimate(scene, it.spawn_ray(bs->wo), sampler, depth + 1);
       auto cosine = absdot(it.n, bs->wo);
       return li * cosine * bs->f / bs->pdf;
     } else {
@@ -563,7 +563,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   }
 
   auto direct_light = [&](LightSample ls) {
-    if (!hit(it.SpawnRay(ls.wo, ls.distance))) {
+    if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
       auto f = it.material->F(mec);
       return ls.le / ls.pdf * psl::max(dot(it.n, ls.wo), 0.0f) * f;
@@ -584,8 +584,8 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   auto& quad = *sd_tree.traverse(p).guide;
 
   auto guide_select_prob = 0.8f;
-  if (sampler.Get1D() < guide_select_prob) {
-    if (auto qs = quad.sample(sampler.Get2D())) {
+  if (sampler.get1d() < guide_select_prob) {
+    if (auto qs = quad.sample(sampler.get2d())) {
       auto wo = uniform_sphere(qs->sc);
       auto mec = MaterialEvalCtx{it, -ray.d, wo};
       auto le = quad.flux_estimate(qs->sc) / (4);
@@ -593,7 +593,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
       L += le * it.material->F(mec) / qs->pdf * mis_factor;
     }
   } else {
-    if (auto bs = it.material->sample({it, -ray.d, sampler.Get1D(), sampler.Get2D()})) {
+    if (auto bs = it.material->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
       auto sc = inverse_uniform_sphere(bs->wo);
       auto le = quad.flux_estimate(sc) / (4);
       auto mis_factor = balance_heuristic(1, bs->pdf, 1, quad.pdf(sc)) / (1 - guide_select_prob);
@@ -601,7 +601,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
     }
   }
   if (scene.env_light)
-    if (auto ls = scene.env_light->sample(it.n, sampler.Get2D()))
+    if (auto ls = scene.env_light->sample(it.n, sampler.get2d()))
       L += direct_light(*ls);
 
   return L;
@@ -645,7 +645,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
 
   SpatialNode& leaf = sd_tree.traverse(it.p);
   auto direct_light = [&](LightSample ls, float pdf_g, bool collect_ = true) {
-    if (!hit(it.SpawnRay(ls.wo, ls.distance))) {
+    if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto cosine = absdot(ls.wo, it.n);
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
       auto f = it.material->F(mec);
@@ -661,13 +661,13 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
   auto guide_select_prob = use_guide ? 0.75f : 0.0f;
   if (it.material->is_delta())
     guide_select_prob = 0.0f;
-  if (sampler.Get1D() < guide_select_prob) {
-    if (auto ps = leaf.sample(sampler.Get2D())) {
+  if (sampler.get1d() < guide_select_prob) {
+    if (auto ps = leaf.sample(sampler.get2d())) {
       auto cosine = absdot(it.n, ps->w);
       auto mec = MaterialEvalCtx{it, wi, ps->w};
       auto f = it.material->F(mec);
       if (psl::abs(ps->pdf) > 1e-7f && cosine > 1e-7f && length_squared(f) > 1e-10f) {
-        auto li = radiance(scene, it.SpawnRay(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
+        auto li = radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, ps->w, li * cosine / ps->pdf}, sampler.Get3D());
         auto mis_factor = power_heuristic(1, ps->pdf, 1, it.material->pdf(mec)) / guide_select_prob;
@@ -678,18 +678,18 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
       }
     }
 
-    if (auto ls = light_sampler.sample(it.p, it.n, sampler.Get1D(), sampler.Get2D())) {
+    if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
       lo += direct_light(*ls, 0.0f, false);
     }
     if (scene.env_light) {
-      if (auto ls = scene.env_light->sample(it.n, sampler.Get2D()))
+      if (auto ls = scene.env_light->sample(it.n, sampler.get2d()))
         lo += direct_light(*ls, 0.0f, false);
     }
   } else {
-    if (auto bs = it.material->sample({it, wi, sampler.Get1D(), sampler.Get2D()})) {
+    if (auto bs = it.material->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto cosine = absdot(it.n, bs->wo);
       if (psl::abs(bs->pdf) > 1e-7f && cosine > 1e-7f && length_squared(bs->f) > 1e-10f) {
-        auto li = radiance(scene, it.SpawnRay(bs->wo), sampler, depth + 1, bs->pdf, it.n,
+        auto li = radiance(scene, it.spawn_ray(bs->wo), sampler, depth + 1, bs->pdf, it.n,
                            it.material->is_delta(), true);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, bs->wo, li * cosine / bs->pdf}, sampler.Get3D());
@@ -705,12 +705,12 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     }
 
     if (!it.material->is_delta())
-      if (auto ls = light_sampler.sample(it.p, it.n, sampler.Get1D(), sampler.Get2D())) {
+      if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
         lo += direct_light(*ls, ls->light->is_delta() ? 0.0f : it.material->pdf({it, wi, ls->wo}),
                            false);
       }
     if (!it.material->is_delta() && scene.env_light) {
-      if (auto ls = scene.env_light->sample(it.n, sampler.Get2D()))
+      if (auto ls = scene.env_light->sample(it.n, sampler.get2d()))
         lo += direct_light(*ls, it.material->pdf({it, wi, ls->wo}), false);
     }
   }

@@ -14,20 +14,21 @@ struct UniformSampler {
   UniformSampler(int samplesPerPixel, int seed = 0) : samplesPerPixel(samplesPerPixel), rng(seed) {
   }
 
-  int SamplesPerPixel() const {
+  int spp() const {
     return samplesPerPixel;
   }
-  void StartPixel(const vec2i&, int) {
+  void start_pixel(vec2i, int) {
   }
-  void StartNextSample() {
+  void start_next_sample() {
   }
-  float Get1D() {
+  float get1d() {
     return rng.uniformf();
   }
-  vec2 Get2D() {
+  vec2 get2d() {
     return rng.uniform2f();
   }
 
+private:
   int samplesPerPixel;
   RNG rng;
 };
@@ -38,27 +39,27 @@ struct StratifiedSampler {
     samplesPerPixel = xPixelSamples * yPixelSamples;
   }
 
-  int SamplesPerPixel() const {
+  int spp() const {
     return samplesPerPixel;
   }
-  void StartPixel(vec2i p, int index) {
+  void start_pixel(vec2i p, int index) {
     pixel = p;
     sampleIndex = index;
     dimension = 0;
   }
-  void StartNextSample() {
+  void start_next_sample() {
     sampleIndex++;
     dimension = 0;
   }
-  float Get1D() {
+  float get1d() {
     int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
     dimension += 1;
 
     float delta = jitter ? rng.uniformf() : 0.5f;
 
-    return (stratum + delta) / SamplesPerPixel();
+    return (stratum + delta) / spp();
   }
-  vec2 Get2D() {
+  vec2 get2d() {
     int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
     dimension += 2;
 
@@ -68,6 +69,7 @@ struct StratifiedSampler {
     return {(x + dx) / xPixelSamples, (y + dy) / yPixelSamples};
   }
 
+private:
   int xPixelSamples, yPixelSamples;
   int samplesPerPixel;
   RNG rng;
@@ -78,38 +80,33 @@ struct StratifiedSampler {
 };
 
 struct HaltonSampler {
-  enum class RandomizeStrategy { None, PermuteDigits };
+  HaltonSampler(int samplesPerPixel);
 
-  HaltonSampler(int samplesPerPixel, vec2i filmsize,
-                RandomizeStrategy randomizeStrategy = RandomizeStrategy::PermuteDigits);
-
-  int SamplesPerPixel() const {
+  int spp() const {
     return samplesPerPixel;
   }
-  void StartPixel(vec2i p, int sampleIndex);
-  void StartNextSample() {
+  void start_pixel(vec2i p, int sampleIndex);
+  void start_next_sample() {
     haltonIndex += sampleStride;
     dimension = 2;
   }
-  float Get1D() {
+  float get1d() {
     if (dimension >= PrimeTablesize)
       dimension = 2;
-    return SampleDimension(dimension++);
+    return sample_dimension(dimension++);
   }
-  vec2 Get2D() {
+  vec2 get2d() {
     if (dimension + 1 >= PrimeTablesize)
       dimension = 2;
     int dim = dimension;
     dimension += 2;
-    return {SampleDimension(dim), SampleDimension(dim + 1)};
+    return {sample_dimension(dim), sample_dimension(dim + 1)};
   }
-  float SampleDimension(int dim) const {
-    return ScrambledRadicalInverse(dim, haltonIndex, PermutationForDimension(dim));
-  }
-  const uint16_t* PermutationForDimension(int dim) const {
-    return &radicalInversePermutations[PrimeSums[dim]];
+  float sample_dimension(int dim) const {
+    return scrambled_radical_inverse(dim, haltonIndex, &radicalInversePermutations[PrimeSums[dim]]);
   }
 
+private:
   int samplesPerPixel = 0;
   static constexpr int MaxHaltonResolution = 128;
   vec2i baseScales, baseExponents;
@@ -118,7 +115,6 @@ struct HaltonSampler {
   int sampleStride = 0;
   int64_t haltonIndex = 0;
   int dimension = 0;
-  RandomizeStrategy randomizeStrategy;
 
   static psl::vector<uint16_t> radicalInversePermutations;
 };
@@ -126,21 +122,20 @@ struct HaltonSampler {
 struct ZeroTwoSequenceSampler {
   ZeroTwoSequenceSampler(int samplesPerPixel, int nSampledDimensions);
 
-  int SamplesPerPixel() const {
+  int spp() const {
     return samplesPerPixel;
   }
-  void StartPixel(vec2i p, int sampleIndex);
-  void StartNextSample() {
+  void start_pixel(vec2i p, int sampleIndex);
+  void start_next_sample() {
     currentSampleIndex++;
     current1DDimension = 0;
     current2DDimension = 0;
   }
-  float Get1D();
-  vec2 Get2D();
+  float get1d();
+  vec2 get2d();
 
+private:
   int samplesPerPixel;
-  int nSampledDimensions;
-
   int currentSampleIndex = 0;
   int current1DDimension = 0, current2DDimension = 0;
   psl::vector<psl::vector<float>> samples1D;
@@ -155,59 +150,59 @@ struct MltSampler {
         largeStepProbability(largeStepProbability),
         streamCount(streamCount){};
 
-  int SamplesPerPixel() const {
+  int spp() const {
     return 0;
   }
 
-  void StartPixel(vec2i, int) {
+  void start_pixel(vec2i, int) {
   }
 
-  void StartNextSample() {
+  void start_next_sample() {
     sampleIndex++;
     streamIndex = 0;
     dimension = 0;
     largeStep = rng.uniformf() < largeStepProbability;
   }
 
-  void StartStream(int index) {
+  void start_stream(int index) {
     streamIndex = index;
     dimension = 0;
   }
 
-  float Get1D() {
-    int dim = GetNextIndex();
-    Ensureready(dim);
+  float get1d() {
+    int dim = get_next_index();
+    ensure_ready(dim);
     return X[dim].value;
   }
 
-  vec2 Get2D() {
-    return {Get1D(), Get1D()};
+  vec2 get2d() {
+    return {get1d(), get1d()};
   }
 
-  void Accept() {
+  void accept() {
     if (largeStep)
       lastLargeStepIndex = sampleIndex;
   }
 
-  void Reject() {
+  void reject() {
     for (auto& Xi : X)
       if (Xi.lastModificationIndex == sampleIndex)
-        Xi.Restore();
+        Xi.restore();
     --sampleIndex;
   }
 
 private:
-  void Ensureready(int dim);
-  int GetNextIndex() {
+  void ensure_ready(int dim);
+  int get_next_index() {
     return streamIndex + streamCount * dimension++;
   }
 
   struct PrimarySample {
-    void Backup() {
+    void backup() {
       valueBackup = value;
       modifyBackup = lastModificationIndex;
     }
-    void Restore() {
+    void restore() {
       value = valueBackup;
       lastModificationIndex = modifyBackup;
     }
@@ -232,27 +227,29 @@ struct Sampler : psl::Variant<UniformSampler, StratifiedSampler, HaltonSampler,
                               ZeroTwoSequenceSampler, MltSampler> {
   using Variant::Variant;
 
-  int SamplesPerPixel() const {
-    return dispatch([&](auto&& x) { return x.SamplesPerPixel(); });
+  int spp() const {
+    return dispatch([&](auto&& x) { return x.spp(); });
   }
-  void StartPixel(vec2i p, int sampleIndex) {
-    return dispatch([&](auto&& x) { return x.StartPixel(p, sampleIndex); });
+  void start_pixel(vec2i p, int sampleIndex) {
+    return dispatch([&](auto&& x) { return x.start_pixel(p, sampleIndex); });
   }
-  void StartNextSample() {
-    return dispatch([&](auto&& x) { return x.StartNextSample(); });
+  void start_next_sample() {
+    return dispatch([&](auto&& x) { return x.start_next_sample(); });
   }
-  float Get1D() {
-    return dispatch([&](auto&& x) { return x.Get1D(); });
+  float get1d() {
+    return dispatch([&](auto&& x) { return x.get1d(); });
   }
-  vec2 Get2D() {
-    return dispatch([&](auto&& x) { return x.Get2D(); });
+  vec2 get2d() {
+    return dispatch([&](auto&& x) { return x.get2d(); });
   }
   vec3 Get3D() {
-    return {Get1D(), Get1D(), Get1D()};
+    return {get1d(), get1d(), get1d()};
   }
   Sampler Clone() const {
     return dispatch([&](auto&& x) { return Sampler(x); });
   }
 };
+
+void sampler_context(Context& ctx);
 
 }  // namespace pine

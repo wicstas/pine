@@ -171,7 +171,10 @@ private:
 };
 
 struct NodeComponent {
-  NodeComponent(Mnode<vec3> x, int n) : x{psl::move(x)}, n{n} {};
+  NodeComponent(Mnode<vec3> x, int n) : x{psl::move(x)}, n{n} {
+    if (n < 0 || n > 2)
+      exception("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
+  };
   float eval(const NodeEvalCtx& ctx) const {
     CHECK_RANGE(n, 0, 2);
     return x(ctx)[n];
@@ -261,5 +264,7 @@ inline Mnode<vec3>& Mnode<vec3>::operator=(const Mnode<vec3>&) = default;
 inline vec3 Mnode<vec3>::operator()(const NodeEvalCtx& nc) const {
   return value->dispatch([&nc](const auto& x) { return vec3{x.eval(nc)}; });
 }
+
+void node_context(Context& ctx);
 
 }  // namespace pine

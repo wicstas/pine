@@ -1,6 +1,7 @@
 #include <pine/core/sampling.h>
 #include <pine/core/geometry.h>
 #include <pine/core/profiler.h>
+#include <pine/core/context.h>
 #include <pine/core/light.h>
 #include <pine/core/color.h>
 
@@ -63,7 +64,7 @@ static vec2 ic2sc(vec2 ic, vec2i image_size) {
 Atmosphere::Atmosphere(vec3 sun_direction_, vec3 sun_color, vec2i image_size)
     : sun_direction{normalize(sun_direction_)}, sun_color{sun_color}, image_size{image_size} {
   Profiler _("Atmosphere ctor");
-  auto density = Array2D<float>{image_size};
+  auto density = Array2d<float>{image_size};
   for_2d(image_size, [&](auto p) {
     auto sc = ic2sc(p, image_size);
     auto wo = uniform_sphere(sc);
@@ -96,7 +97,7 @@ float Atmosphere::pdf(vec3, vec3 wo) const {
 ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint)
     : image{psl::move(image_)}, tint{tint} {
   CHECK(image);
-  auto density = Array2D<float>{image->size()};
+  auto density = Array2d<float>{image->size()};
   for_2d(image->size(), [&](auto p) { density[p] = length((*image)[p]); });
   distr = Distribution2D(density, 20);
 }
@@ -123,6 +124,18 @@ float ImageSky::pdf(vec3, vec3 wo) const {
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
   return distr.pdf(ic) / (4 * pi);
+}
+
+void light_context(Context& ctx) {
+  ctx.type<PointLight>("PointLight").ctor<vec3, vec3>();
+  ctx.type<DirectionalLight>("DirectionalLight").ctor<vec3, vec3>();
+  ctx.type<Light>("Light").ctor_variant<PointLight, DirectionalLight>();
+  ctx.type<Sky>("Sky").ctor<vec3>();
+  ctx.type<Atmosphere>("Atmosphere").ctor<vec3, vec3>();
+  ctx.type<ImageSky>("ImageSky")
+      .ctor<psl::shared_ptr<Image>>()
+      .ctor<psl::shared_ptr<Image>, vec3>();
+  ctx.type<EnvironmentLight>("EnvironmentLight").ctor_variant<Atmosphere, Sky, ImageSky>();
 }
 
 }  // namespace pine

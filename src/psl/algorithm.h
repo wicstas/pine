@@ -2,6 +2,7 @@
 
 #include <psl/type_traits.h>
 #include <psl/utility.h>
+#include <psl/new.h>
 
 namespace psl {
 
@@ -154,6 +155,13 @@ void move(OutputIterator auto d_first, Range auto&& input) {
   auto last = psl::end(input);
   for (; first != last; ++first, ++d_first)
     *d_first = psl::move(*first);
+}
+
+void inplace(OutputIterator auto d_first, Range auto&& input) {
+  auto first = psl::begin(input);
+  auto last = psl::end(input);
+  for (; first != last; ++first, ++d_first)
+    psl::construct_at(&(*d_first), *first);
 }
 
 void fill(Range auto&& output, const auto& value) {

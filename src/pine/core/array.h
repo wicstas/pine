@@ -6,11 +6,11 @@
 namespace pine {
 
 template <typename T>
-struct Array2D {
-  Array2D() = default;
-  Array2D(vec2i size) : size_{size}, data_{static_cast<size_t>(area(size))} {
+struct Array2d {
+  Array2d() = default;
+  Array2d(vec2i size) : size_{size}, data_{static_cast<size_t>(area(size))} {
   }
-  Array2D(vec2i size, const T *input) : size_{size}, data_{static_cast<size_t>(area(size))} {
+  Array2d(vec2i size, const T *input) : size_{size}, data_{static_cast<size_t>(area(size))} {
     psl::memcpy(&data_[0], input, data_.size() * sizeof(T));
   }
 
@@ -53,9 +53,10 @@ private:
   psl::vector<T> data_;
 };
 
-using Array2D2f = Array2D<vec2>;
-using Array2D3f = Array2D<vec3>;
-using Array2D4f = Array2D<vec4>;
+using Array2df = Array2d<float>;
+using Array2d2f = Array2d<vec2>;
+using Array2d3f = Array2d<vec3>;
+using Array2d4f = Array2d<vec4>;
 
 template <typename F>
 void for_2d(vec2i lower, vec2i upper, F f, bool horizontal = false) {
@@ -83,8 +84,8 @@ void for_2d(vec2i size, F f, bool horizontal = false) {
   return for_2d(vec2i{}, size, f, horizontal);
 }
 
-inline Array2D2f grid(vec2 a, vec2 b, vec2i size) {
-  auto arr = Array2D2f(size);
+inline Array2d2f grid(vec2 a, vec2 b, vec2i size) {
+  auto arr = Array2d2f(size);
   for_2d(size, [&](vec2i p) { arr[p] = lerp((p + vec2{0.5f}) / size, a, b); });
   return arr;
 }

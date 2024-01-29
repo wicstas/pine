@@ -46,6 +46,7 @@ src/pine/core/light.cpp
 src/pine/core/accel.cpp
 src/pine/core/array.cpp
 src/pine/core/color.cpp
+src/pine/core/image.cpp
 src/pine/core/node.cpp
 src/pine/core/film.cpp
 src/pine/core/bxdf.cpp
@@ -70,7 +71,7 @@ set(ASSIMP_NO_EXPORT ON)
 set(ASSIMP_BUILD_TESTS OFF)  
 set(ASSIMP_INSTALL OFF)  
 set(ASSIMP_INSTALL_PDB OFF)
-add_subdirectory(src/ext/assimp)
+add_subdirectory(src/contrib/assimp)
 
 target_link_libraries(pinelib psl Threads::Threads assimp)
 

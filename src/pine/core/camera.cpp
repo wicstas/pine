@@ -1,5 +1,6 @@
 #include <pine/core/sampling.h>
 #include <pine/core/camera.h>
+#include <pine/core/context.h>
 
 namespace pine {
 
@@ -16,6 +17,13 @@ Ray ThinLenCamera::gen_ray(vec2 p_film, vec2 u2) const {
   auto ray = Ray{vec3{c2w * vec4{pLen, 1.0f}}, mat3{c2w} * normalize(pFocus - pLen)};
 
   return ray;
+}
+
+void camera_context(Context& ctx) {
+  ctx.type<ThinLenCamera>("ThinLenCamera")
+      .ctor<Film, vec3, vec3, float>()
+      .ctor<Film, vec3, vec3, float, float, float>();
+  ctx.type<Camera>("Camera").ctor_variant<ThinLenCamera>().method("film", &Camera::film);
 }
 
 }  // namespace pine

@@ -32,10 +32,12 @@ int main(int argc, char* argv[]) {
     }
     Log("");
 
+  } catch (const FatalException&) {
+    Log("Uncaught Fatal exception");
   } catch (const Exception& e) {
-    Fatal("Pine exception: ", e.what());
+    Log("Uncaught Pine exception: ", e.what());
   } catch (...) {
-    Fatal("Uncaught unknown exception");
+    Log("Uncaught unknown exception");
   }
 
   Profiler::Finalize();

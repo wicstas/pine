@@ -24,9 +24,9 @@ vec3 VisualizerIntegrator::radiance(Scene&, Ray ray, Sampler&) {
   Interaction it;
   if (intersect(ray, it)) {
     switch (viz_type) {
-      case Normal: return it.n; break;
+      case Normal: return abs(it.n); break;
       case Position: return it.p; break;
-      case UV: return vec3{it.uv}; break;
+      case UV: return vec3(it.uv); break;
       case BVH: return color_map(it.bvh / 10.0f); break;
     }
   }

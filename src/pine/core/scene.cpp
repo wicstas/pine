@@ -1,4 +1,5 @@
 #include <pine/core/scene.h>
+#include <pine/core/context.h>
 
 namespace pine {
 
@@ -65,6 +66,21 @@ void add_box(Scene& scene, mat4 m, psl::string material_name) {
   scene.add_geometry(Rect::from_vertex({1, 0, 0}, {1, 1, 0}, {1, 0, 1}).apply(m), material_name);
   scene.add_geometry(Rect::from_vertex({0, 0, 0}, {0, 0, 1}, {1, 0, 0}).apply(m), material_name);
   scene.add_geometry(Rect::from_vertex({0, 1, 0}, {0, 1, 1}, {1, 1, 0}).apply(m), material_name);
+}
+
+void scene_context(Context& ctx) {
+  ctx.type<Scene>("Scene")
+      .ctor<>()
+      .member("camera", &Scene::camera)
+      .method("add", &Scene::add_material)
+      .method("add", overloaded<Shape, psl::string>(&Scene::add_geometry))
+      .method("add", overloaded<Shape, Material>(&Scene::add_geometry))
+      .method("add", overloaded<Light>(&Scene::add_light))
+      .method("set", &Scene::set_camera)
+      .method("set", &Scene::set_env_light)
+      .method("reset", &Scene::reset);
+  ctx("add_box") = overloaded<Scene&, mat4, Material>(add_box);
+  ctx("add_box") = overloaded<Scene&, mat4, psl::string>(add_box);
 }
 
 }  // namespace pine

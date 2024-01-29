@@ -19,13 +19,13 @@ psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data)
 
 void save_image(psl::string filename, vec2i size, int nchannel, const float* data);
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t* data);
-inline void save_image(psl::string filename, const Array2D<vec2>& pixels) {
+inline void save_image(psl::string filename, const Array2d<vec2>& pixels) {
   save_image(filename, pixels.size(), 2, &pixels.data()[0][0]);
 }
-inline void save_image(psl::string filename, const Array2D<vec3>& pixels) {
+inline void save_image(psl::string filename, const Array2d<vec3>& pixels) {
   save_image(filename, pixels.size(), 3, &pixels.data()[0][0]);
 }
-inline void save_image(psl::string filename, const Array2D<vec4>& pixels) {
+inline void save_image(psl::string filename, const Array2d<vec4>& pixels) {
   save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
 }
 
