@@ -53,36 +53,14 @@ Context get_default_context() {
       .method("render", &VisualizerIntegrator::render);
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
-  ctx("print") = +[](psl::span<const Variable*> args) {
-    auto ctx = Context();
-    ctx("to_string") =
-        overloads<bool, int, float, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4, psl::string>(
-            [](const auto& x) {
-              using psl::to_string;
-              return to_string(x);
-            });
-    auto str = psl::string();
-    for (auto arg : args)
-      str += ctx.call("to_string", {&arg, &arg + 1}).as<psl::string>() + ' ';
-    if (str.size())
-      str.pop_back();
-    Logr(str);
-  };
-  ctx("println") = +[](psl::span<const Variable*> args) {
-    auto ctx = Context();
-    ctx("to_string") =
-        overloads<bool, int, float, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4, psl::string>(
-            [](const auto& x) {
-              using psl::to_string;
-              return to_string(x);
-            });
-    auto str = psl::string();
-    for (auto arg : args)
-      str += ctx.call("to_string", {&arg, &arg + 1}).as<psl::string>() + ' ';
-    if (str.size())
-      str.pop_back();
-    Log(str);
-  };
+  ctx("str") =
+      overloads<bool, int, float, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4, psl::string>(
+          [](const auto& x) {
+            using psl::to_string;
+            return to_string(x);
+          });
+  ctx("print") = +[](const psl::string& x) { Logr(x); };
+  ctx("println") = +[](const psl::string& x) { Log(x); };
 
   return ctx;
 }

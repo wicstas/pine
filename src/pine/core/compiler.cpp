@@ -803,11 +803,14 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
 void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto f_bytecodes = Bytecodes(context, bytecodes.sl);
+    auto param_type_ids = psl::vector<psl::TypeId>();
     for (const auto& param : params) {
-      f_bytecodes.add_typed(param.name, context.get_type_id(param.type));
+      auto tid = context.get_type_id(param.type);
+      f_bytecodes.add_typed(param.name, tid);
+      param_type_ids.push_back(psl::TypeId(tid, false, false));
     }
     block.emit(context, f_bytecodes);
-    context(name) = tag<void, psl::span<const Variable*>>(
+    context(name) = low_level(
         [&context, f_bytecodes, *this](psl::span<const Variable*> args) mutable {
           CHECK_EQ(args.size(), params.size());
           auto vm = VirtualMachine();
@@ -816,7 +819,9 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
           for (size_t i = 0; i < args.size(); i++)
             vm.stack.push(*args[i]);
           execute(context, f_bytecodes, vm);
-        });
+          return psl::Empty();
+        },
+        psl::type_id<psl::Empty>(), param_type_ids);
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
   }

@@ -13,15 +13,25 @@
 
 namespace pine {
 
-template <typename T, typename R, typename... Args>
+template <typename F, typename R, typename... Args>
 struct Lambda {
-  Lambda(T lambda) : lambda(psl::move(lambda)) {
+  Lambda(F lambda) : lambda(psl::move(lambda)) {
   }
-  T lambda;
+  F lambda;
+};
+template <typename F>
+struct LowLevel {
+  F lambda;
+  size_t return_type_id_;
+  psl::vector<psl::TypeId> param_type_ids_;
 };
 template <typename R, typename... Args, typename F>
 auto tag(F lambda) {
   return Lambda<F, R, Args...>(psl::move(lambda));
+}
+template <typename F>
+auto low_level(F lambda, size_t return_type_id_, psl::vector<psl::TypeId> param_type_ids_) {
+  return LowLevel<F>{psl::move(lambda), return_type_id_, psl::move(param_type_ids_)};
 }
 template <typename T, typename U, typename R, typename... Args>
 auto derived(R (U::*f)(Args...)) {
@@ -145,7 +155,7 @@ struct FunctionConcept {
 
   virtual Variable call(psl::span<const Variable*> args) = 0;
   virtual size_t n_parameters() const = 0;
-  virtual psl::span<psl::TypeId> parameter_type_ids() const = 0;
+  virtual psl::span<const psl::TypeId> parameter_type_ids() const = 0;
   virtual size_t return_type_id() const = 0;
 };
 
@@ -157,32 +167,24 @@ struct Function {
     FunctionModel(T base) : base(psl::move(base)){};
 
     Variable call(psl::span<const Variable*> args) override {
-      if constexpr (psl::SameAs<psl::FirstType<Args..., void>, psl::span<const Variable*>>) {
+      DCHECK_EQ(sizeof...(Args), args.size());
+      return [&, this]<typename... Ps>(psl::IndexedTypeSequence<Ps...>) {
+        const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
+          // if constexpr (psl::SameAs<P, const Variable&>)
+          //   return var;
+          // else
+          return var.template as<typename P::Type>();
+        };
         if constexpr (psl::SameAs<R, void>)
-          return (base(args), Variable(psl::Empty()));
+          return (base(cast.template operator()<Ps>(*args[Ps::index])...), Variable(psl::Empty()));
         else
-          return Variable(base(args));
-      } else {
-        DCHECK_EQ(sizeof...(Args), args.size());
-        return [&, this]<typename... Ps>(psl::IndexedTypeSequence<Ps...>) {
-          const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
-            if constexpr (psl::SameAs<P, const Variable&>)
-              return var;
-            else
-              return var.template as<typename P::Type>();
-          };
-          if constexpr (psl::SameAs<R, void>)
-            return (base(cast.template operator()<Ps>(*args[Ps::index])...),
-                    Variable(psl::Empty()));
-          else
-            return Variable{base(cast.template operator()<Ps>(*args[Ps::index])...)};
-        }(psl::make_indexed_type_sequence<Args...>());
-      }
+          return Variable{base(cast.template operator()<Ps>(*args[Ps::index])...)};
+      }(psl::make_indexed_type_sequence<Args...>());
     }
     size_t n_parameters() const override {
       return sizeof...(Args);
     }
-    psl::span<psl::TypeId> parameter_type_ids() const override {
+    psl::span<const psl::TypeId> parameter_type_ids() const override {
       if constexpr (sizeof...(Args) == 0) {
         return {};
       } else {
@@ -199,6 +201,32 @@ struct Function {
 
   private:
     T base;
+  };
+
+  template <typename T>
+  struct LowLevelFunctionModel : FunctionConcept {
+    LowLevelFunctionModel(T base, size_t return_type_id_, psl::vector<psl::TypeId> param_type_ids_)
+        : base(psl::move(base)),
+          return_type_id_(return_type_id_),
+          param_type_ids_(psl::move(param_type_ids_)){};
+
+    Variable call(psl::span<const Variable*> args) override {
+      return base(args);
+    }
+    size_t n_parameters() const override {
+      return param_type_ids_.size();
+    }
+    psl::span<const psl::TypeId> parameter_type_ids() const override {
+      return param_type_ids_;
+    }
+    size_t return_type_id() const override {
+      return return_type_id_;
+    }
+
+  private:
+    T base;
+    size_t return_type_id_;
+    psl::vector<psl::TypeId> param_type_ids_;
   };
 
   template <typename R, typename... Args>
@@ -244,6 +272,11 @@ struct Function {
     };
     model = psl::make_shared<FunctionModel<decltype(lambda), R&, Args...>>(lambda);
   }
+  template <typename F>
+  Function(LowLevel<F> f)
+      : model(psl::make_shared<LowLevelFunctionModel<F>>(f.lambda, f.return_type_id_,
+                                                         f.param_type_ids_)) {
+  }
 
   Variable call(psl::span<const Variable*> args) const {
     return model->call(args);
@@ -252,7 +285,7 @@ struct Function {
     DCHECK(model);
     return model->n_parameters();
   }
-  psl::span<psl::TypeId> parameter_type_ids() const {
+  psl::span<const psl::TypeId> parameter_type_ids() const {
     DCHECK(model);
     return model->parameter_type_ids();
   }
@@ -312,6 +345,10 @@ struct Context {
     }
     template <typename T, typename R, typename... Args>
     void add(Lambda<T, R, Args...> f) const {
+      ctx.add_f(psl::move(name), Function{psl::move(f)});
+    }
+    template <typename F>
+    void add(LowLevel<F> f) const {
       ctx.add_f(psl::move(name), Function{psl::move(f)});
     }
 
