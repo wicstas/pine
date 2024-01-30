@@ -57,10 +57,8 @@ auto overloaded(R (*f)(Args...)) {
 struct VariableConcept {
   virtual ~VariableConcept() = default;
   virtual psl::shared_ptr<VariableConcept> clone() const = 0;
+  virtual void* raw_ptr() = 0;
   virtual void* ptr() = 0;
-  const void* ptr() const {
-    return const_cast<VariableConcept*>(this)->ptr();
-  }
   virtual size_t type_id() const = 0;
   virtual const psl::string& type_name() const = 0;
 };
@@ -72,17 +70,28 @@ struct Variable {
     psl::shared_ptr<VariableConcept> clone() const override {
       return psl::make_shared<VariableModel<R, T>>(*this);
     }
-    void* ptr() override {
-      if constexpr (psl::is_psl_ref<T>)
+    void* raw_ptr() override {
+      if constexpr (psl::is_psl_ref<T>) {
         return &(*base);
-      else
+      } else {
         return &base;
+      }
+    }
+    void* ptr() override {
+      if constexpr (psl::is_psl_ref<T>) {
+        if constexpr (psl::same_as<R, Variable>)
+          return (*base).ptr();
+        else
+          return &(*base);
+      } else {
+        return &base;
+      }
     }
     size_t type_id() const override {
       return psl::type_id<R>();
     }
     const psl::string& type_name() const override {
-      return psl::type_name<R>();
+      return psl::type_name<T>();
     }
 
   private:
@@ -99,43 +108,47 @@ struct Variable {
       : model(psl::make_shared<VariableModel<T, psl::ref_wrapper<T>>>(psl::move(x))) {
   }
 
-  using PodTypes = psl::TypePack<bool, int, float, vec2i, vec2, vec3, vec4>;
+  // using PodTypes = psl::TypePack<bool, int, float, vec2i, vec2, vec3, vec4>;
 
-  template <typename T>
-  requires psl::one_of<T, PodTypes>
-  Variable(T x) : pod(x) {
-  }
+  // template <typename T>
+  // requires psl::one_of<T, PodTypes>
+  // Variable(T x) : pod(x) {
+  // }
   Variable clone() const {
-    if (pod.is_valid())
-      return *this;
+    // if (pod.is_valid())
+    //   return *this;
     DCHECK(model);
     return Variable(model->clone());
   }
   size_t type_id() const {
-    if (pod.is_valid())
-      return pod.dispatch([](auto&& x) { return psl::type_id<decltype(x)>(); });
+    // if (pod.is_valid())
+    //   return pod.dispatch([](auto&& x) { return psl::type_id<decltype(x)>(); });
     DCHECK(model);
     return model->type_id();
   }
   const psl::string& type_name() const {
-    if (pod.is_valid())
-      return pod.dispatch([](auto&& x) -> decltype(auto) { return psl::type_name<decltype(x)>(); });
+    // if (pod.is_valid())
+    //   return pod.dispatch([](auto&& x) -> decltype(auto) { return psl::type_name<decltype(x)>();
+    //   });
     DCHECK(model);
     return model->type_name();
   }
   template <typename T>
   bool is() const {
-    if (pod.is_valid())
-      return pod.is<psl::Decay<T>>();
+    // if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
+    //   DCHECK(model.is_valid());
+    //   return pod.is<psl::Decay<T>>();
+    // }
     DCHECK(model);
     return model->type_id() == psl::type_id<T>();
   }
   template <typename T>
   T as() const {
-    if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
-      if (pod.is_valid())
-        return const_cast<Variable&>(*this).pod.as<psl::Decay<T>>();
-    }
+    // if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
+    //   DCHECK(model.is_valid());
+    //   DCHECK(pod.is<psl::Decay<T>>());
+    //   return const_cast<Variable&>(*this).pod.as<psl::Decay<T>>();
+    // }
     DCHECK(model);
     using Base = psl::Decay<T>;
 #ifndef NDEBUG
@@ -145,9 +158,23 @@ struct Variable {
     return *reinterpret_cast<Base*>(model->ptr());
   }
 
+  void* ptr() const {
+    // if (pod.is_valid())
+    //   return const_cast<Variable&>(*this).pod.ptr();
+    DCHECK(model);
+    return model->ptr();
+  }
+
+  void* raw_ptr() const {
+    // if (pod.is_valid())
+    //   return const_cast<Variable&>(*this).pod.ptr();
+    DCHECK(model);
+    return model->raw_ptr();
+  }
+
 private:
   psl::shared_ptr<VariableConcept> model;
-  psl::CopyTemplateArguments<psl::Variant, PodTypes> pod;
+  // psl::CopyTemplateArguments<psl::Variant, PodTypes> pod;
 };
 
 struct FunctionConcept {
@@ -170,9 +197,6 @@ struct Function {
       DCHECK_EQ(sizeof...(Args), args.size());
       return [&, this]<typename... Ps>(psl::IndexedTypeSequence<Ps...>) {
         const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
-          // if constexpr (psl::SameAs<P, const Variable&>)
-          //   return var;
-          // else
           return var.template as<typename P::Type>();
         };
         if constexpr (psl::SameAs<R, void>)
@@ -281,6 +305,13 @@ struct Function {
   Variable call(psl::span<const Variable*> args) const {
     return model->call(args);
   }
+  Variable operator()(auto&&... args) const {
+    Variable args_[]{Variable(FWD(args))...};
+    const Variable* args_ptr[sizeof...(args)];
+    for (size_t i = 0; i < sizeof...(args); i++)
+      args_ptr[i] = &args_[i];
+    return call(args_ptr);
+  }
   size_t n_parameters() const {
     DCHECK(model);
     return model->n_parameters();
@@ -345,11 +376,11 @@ struct Context {
     }
     template <typename T, typename R, typename... Args>
     void add(Lambda<T, R, Args...> f) const {
-      ctx.add_f(psl::move(name), Function{psl::move(f)});
+      ctx.add_f(psl::move(name), Function(psl::move(f)));
     }
     template <typename F>
     void add(LowLevel<F> f) const {
-      ctx.add_f(psl::move(name), Function{psl::move(f)});
+      ctx.add_f(psl::move(name), Function(psl::move(f)));
     }
 
     template <typename T>
@@ -536,6 +567,7 @@ struct Context {
   psl::vector<Function> functions;
   psl::multimap<psl::string, size_t> variables_map;
   psl::vector<Variable> variables;
+  psl::vector<Variable> function_variables;
   psl::unordered_map<size_t, TypeTrait> types;
 };
 

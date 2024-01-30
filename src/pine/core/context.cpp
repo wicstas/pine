@@ -4,9 +4,17 @@
 
 namespace pine {
 
+struct Any {};
+
 Context::Context() {
   auto& context = *this;
+  context("type") = low_level(
+      [&context](psl::span<const Variable*> args) -> psl::string {
+        return context.types[args[0]->type_id()].alias;
+      },
+      psl::type_id<psl::string>(), psl::vector_of(psl::TypeId(psl::type_id<Any>(), false, false)));
   context.type<psl::Empty>("void");
+  context.type<Function>("function");
   context.type<int, Context::Float>("int").ctor_variant<float>(true);
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
@@ -121,8 +129,8 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       auto difference = size_t{0};
       auto match = true;
       for (size_t i = 0; i < arg_type_ids.size(); i++) {
-        if (param_type_ids[i].code == psl::type_id<Variable>()) {
-        } else if (arg_type_ids[i] == param_type_ids[i].code) {
+        if (arg_type_ids[i] == param_type_ids[i].code) {
+        } else if (param_type_ids[i].code == psl::type_id<Any>()) {
         } else if (auto idx = converter_index(arg_type_ids[i], param_type_ids[i].code);
                    !param_type_ids[i].is_ref && idx != size_t(-1)) {
           converts.push_back({i, idx, param_type_ids[i].code});
@@ -198,6 +206,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
 }
 
 void Context::add_f(psl::string name, Function func) {
+  function_variables.push_back(Variable(func));
   functions_map.insert({psl::move(name), functions.size()});
   functions.push_back(psl::move(func));
 }

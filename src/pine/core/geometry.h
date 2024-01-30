@@ -263,6 +263,7 @@ private:
 };
 
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
+TriangleMesh height_map_to_mesh(vec2i resolution, const Function& height_function);
 
 struct Shape : psl::Variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using Variant::Variant;

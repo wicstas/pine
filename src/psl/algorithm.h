@@ -171,6 +171,13 @@ void fill(Range auto&& output, const auto& value) {
     *first = value;
 }
 
+void fill_inplace(Range auto&& output, const auto& value) {
+  auto first = psl::begin(output);
+  auto last = psl::end(output);
+  for (; first != last; ++first)
+    psl::construct_at(&*first, value);
+}
+
 void insert(auto&& f, Range auto&& input) {
   auto first = psl::begin(input);
   auto last = psl::end(input);

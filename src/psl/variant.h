@@ -221,6 +221,10 @@ struct Variant {
     tag_ = invalid_tag;
   }
 
+  void* ptr() {
+    return &value;
+  };
+
 private:
   Aggregate value;
   uint8_t tag_ = invalid_tag;

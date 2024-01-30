@@ -284,6 +284,10 @@ public:
     return !((*this) == rhs);
   }
 
+  void _set_size(size_t nlen) {
+    len = nlen;
+  }
+
 protected:
   T* ptr = nullptr;
   size_t len = 0;
@@ -294,8 +298,10 @@ protected:
 
 template <typename T>
 vector<T> vector_n_of(size_t n, const T& x) {
-  auto v = vector<T>(n);
-  psl::fill(v, x);
+  auto v = vector<T>();
+  v.reserve(n);
+  v._set_size(n);
+  psl::fill_inplace(v, x);
   return v;
 }
 

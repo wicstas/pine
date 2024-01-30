@@ -50,6 +50,8 @@ struct Bytecode {
     LoadBoolConstant,
     LoadStringConstant,
     Call,
+    InitVar,
+    Return,
     IntPreInc,
     IntPreDec,
     IntPostInc,
@@ -228,16 +230,11 @@ private:
 };
 
 struct VirtualMachine {
-  Stack<Variable, psl::static_allocator<Variable, 32>> stack;
+  Stack<Variable, psl::default_allocator<Variable>> stack;
+  // Stack<Variable, psl::static_allocator<Variable, 32>> stack;
 };
 
-void execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm);
-
-inline void execute(const Context& context, const Bytecodes& bytecodes) {
-  auto vm = VirtualMachine();
-  for (const auto& var : context.variables)
-    vm.stack.push(var);
-  execute(context, bytecodes, vm);
-}
+Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm);
+Variable execute(const Context& context, const Bytecodes& bytecodes);
 
 }  // namespace pine
