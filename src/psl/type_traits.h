@@ -155,6 +155,13 @@ template <typename T>
 constexpr bool is_const = _IsConst<T>::value;
 
 template <typename T>
+struct _IsConstRef : FalseType {};
+template <typename T>
+struct _IsConstRef<const T&> : TrueType {};
+template <typename T>
+constexpr bool is_const_ref = _IsConstRef<T>::value;
+
+template <typename T>
 struct _RemoveConst {
   using Type = T;
 };

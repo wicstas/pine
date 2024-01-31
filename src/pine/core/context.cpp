@@ -8,11 +8,11 @@ struct Any {};
 
 Context::Context() {
   auto& context = *this;
-  context("type") = low_level(
-      [&context](psl::span<const Variable*> args) -> psl::string {
-        return context.types[args[0]->type_id()].alias;
-      },
+  context.type<Any>("any");
+  context("__typename") = low_level(
+      [](psl::span<const Variable*> args) -> psl::string { return args[0]->type_name(); },
       psl::type_id<psl::string>(), psl::vector_of(psl::TypeId(psl::type_id<Any>(), false, false)));
+  context.type<size_t>("size_t");
   context.type<psl::Empty>("void");
   context.type<Function>("function");
   context.type<int, Context::Float>("int").ctor_variant<float>(true);
@@ -132,7 +132,9 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
         if (arg_type_ids[i] == param_type_ids[i].code) {
         } else if (param_type_ids[i].code == psl::type_id<Any>()) {
         } else if (auto idx = converter_index(arg_type_ids[i], param_type_ids[i].code);
-                   !param_type_ids[i].is_ref && idx != size_t(-1)) {
+                   (!param_type_ids[i].is_ref || param_type_ids[i].is_const) && idx != size_t(-1)) {
+          Debug("`", name, "` need to convert ", find_type(arg_type_ids[i]).alias, " to ",
+                find_type(param_type_ids[i].code).alias);
           converts.push_back({i, idx, param_type_ids[i].code});
           difference += 1;
         } else {
@@ -156,10 +158,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       auto arg_type_aliases = psl::string();
       auto candidates = psl::string();
       for (auto arg_type_id : arg_type_ids) {
-        if (auto it = types.find(arg_type_id); it != types.end())
-          arg_type_aliases += it->second.alias + ", ";
-        else
-          Fatal("Some type trait is not set");
+        arg_type_aliases += find_type(arg_type_id).alias + ", ";
       }
       if (arg_type_aliases.size()) {
         arg_type_aliases.pop_back();
@@ -168,10 +167,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
       for (auto fi = first; fi != last; fi++) {
         candidates += fi->first + '(';
         for (auto param_type_id : functions[fi->second].parameter_type_ids()) {
-          if (auto it = types.find(param_type_id.code); it != types.end())
-            candidates += it->second.alias + ", ";
-          else
-            Fatal("Some type trait is not set");
+          candidates += find_type(param_type_id.code).alias + ", ";
         }
         if (functions[fi->second].n_parameters() != 0) {
           candidates.pop_back();
@@ -206,7 +202,6 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> ar
 }
 
 void Context::add_f(psl::string name, Function func) {
-  function_variables.push_back(Variable(func));
   functions_map.insert({psl::move(name), functions.size()});
   functions.push_back(psl::move(func));
 }
@@ -289,10 +284,24 @@ psl::string Context::complete(psl::string part) const {
 
 size_t Context::get_type_id(psl::string name) const {
   for (const auto& type : types) {
-    if (type.second.alias == name)
+    if (type.second.alias == name) {
       return type.first;
+    }
   }
   exception("Type `", name, "` is not registered");
+}
+
+Context::TypeTrait& Context::find_type(size_t type_id) {
+  if (auto it = types.find(type_id); it != types.end())
+    return it->second;
+  else
+    exception("Type with id ", type_id, " is not register");
+}
+const Context::TypeTrait& Context::find_type(size_t type_id) const {
+  if (auto it = types.find(type_id); it != types.end())
+    return it->second;
+  else
+    exception("Type with id ", type_id, " is not register");
 }
 
 }  // namespace pine

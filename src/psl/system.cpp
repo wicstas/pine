@@ -6,7 +6,7 @@
 
 namespace psl {
 
-void abort() {
+[[noreturn]] void abort() {
   ::abort();
 }
 

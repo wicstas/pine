@@ -11,7 +11,8 @@ clock::clock() {
 }
 clock::~clock() {
   using T = decltype(std::chrono::high_resolution_clock::now());
-  delete (T*)time_point;
+  if (time_point)
+    delete (T*)time_point;
 }
 
 float clock::now() {

@@ -45,6 +45,7 @@ struct Bytecode {
   enum Instruction {
     Load,
     Copy,
+    ShallowCopy,
     LoadFloatConstant,
     LoadIntConstant,
     LoadBoolConstant,
@@ -136,9 +137,9 @@ struct Bytecodes {
   }
 
   void name_top_var(psl::string name);
-  size_t get_var_type(size_t var_index) const;
-  uint16_t get_var_by_name(psl::string_view name) const;
-  uint16_t last_var() const;
+  size_t var_type(size_t var_index) const;
+  uint16_t var_index_by_name(psl::string_view name) const;
+  uint16_t top_var_index() const;
   void pop_stack();
   size_t stack_size() const;
 

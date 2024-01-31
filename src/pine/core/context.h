@@ -56,8 +56,9 @@ auto overloaded(R (*f)(Args...)) {
 
 struct VariableConcept {
   virtual ~VariableConcept() = default;
+  virtual psl::shared_ptr<VariableConcept> shallow_clone() const = 0;
   virtual psl::shared_ptr<VariableConcept> clone() const = 0;
-  virtual void* raw_ptr() = 0;
+  virtual void* shallow_ptr() = 0;
   virtual void* ptr() = 0;
   virtual size_t type_id() const = 0;
   virtual const psl::string& type_name() const = 0;
@@ -67,10 +68,16 @@ struct Variable {
   template <typename R, typename T>
   struct VariableModel : VariableConcept {
     VariableModel(T base) : base{psl::move(base)} {};
-    psl::shared_ptr<VariableConcept> clone() const override {
+    psl::shared_ptr<VariableConcept> shallow_clone() const override {
       return psl::make_shared<VariableModel<R, T>>(*this);
     }
-    void* raw_ptr() override {
+    psl::shared_ptr<VariableConcept> clone() const override {
+      if constexpr (psl::same_as<R, Variable>)
+        return (*base).model->clone();
+      else
+        return psl::make_shared<VariableModel<R, T>>(*this);
+    }
+    void* shallow_ptr() override {
       if constexpr (psl::is_psl_ref<T>) {
         return &(*base);
       } else {
@@ -91,12 +98,14 @@ struct Variable {
       return psl::type_id<R>();
     }
     const psl::string& type_name() const override {
-      return psl::type_name<T>();
+      return psl::type_name<R>();
     }
 
   private:
     T base;
   };
+
+  friend struct VariableConcept;
 
   Variable(psl::shared_ptr<VariableConcept> model) : model(psl::move(model)) {
   }
@@ -114,6 +123,12 @@ struct Variable {
   // requires psl::one_of<T, PodTypes>
   // Variable(T x) : pod(x) {
   // }
+  Variable shallow_clone() const {
+    // if (pod.is_valid())
+    //   return *this;
+    DCHECK(model);
+    return Variable(model->shallow_clone());
+  }
   Variable clone() const {
     // if (pod.is_valid())
     //   return *this;
@@ -157,6 +172,21 @@ struct Variable {
 #endif
     return *reinterpret_cast<Base*>(model->ptr());
   }
+  template <typename T>
+  T shallow_as() const {
+    // if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
+    //   DCHECK(model.is_valid());
+    //   DCHECK(pod.is<psl::Decay<T>>());
+    //   return const_cast<Variable&>(*this).pod.as<psl::Decay<T>>();
+    // }
+    DCHECK(model);
+    using Base = psl::Decay<T>;
+#ifndef NDEBUG
+    if (!is<Base>())
+      Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
+#endif
+    return *reinterpret_cast<Base*>(model->shallow_ptr());
+  }
 
   void* ptr() const {
     // if (pod.is_valid())
@@ -165,11 +195,11 @@ struct Variable {
     return model->ptr();
   }
 
-  void* raw_ptr() const {
+  void* shallow_ptr() const {
     // if (pod.is_valid())
     //   return const_cast<Variable&>(*this).pod.ptr();
     DCHECK(model);
-    return model->raw_ptr();
+    return model->shallow_ptr();
   }
 
 private:
@@ -447,6 +477,11 @@ struct Context {
           type_trait.alias, +[](Args... args) { return T(psl::move(args)...); });
       return *this;
     }
+    template <typename F>
+    TypeProxy& ctor(F f) {
+      ctx.add_f(type_trait.alias, psl::move(f));
+      return *this;
+    }
     template <typename... Args>
     TypeProxy& ctor_variant(bool explicit_ = false) {
       if (!explicit_)
@@ -456,6 +491,15 @@ struct Context {
       (ctx.add_f(
            type_trait.alias, +[](Args arg) { return T(psl::move(arg)); }),
        ...);
+      return *this;
+    }
+    template <typename... Args>
+    TypeProxy& ctor_variant(psl::string name, auto f, bool explicit_ = false) {
+      if (!explicit_)
+        [&]<int... I>(psl::IntegerSequence<int, I...>) {
+          ((type_trait.convert_froms[psl::type_id<Args>()] = ctx.functions.size() + I), ...);
+        }(psl::make_integer_sequence<int, sizeof...(Args)>());
+      (ctx.add_f(name, tag<T, Args>(f)), ...);
       return *this;
     }
 
@@ -495,6 +539,11 @@ struct Context {
 
   Proxy operator()(psl::string name) {
     return Proxy(*this, psl::move(name));
+  }
+
+  template <typename T>
+  auto type() {
+    return TypeProxy<T>(*this, find_type(psl::type_id<T>()));
   }
   template <typename T, TypeClass type_class = TypeClass::None>
   auto type(psl::string alias) {
@@ -561,7 +610,16 @@ struct Context {
   psl::vector<psl::string> candidates(psl::string part) const;
   psl::string complete(psl::string part) const;
 
+  const TypeTrait& find_type(size_t type_id) const;
+  TypeTrait& find_type(size_t type_id);
   size_t get_type_id(psl::string name) const;
+
+  size_t next_internal_class_id() const {
+    return internal_class_n;
+  }
+  size_t new_internal_class() {
+    return internal_class_n++;
+  }
 
   psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Function> functions;
@@ -569,6 +627,7 @@ struct Context {
   psl::vector<Variable> variables;
   psl::vector<Variable> function_variables;
   psl::unordered_map<size_t, TypeTrait> types;
+  size_t internal_class_n = 0;
 };
 
 }  // namespace pine

@@ -319,7 +319,7 @@ auto vector_of(Ts... xs) {
   } else {
     if constexpr (sizeof...(Ts) == 0)
       static_assert(psl::deferred_bool<false, Ts...>,
-                    "When the parameter pack can be_ null, please specify the vector type");
+                    "When the parameter pack can be null, please specify the vector type");
     else {
       using T = FirstType<Ts...>;
       return vector<T>{std::initializer_list<T>{psl::move(xs)...}};

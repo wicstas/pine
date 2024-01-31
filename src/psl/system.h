@@ -32,8 +32,8 @@ struct TypeId {
 };
 template <typename T>
 TypeId type_id_full() {
-  static auto id =
-      TypeId{type_id<T>(), psl::is_const<T>, psl::is_reference<T> || psl::is_rv_reference<T>};
+  static auto id = TypeId{type_id<T>(), psl::is_const<T> || psl::is_const_ref<T>,
+                          psl::is_reference<T> || psl::is_rv_reference<T>};
   return id;
 }
 
@@ -45,7 +45,7 @@ const psl::string& type_name() {
   return str;
 }
 
-void abort();
+[[noreturn]] void abort();
 
 class string stacktrace();
 
