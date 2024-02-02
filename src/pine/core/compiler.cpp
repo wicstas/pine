@@ -12,13 +12,6 @@ struct PBlock;
 struct FunctionDefinition;
 }  // namespace pine
 
-namespace psl {
-extern template struct Box<pine::PExpr>;
-extern template struct Box<pine::Expr0>;
-extern template struct Box<pine::Block>;
-extern template struct Box<pine::FunctionDefinition>;
-}  // namespace psl
-
 namespace pine {
 
 template <typename T>
@@ -293,7 +286,7 @@ struct Declaration {
 
   psl::string name;
   Expr expr;
-  bool as_ref = false;
+  bool as_ref;
 };
 struct Semicolon {
   void emit(Context&, Bytecodes&) const {
@@ -369,11 +362,11 @@ struct IfElseChain {
   psl::optional<Else> else_;
 };
 struct ParameterDeclaration {
-  psl::string name;
-  psl::string type;
+  Id name;
+  Id type;
 };
 struct FunctionDefinition : ASTNode {
-  FunctionDefinition(size_t row, size_t column, psl::string name, psl::string return_type,
+  FunctionDefinition(size_t row, size_t column, psl::string name, Id return_type,
                      psl::vector<ParameterDeclaration> params, Block block)
       : ASTNode(row, column),
         name(psl::move(name)),
@@ -385,17 +378,16 @@ struct FunctionDefinition : ASTNode {
   void emit(Context& context, Bytecodes& bytecodes) const;
 
   psl::string name;
-  psl::string return_type;
+  Id return_type;
   psl::vector<ParameterDeclaration> params;
   Block block;
 };
-struct MemberDefinition : ASTNode {
-  MemberDefinition(size_t row, size_t column, psl::string name, psl::string type)
-      : ASTNode(row, column), name(psl::move(name)), type(psl::move(type)) {
+struct MemberDefinition {
+  MemberDefinition(Id name, Id type) : name(psl::move(name)), type(psl::move(type)) {
   }
 
-  psl::string name;
-  psl::string type;
+  Id name;
+  Id type;
 };
 struct InternalClass {
   psl::vector<Variable> members;
@@ -426,20 +418,21 @@ struct PBlock
     return dispatch([&](auto&& x) { x.emit(context, bytecodes); });
   }
 };
-}  // namespace pine
 
-namespace psl {
-template struct Box<pine::PExpr>;
-template struct Box<pine::Expr0>;
-template struct Box<pine::Block>;
-template struct Box<pine::FunctionDefinition>;
-}  // namespace psl
-
-namespace pine {
-uint16_t Id::emit(Context&, Bytecodes& bytecodes) const {
+uint16_t Id::emit(Context& context, Bytecodes& bytecodes) const {
   auto var_index = bytecodes.var_index_by_name(value);
-  if (var_index == uint16_t(-1))
-    bytecodes.error(*this, "Variable `", value, "` is not found");
+  if (var_index == uint16_t(-1)) {
+    auto fr = context.find_unique_f(value);
+    if (fr.status == fr.None)
+      bytecodes.error(*this, "Variable `", value, "` is not found");
+    else if (fr.status == fr.TooMany) {
+      bytecodes.error(*this, "Reference to function `", value, "` is ambiguous, candidates:\n",
+                      fr.candidates);
+    } else {
+      bytecodes.add_typed(Bytecode::LoadFunction, fr.function_index, psl::type_id<Function>());
+      return bytecodes.top_var_index();
+    }
+  }
   return var_index;
 }
 NumberLiteral::NumberLiteral(const psl::string& str) {
@@ -469,24 +462,24 @@ uint16_t StringLiteral::emit(Context&, Bytecodes& bytecodes) const {
 uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
   auto arg_indices = psl::vector<uint16_t>(args.size());
   if (args.size() >= 2 && args.size() <= 4) {
-    auto arg_type_ids = psl::vector<size_t>(args.size());
+    auto atids = psl::vector<size_t>(args.size());
     for (size_t i = 0; i < args.size(); i++) {
       arg_indices[i] = args[i].emit(context, bytecodes);
-      arg_type_ids[i] = bytecodes.var_type(arg_indices[i]);
+      atids[i] = bytecodes.var_type(arg_indices[i]);
     }
     auto float_ = false;
-    for (auto id : arg_type_ids)
+    for (auto id : atids)
       if (id == psl::type_id<float>()) {
         float_ = true;
         break;
       }
     auto [fi, rtid, converts] =
-        context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), arg_type_ids);
+        context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), atids);
     for (auto convert : converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      arg_type_ids[convert.position] = convert.to_type_id;
+      atids[convert.position] = convert.to_type_id;
     }
     bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
     return bytecodes.top_var_index();
@@ -498,29 +491,31 @@ uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
 }
 uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
   try {
-    CHECK(name != "()");
-    if (auto vi = bytecodes.var_index_by_name(name); vi != uint16_t(-1)) {
-      auto args_ = args;
-      args_.push_front(Id(row, column, name));
-      return FunctionCall(row, column, "()", args_).emit(context, bytecodes);
-    }
+    // If `x` is a variable, then `x(...)` will be transformed to `()(x, ...)`,
+    // i.e. call the operator() with x as the first argument
+    if (name != "()")
+      if (auto vi = bytecodes.var_index_by_name(name); vi != uint16_t(-1)) {
+        auto args_ = args;
+        args_.push_front(Id(row, column, name));
+        return FunctionCall(row, column, "()", args_).emit(context, bytecodes);
+      }
     if (args.size() > 8)
       bytecodes.error(*this, "Functions can accept no more than 8 arguments, got ", args.size());
     auto arg_indices = psl::vector<uint16_t>(args.size());
-    auto arg_type_ids = psl::vector<size_t>(args.size());
+    auto atids = psl::vector<size_t>(args.size());
 
     for (size_t i = 0; i < args.size(); i++) {
       auto vi = args[i].emit(context, bytecodes);
       arg_indices[i] = vi;
-      arg_type_ids[i] = bytecodes.var_type(vi);
+      atids[i] = bytecodes.var_type(vi);
     }
 
-    auto [fi, rtid, converts] = context.find_f(name, arg_type_ids);
+    auto [fi, rtid, converts] = context.find_f(name, atids);
     for (auto convert : converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      arg_type_ids[convert.position] = convert.to_type_id;
+      atids[convert.position] = convert.to_type_id;
     }
     bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
     return bytecodes.top_var_index();
@@ -535,10 +530,10 @@ uint16_t MemberAccess::emit(Context& context, Bytecodes& bytecodes) const {
   auto vi = pexpr->emit(context, bytecodes);
   try {
     auto tid = bytecodes.var_type(vi);
-    auto fi = context.find_type(tid).find_member_accessor_index(id.value);
+    auto fi = context.get_type(tid).find_member_accessor_index(id.value);
     if (fi == size_t(-1))
       bytecodes.error(*this, "Can't find member `", id.value, "` in type `",
-                      context.find_type(tid).alias, '`');
+                      context.get_type(tid).alias, '`');
     bytecodes.add_typed(Bytecode::Call, fi, context.functions[fi].return_type_id(), vi);
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
@@ -550,14 +545,14 @@ Subscript::Subscript(size_t row, size_t column, PExpr pexpr, Expr index)
 }
 uint16_t Subscript::emit(Context& context, Bytecodes& bytecodes) const {
   uint16_t arg_indices[]{pexpr->emit(context, bytecodes), index.emit(context, bytecodes)};
-  size_t arg_type_ids[]{bytecodes.var_type(arg_indices[0]), bytecodes.var_type(arg_indices[1])};
+  size_t atids[]{bytecodes.var_type(arg_indices[0]), bytecodes.var_type(arg_indices[1])};
   try {
-    auto [fi, rtid, converts] = context.find_f("[]", arg_type_ids);
+    auto [fi, rtid, converts] = context.find_f("[]", atids);
     for (const auto& convert : converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      arg_type_ids[convert.position] = convert.to_type_id;
+      atids[convert.position] = convert.to_type_id;
     }
     bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices[0], arg_indices[1]);
     return bytecodes.top_var_index();
@@ -576,7 +571,8 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
   auto members = psl::vector_of<MemberDefinition>();
   auto body = this->body;
   // In operator(): Add the lambda object itself as the first argument
-  body->params.push_front(ParameterDeclaration("self", class_name));
+  body->params.push_front(
+      ParameterDeclaration(Id(row, column, "self"), Id(row, column, class_name)));
   // In ctor: Initialize `self`
   auto it = psl::next(ctor_body.elems.insert(
       ctor_body.elems.begin(),
@@ -585,47 +581,47 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
     auto vi = bytecodes.var_index_by_name(capture.value);
     if (vi == uint16_t(-1))
       bytecodes.error(capture, "Variable `", capture.value, "` is not found");
-    auto tname = context.find_type(bytecodes.var_type(vi)).alias;
+    auto tname = context.get_type(bytecodes.var_type(vi)).alias;
     // Create a member that corresponds to each captured variable
-    members.push_back(MemberDefinition(capture.row, capture.column, capture.value, tname));
+    members.push_back(MemberDefinition(capture, Id(capture.row, capture.column, tname)));
 
     // In ctor: Initialize each member with their corresponding captured variable
+    auto member_name = Id(capture.row, capture.column, "__" + capture.value);
     it = psl::next(ctor_body.elems.insert(
-        it,
-        Stmt(Expr(Expr(MemberAccess(capture.row, capture.column, Id(row, column, "self"), capture)),
-                  Expr(capture), Expr::Init))));
-    ctor_params.push_back(ParameterDeclaration(capture.value, tname));
+        it, Stmt(Expr(Expr(MemberAccess(capture.row, capture.column, Id(row, column, "self"),
+                                        member_name)),
+                      Expr(capture), Expr::Init))));
+    ctor_params.push_back(ParameterDeclaration(capture, Id(capture.row, capture.column, tname)));
     ctor_args.push_back(Expr(capture));
   }
   // In ctor: Return self
   ctor_body.elems.push_back(Stmt(ReturnStmt(Id(row, column, "self"))));
   // In operator(): Create references to members so that we can write x instead of self.x
   for (const auto& member : members) {
-    body->block.elems.push_front(Stmt(Declaration(
-        member.name,
-        Expr(MemberAccess(row, column, Id(row, column, "self"), Id(row, column, member.name))),
-        true)));
+    body->block.elems.push_front(Stmt(
+        Declaration(member.name.value,
+                    Expr(MemberAccess(row, column, Id(row, column, "self"), member.name)), true)));
   }
-  auto lambda_class =
-      ClassDefinition(row, column, class_name,
-                      psl::vector_of(FunctionDefinition(row, column, class_name, class_name,
-                                                        ctor_params, ctor_body)),
-                      psl::vector_of(*body), members);
+  auto lambda_class = ClassDefinition(
+      row, column, class_name,
+      psl::vector_of(FunctionDefinition(row, column, class_name, Id(row, column, class_name),
+                                        ctor_params, ctor_body)),
+      psl::vector_of(*body), members);
   auto class_id = lambda_class.emit(context, bytecodes);
-  context.find_type(class_id).convert_tos[psl::type_id<Function>()] = context.functions.size();
-  auto arg_type_ids = psl::vector<size_t>();
-  auto param_type_ids = psl::vector<psl::TypeId>();
+  context.get_type(class_id).convert_tos[psl::type_id<Function>()] = context.functions.size();
+  auto atids = psl::vector<size_t>();
+  auto ptids = psl::vector<psl::TypeId>();
   for (size_t i = 0; i < body->params.size(); i++) {
-    auto tid = context.get_type_id(body->params[i].type);
-    arg_type_ids.push_back(tid);
+    auto tid = context.get_type_id(body->params[i].type.value);
+    atids.push_back(tid);
     if (i != 0)
-      param_type_ids.push_back(psl::TypeId(tid, false, false));
+      ptids.push_back(psl::TypeId(tid, false, false));
   }
-  auto fr = context.find_f("()", arg_type_ids);
+  auto fr = context.find_f("()", atids);
   auto fid = fr.function_index;
   context.functions.push_back(low_level(
       [f = context.functions[fid], rid = fr.return_type_id,
-       param_type_ids](psl::span<const Variable*> args) {
+       ptids](psl::span<const Variable*> args) {
         return Function(low_level(
             [self = *args[0], f](psl::span<const Variable*> args) {
               auto args_ =
@@ -634,13 +630,12 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
               args_.insert_range(args_.end(), args);
               return f.call(args_);
             },
-            rid, param_type_ids));
+            rid, ptids));
       },
       psl::type_id<Function>(), psl::vector_of(psl::TypeId(class_id, false, false))));
   // Create the lambda object
   return Expr(FunctionCall(row, column, class_name, ctor_args)).emit(context, bytecodes);
 }
-
 uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
   if (op == None)
     return x.emit(context, bytecodes);
@@ -648,26 +643,26 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto vi = x.emit(context, bytecodes);
     uint16_t arg_indices[]{vi};
-    size_t arg_type_ids[]{bytecodes.var_type(vi)};
+    size_t atids[]{bytecodes.var_type(vi)};
     auto fr = Context::FindFResult();
     switch (op) {
       case None: break;
-      case PreInc: fr = context.find_f("++x", arg_type_ids); break;
-      case PreDec: fr = context.find_f("--x", arg_type_ids); break;
-      case PostInc: fr = context.find_f("x++", arg_type_ids); break;
-      case PostDec: fr = context.find_f("x--", arg_type_ids); break;
-      case Positive: fr = context.find_f("+x", arg_type_ids); break;
-      case Negate: fr = context.find_f("-x", arg_type_ids); break;
-      case Invert: fr = context.find_f("!x", arg_type_ids); break;
+      case PreInc: fr = context.find_f("++x", atids); break;
+      case PreDec: fr = context.find_f("--x", atids); break;
+      case PostInc: fr = context.find_f("x++", atids); break;
+      case PostDec: fr = context.find_f("x--", atids); break;
+      case Positive: fr = context.find_f("+x", atids); break;
+      case Negate: fr = context.find_f("-x", atids); break;
+      case Invert: fr = context.find_f("!x", atids); break;
     }
     CHECK(fr.function_index != size_t(-1));
     for (auto convert : fr.converts) {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      arg_type_ids[convert.position] = convert.to_type_id;
+      atids[convert.position] = convert.to_type_id;
     }
-    if (arg_type_ids[0] == psl::type_id<int>() && op != Invert) {
+    if (atids[0] == psl::type_id<int>() && op != Invert) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -680,7 +675,7 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
         case Negate: inst = Bytecode::IntNegate; break;
       }
       bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
-    } else if (arg_type_ids[0] == psl::type_id<float>() && (op == Positive || op == Negate)) {
+    } else if (atids[0] == psl::type_id<float>() && (op == Positive || op == Negate)) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -716,34 +711,30 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
     auto a_index = a->emit(context, bytecodes);
     auto b_index = b->emit(context, bytecodes);
     uint16_t arg_indices[]{a_index, b_index};
-    size_t arg_type_ids[]{bytecodes.var_type(a_index), bytecodes.var_type(b_index)};
-    if (op == Init) {
-      bytecodes.add(Bytecode::InitVar, a_index, b_index);
-      return uint16_t(-1);
-    }
+    size_t atids[]{bytecodes.var_type(a_index), bytecodes.var_type(b_index)};
     auto fr = Context::FindFResult();
     switch (op) {
       case None: CHECK(false); break;
-      case Mul: fr = context.find_f("*", arg_type_ids); break;
-      case Div: fr = context.find_f("/", arg_type_ids); break;
-      case Mod: fr = context.find_f("%", arg_type_ids); break;
-      case Pow: fr = context.find_f("^", arg_type_ids); break;
-      case Add: fr = context.find_f("+", arg_type_ids); break;
-      case Sub: fr = context.find_f("-", arg_type_ids); break;
-      case Lt: fr = context.find_f("<", arg_type_ids); break;
-      case Gt: fr = context.find_f(">", arg_type_ids); break;
-      case Le: fr = context.find_f("<=", arg_type_ids); break;
-      case Ge: fr = context.find_f(">=", arg_type_ids); break;
-      case Eq: fr = context.find_f("==", arg_type_ids); break;
-      case Ne: fr = context.find_f("!=", arg_type_ids); break;
-      case And: fr = context.find_f("&&", arg_type_ids); break;
-      case Or: fr = context.find_f("||", arg_type_ids); break;
-      case AddE: fr = context.find_f("+=", arg_type_ids); break;
-      case SubE: fr = context.find_f("-=", arg_type_ids); break;
-      case MulE: fr = context.find_f("*=", arg_type_ids); break;
-      case DivE: fr = context.find_f("/=", arg_type_ids); break;
-      case ModE: fr = context.find_f("%=", arg_type_ids); break;
-      case Assi: fr = context.find_f("=", arg_type_ids); break;
+      case Mul: fr = context.find_f("*", atids); break;
+      case Div: fr = context.find_f("/", atids); break;
+      case Mod: fr = context.find_f("%", atids); break;
+      case Pow: fr = context.find_f("^", atids); break;
+      case Add: fr = context.find_f("+", atids); break;
+      case Sub: fr = context.find_f("-", atids); break;
+      case Lt: fr = context.find_f("<", atids); break;
+      case Gt: fr = context.find_f(">", atids); break;
+      case Le: fr = context.find_f("<=", atids); break;
+      case Ge: fr = context.find_f(">=", atids); break;
+      case Eq: fr = context.find_f("==", atids); break;
+      case Ne: fr = context.find_f("!=", atids); break;
+      case And: fr = context.find_f("&&", atids); break;
+      case Or: fr = context.find_f("||", atids); break;
+      case AddE: fr = context.find_f("+=", atids); break;
+      case SubE: fr = context.find_f("-=", atids); break;
+      case MulE: fr = context.find_f("*=", atids); break;
+      case DivE: fr = context.find_f("/=", atids); break;
+      case ModE: fr = context.find_f("%=", atids); break;
+      case Assi: fr = context.find_f("=", atids); break;
       case Init: CHECK(false);
     }
     CHECK(fr.function_index != size_t(-1));
@@ -751,10 +742,10 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
       bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      arg_type_ids[convert.position] = convert.to_type_id;
+      atids[convert.position] = convert.to_type_id;
     }
-    if (arg_type_ids[0] == psl::type_id<int>() && arg_type_ids[1] == psl::type_id<int>() &&
-        op != And && op != Or) {
+    if (atids[0] == psl::type_id<int>() && atids[1] == psl::type_id<int>() && op != And &&
+        op != Or) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -781,9 +772,8 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
         case Init: CHECK(false); break;
       }
       bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
-    } else if (arg_type_ids[0] == psl::type_id<float>() &&
-               arg_type_ids[1] == psl::type_id<float>() && op != And && op != Or && op != Mod &&
-               op != ModE) {
+    } else if (atids[0] == psl::type_id<float>() && atids[1] == psl::type_id<float>() &&
+               op != And && op != Or && op != Mod && op != ModE) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -821,18 +811,13 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
 void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
   auto vi = expr.emit(context, bytecodes);
   if (as_ref)
-    bytecodes.add_typed(Bytecode::ShallowCopy, vi, bytecodes.var_type(vi));
+    bytecodes.add_typed(Bytecode::MakeRef, vi, bytecodes.var_type(vi));
   else
     bytecodes.add_typed(Bytecode::Copy, vi, bytecodes.var_type(vi));
   bytecodes.name_top_var(name);
 }
 void Stmt::emit(Context& context, Bytecodes& bytecodes) const {
   dispatch([&](auto&& x) { x.emit(context, bytecodes); });
-  // if (is<Expr>() && as<Expr>().op != Expr::Init) {
-  //   CHECK(bytecodes.code_position() != 0);
-  //   bytecodes[bytecodes.code_position() - 1].value1 = size_t(-1);
-  //   bytecodes.pop_stack();
-  // }
 }
 Block::Block(psl::vector<PBlock> elems) : elems{psl::move(elems)} {
 }
@@ -844,7 +829,6 @@ void Block::emit(Context& ctx, Bytecodes& bytecodes) const {
   bytecodes.add(Bytecode::UnwindStack, sp);
   bytecodes.exit_scope();
 }
-
 While::While(size_t row, size_t column, Expr condition, PBlock pblock)
     : ASTNode{row, column}, condition(psl::move(condition)), pblock(psl::move(pblock)) {
 }
@@ -875,7 +859,6 @@ void While::emit(Context& context, Bytecodes& bytecodes) const {
     }
   }
 }
-
 For::For(size_t row, size_t column, Stmt init, Expr condition, Expr inc, PBlock block)
     : ASTNode{row, column},
       init{psl::move(init)},
@@ -961,17 +944,21 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
   bytecodes.add(Bytecode::UnwindStack, sp);
   bytecodes.exit_scope();
 }
-
 void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto f_bytecodes = Bytecodes(context, bytecodes.sl);
-    auto param_type_ids = psl::vector<psl::TypeId>();
+    auto ptids = psl::vector<psl::TypeId>();
     for (const auto& param : params) {
-      auto tid = context.get_type_id(param.type);
-      f_bytecodes.add_typed(param.name, tid);
-      param_type_ids.push_back(psl::TypeId(tid, false, false));
+      auto tid = context.get_type_id(param.type.value);
+      if (tid == size_t(-1))
+        bytecodes.error(param.type, "Type `", param.type.value, "` is not found");
+      f_bytecodes.add_typed(param.name.value, tid);
+      ptids.push_back(psl::TypeId(tid, false, false));
     }
     block.emit(context, f_bytecodes);
+    auto rtid = context.find_type_id(return_type.value);
+    if (rtid == size_t(-1))
+      bytecodes.error(return_type, "Type `", return_type.value, "` is not found");
     context(name) = low_level(
         [&context, f_bytecodes, *this](psl::span<const Variable*> args) mutable {
           CHECK_EQ(args.size(), params.size());
@@ -982,10 +969,7 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
             vm.stack.push(*args[i]);
           return execute(context, f_bytecodes, vm);
         },
-        context.get_type_id(return_type), param_type_ids);
-    // bytecodes.add_typed(Bytecode::Load, context.function_variables.size() - 1,
-    //                     context.function_variables.back().type_id());
-    // bytecodes.name_top_var(name);
+        rtid, ptids);
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
   }
@@ -1001,13 +985,26 @@ size_t ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
       type_id, {});
 
   for (size_t i = 0; i < members.size(); i++) {
-    type_trait.member_accessors[members[i].name] = context.functions.size();
+    type_trait.member_accessors[members[i].name.value] = context.functions.size();
+    auto mtid = context.find_type_id(members[i].type.value);
+    if (mtid == size_t(-1))
+      bytecodes.error(members[i].type, "Type `", members[i].type.value, "` is not found");
+    context.functions.push_back(low_level(
+        [i](psl::span<const Variable*> args) {
+          DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
+          return args[0]->as<InternalClass&>().members[i];
+        },
+        mtid, psl::vector_of(psl::TypeId(type_id, false, true))));
+  }
+
+  for (size_t i = 0; i < members.size(); i++) {
+    type_trait.member_accessors["__" + members[i].name.value] = context.functions.size();
     context.functions.push_back(low_level(
         [i](psl::span<const Variable*> args) {
           DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
           return psl::ref(args[0]->as<InternalClass&>().members[i]);
         },
-        context.get_type_id(members[i].type), psl::vector_of(psl::TypeId(type_id, false, true))));
+        psl::type_id<Variable>(), psl::vector_of(psl::TypeId(type_id, false, true))));
   }
 
   for (const auto& ctor : ctors)
@@ -1150,12 +1147,15 @@ struct Parser {
     consume("{");
 
     auto ctors = psl::vector<FunctionDefinition>();
+    auto ctor_init_sizes = psl::vector<size_t>();
     auto methods = psl::vector<FunctionDefinition>();
     auto members = psl::vector<MemberDefinition>();
 
     while (!accept("}")) {
       if (expect("ctor")) {
-        ctors.push_back(ctor_definition(name));
+        auto [ctor, init_size] = ctor_definition(name);
+        ctors.push_back(psl::move(ctor));
+        ctor_init_sizes.push_back(init_size);
       } else if (expect("fn")) {
         methods.push_back(method_definition(name));
       } else {
@@ -1166,33 +1166,31 @@ struct Parser {
         ;
     }
 
-    for (auto& ctor : ctors)
+    for (auto [ctor, init_size] : psl::tie(ctors, ctor_init_sizes))
       for (const auto& member : members) {
         auto r = ctor.row, c = ctor.column;
         CHECK_GE(ctor.block.elems.size(), 1);
-        auto it = psl::next(ctor.block.elems.begin());
+        auto it = psl::next(ctor.block.elems.begin(), init_size);
         it = ctor.block.elems.insert(
-            it,
-            Stmt(Declaration(member.name,
-                             MemberAccess(r, c, Id(r, c, "self"), Id(r, c, member.name)), true)));
+            it, Stmt(Declaration(member.name.value,
+                                 MemberAccess(r, c, Id(r, c, "self"), member.name), true)));
       }
     for (auto& method : methods)
       for (const auto& member : members) {
         auto r = method.row, c = method.column;
         method.block.elems.push_front(Stmt(Declaration(
-            member.name, MemberAccess(r, c, Id(r, c, "self"), Id(r, c, member.name)), true)));
+            member.name.value, MemberAccess(r, c, Id(r, c, "self"), member.name), true)));
       }
     return ClassDefinition(r, c, psl::move(name), psl::move(ctors), psl::move(methods),
                            psl::move(members));
   }
   MemberDefinition member_definition() {
-    auto r = row, c = column;
     auto name = id();
     consume(":");
     auto type = id();
-    return MemberDefinition(r, c, psl::move(name.value), psl::move(type.value));
+    return MemberDefinition(psl::move(name), psl::move(type));
   };
-  FunctionDefinition ctor_definition(psl::string class_name) {
+  psl::pair<FunctionDefinition, size_t> ctor_definition(psl::string class_name) {
     auto r = row, c = column;
     consume("ctor");
     auto ctor_name = id().value;
@@ -1200,14 +1198,14 @@ struct Parser {
     auto params = param_list();
     consume(")");
     auto init_stmts = psl::vector<Stmt>();
+    // Initialize each member variables
     if (accept(":")) {
       while (!expect("{")) {
         auto r = row, c = column;
         auto name = id().value;
         auto expr_ = expr();
-        init_stmts.push_back(
-            Stmt(Expr(Expr(Expr0(r, c, MemberAccess(r, c, Id(r, c, "self"), Id(r, c, name)))),
-                      expr_, Expr::Init)));
+        init_stmts.push_back(Expr(Expr(MemberAccess(r, c, Id(r, c, "self"), Id(r, c, "__" + name))),
+                                  expr_, Expr::Assi));
         if (!accept(",")) {
           if (!expect("{")) {
             error("Expect either `,` to continue or '{' to begin function definition");
@@ -1216,15 +1214,17 @@ struct Parser {
       }
     }
     auto block_ = block();
-    auto it = psl::next(block_.elems.insert(
-        block_.elems.begin(),
-        PBlock(Stmt(
-            Declaration("self", Expr(Expr0(r, c, FunctionCall(r, c, "__" + class_name, {}))))))));
-    for (const auto& init_stmt : init_stmts) {
-      it = psl::next(block_.elems.insert(it, PBlock(init_stmt)));
-    }
-    block_.elems.push_back(PBlock(Stmt(ReturnStmt(Expr(Expr0(r, c, Id(r, c, "self")))))));
-    return FunctionDefinition(r, c, ctor_name, class_name, psl::move(params), psl::move(block_));
+    // Create `self` and add the initializer of its members
+    auto it = psl::next(
+        block_.elems.insert(block_.elems.begin(),
+                            Stmt(Declaration("self", FunctionCall(r, c, "__" + class_name, {})))));
+    for (const auto& init_stmt : init_stmts)
+      it = psl::next(block_.elems.insert(it, init_stmt));
+    // Return `self` in the ctor
+    block_.elems.push_back(Stmt(ReturnStmt(Id(r, c, "self"))));
+    return {FunctionDefinition(r, c, ctor_name, Id(r, c, class_name), psl::move(params),
+                               psl::move(block_)),
+            1 + init_stmts.size()};
   }
   FunctionDefinition method_definition(psl::string class_name) {
     auto r = row, c = column;
@@ -1232,10 +1232,10 @@ struct Parser {
     auto name = id().value;
     consume("(");
     auto params = param_list();
-    params.push_front(ParameterDeclaration("self", class_name));
+    params.push_front(ParameterDeclaration(Id(r, c, "self"), Id(r, c, class_name)));
     consume(")");
     consume(":");
-    auto type = id().value;
+    auto type = id();
     auto block_ = block();
     return FunctionDefinition(r, c, psl::move(name), psl::move(type), psl::move(params),
                               psl::move(block_));
@@ -1248,9 +1248,9 @@ struct Parser {
     auto params = param_list();
     consume(")");
     consume(":");
-    auto type = id().value;
+    auto return_type = id();
     auto block_ = block();
-    return FunctionDefinition(r, c, psl::move(name), psl::move(type), psl::move(params),
+    return FunctionDefinition(r, c, psl::move(name), psl::move(return_type), psl::move(params),
                               psl::move(block_));
   }
   Stmt stmt() {
@@ -1386,20 +1386,23 @@ struct Parser {
         auto r = row, c = column;
         auto id_ = id();
         pexpr_ = MemberAccess{r, c, psl::move(pexpr_), psl::move(id_)};
-      } else if (accept("(")) {
+      } else if (expect("(")) {
         if (pexpr_.is<Id>()) {
+          consume("(");
           pexpr_ = FunctionCall{pexpr_.as<Id>().row, pexpr_.as<Id>().column, pexpr_.as<Id>().value,
                                 arg_list()};
+          consume(")");
         } else if (pexpr_.is<MemberAccess>()) {
+          consume("(");
           auto& p = pexpr_.as<MemberAccess>();
           auto args = arg_list();
           auto name = psl::move(p.id).value;
           args.insert(args.begin(), Expr{Expr0{p.row, p.column, *psl::move(p.pexpr), Expr0::None}});
           pexpr_ = FunctionCall{p.id.row, p.id.column, psl::move(name), psl::move(args)};
+          consume(")");
         } else {
           error("An identifier must precedes function call operator ()");
         }
-        consume(")");
       } else {
         break;
       }
@@ -1447,7 +1450,7 @@ struct Parser {
     auto params = param_list();
     consume(")");
     consume(":");
-    auto return_type = id().value;
+    auto return_type = id();
     auto body = block();
     return LambdaExpr(r, c, captures, FunctionDefinition(r, c, "()", return_type, params, body));
   }
@@ -1469,11 +1472,10 @@ struct Parser {
     auto args = psl::vector<ParameterDeclaration>();
     if (!expect(")"))
       while (true) {
-        auto param = ParameterDeclaration();
-        param.name = id().value;
+        auto name = id();
         consume(":");
-        param.type = id().value;
-        args.push_back(psl::move(param));
+        auto type = id();
+        args.push_back({psl::move(name), psl::move(type)});
         if (expect(")"))
           break;
         else
@@ -1716,11 +1718,16 @@ psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
   auto parser = Parser{source};
   return {parser.block(true), psl::move(parser.sl)};
 }
+
 Bytecodes compile(Context& context, psl::string source) {
-  auto [block, sl] = parse_as_block(psl::move(source));
-  auto bytecodes = Bytecodes(context, psl::move(sl));
-  block.emit(context, bytecodes);
-  return bytecodes;
+  try {
+    auto [block, sl] = parse_as_block(psl::move(source));
+    auto bytecodes = Bytecodes(context, psl::move(sl));
+    block.emit(context, bytecodes);
+    return bytecodes;
+  } catch (const Exception& e) {
+    Fatal("Uncaught exception: ", e.what());
+  }
 }
 
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm) {
@@ -1737,12 +1744,9 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
       switch (code.instruction) {
         case Bytecode::Break: break;
         case Bytecode::Continue: break;
-        case Bytecode::Load: vm.stack.push(context.function_variables[code.value]); break;
+        case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
         case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
-        case Bytecode::ShallowCopy: push(vm.stack[code.value].shallow_clone()); break;
-        case Bytecode::InitVar:
-          vm.stack[code.value].shallow_as<Variable&>() = vm.stack[code.value1].clone();
-          break;
+        case Bytecode::MakeRef: push(vm.stack[code.value].make_ref()); break;
         case Bytecode::LoadFloatConstant:
           push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
           break;

@@ -43,15 +43,14 @@ struct ASTNode {
 
 struct Bytecode {
   enum Instruction {
-    Load,
     Copy,
-    ShallowCopy,
+    MakeRef,
+    LoadFunction,
     LoadFloatConstant,
     LoadIntConstant,
     LoadBoolConstant,
     LoadStringConstant,
     Call,
-    InitVar,
     Return,
     IntPreInc,
     IntPreDec,

@@ -88,7 +88,7 @@ auto distance(It first, It last) {
   return psl::distance(first, last, PriorityTag<1>{});
 }
 
-template <typename It>
+template <RandomAccessIterator It>
 auto range(It first, It last) {
   struct Wrapper {
     It begin() const {
@@ -99,6 +99,21 @@ auto range(It first, It last) {
     }
     size_t size() const {
       return psl::distance(first, last);
+    }
+
+    It first, last;
+  };
+
+  return Wrapper{first, last};
+}
+template <typename It>
+auto range(It first, It last) {
+  struct Wrapper {
+    It begin() const {
+      return first;
+    }
+    It end() const {
+      return last;
     }
 
     It first, last;
@@ -637,6 +652,48 @@ auto sum(Range auto&& range) {
 
 auto find_last_of(Range auto&& range, const auto& value) {
   return find_if(psl::reverse_adapter(range), equal_to(value)).unwrap();
+}
+
+template <Range RangeA, Range RangeB>
+auto tie(RangeA&& a, RangeB&& b) {
+  struct Ranger {
+    struct Iterator {
+      decltype(auto) operator*() const {
+        decltype(auto) a = *a_it;
+        decltype(auto) b = *b_it;
+        return psl::pair<decltype(a), decltype(b)>{FWD(a), FWD(b)};
+      }
+      Iterator& operator++() {
+        ++a_it;
+        ++b_it;
+        return *this;
+      }
+      Iterator operator++(int) {
+        auto old = *this;
+        ++(*this);
+        return old;
+      }
+      bool operator==(const Iterator& b) const {
+        return a_it == b.a_it || b_it == b.b_it;
+      }
+      bool operator!=(const Iterator& b) const {
+        return !(*this == b);
+      }
+
+      IteratorTypeT<RangeA> a_it;
+      IteratorTypeT<RangeB> b_it;
+    };
+    Iterator begin() {
+      return {psl::begin(a), psl::begin(b)};
+    }
+    Iterator end() {
+      return {psl::end(a), psl::end(b)};
+    }
+
+    RangeA a;
+    RangeB b;
+  };
+  return Ranger{FWD(a), FWD(b)};
 }
 
 }  // namespace psl

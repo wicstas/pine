@@ -23,15 +23,15 @@ template <typename F>
 struct LowLevel {
   F lambda;
   size_t return_type_id_;
-  psl::vector<psl::TypeId> param_type_ids_;
+  psl::vector<psl::TypeId> ptids_;
 };
 template <typename R, typename... Args, typename F>
 auto tag(F lambda) {
   return Lambda<F, R, Args...>(psl::move(lambda));
 }
 template <typename F>
-auto low_level(F lambda, size_t return_type_id_, psl::vector<psl::TypeId> param_type_ids_) {
-  return LowLevel<F>{psl::move(lambda), return_type_id_, psl::move(param_type_ids_)};
+auto low_level(F lambda, size_t return_type_id_, psl::vector<psl::TypeId> ptids_) {
+  return LowLevel<F>{psl::move(lambda), return_type_id_, psl::move(ptids_)};
 }
 template <typename T, typename U, typename R, typename... Args>
 auto derived(R (U::*f)(Args...)) {
@@ -56,9 +56,8 @@ auto overloaded(R (*f)(Args...)) {
 
 struct VariableConcept {
   virtual ~VariableConcept() = default;
-  virtual psl::shared_ptr<VariableConcept> shallow_clone() const = 0;
-  virtual psl::shared_ptr<VariableConcept> clone() const = 0;
-  virtual void* shallow_ptr() = 0;
+  virtual psl::shared_ptr<VariableConcept> clone() = 0;
+  virtual psl::shared_ptr<VariableConcept> make_ref() = 0;
   virtual void* ptr() = 0;
   virtual size_t type_id() const = 0;
   virtual const psl::string& type_name() const = 0;
@@ -68,31 +67,21 @@ struct Variable {
   template <typename R, typename T>
   struct VariableModel : VariableConcept {
     VariableModel(T base) : base{psl::move(base)} {};
-    psl::shared_ptr<VariableConcept> shallow_clone() const override {
-      return psl::make_shared<VariableModel<R, T>>(*this);
+    psl::shared_ptr<VariableConcept> clone() override {
+      return psl::make_shared<VariableModel<R, R>>(*reinterpret_cast<R*>(ptr()));
     }
-    psl::shared_ptr<VariableConcept> clone() const override {
-      if constexpr (psl::same_as<R, Variable>)
-        return (*base).model->clone();
+    psl::shared_ptr<VariableConcept> make_ref() override {
+      if constexpr (psl::is_psl_ref<T>)
+        return psl::make_shared<VariableModel<R, T>>(*reinterpret_cast<R*>(ptr()));
       else
-        return psl::make_shared<VariableModel<R, T>>(*this);
-    }
-    void* shallow_ptr() override {
-      if constexpr (psl::is_psl_ref<T>) {
-        return &(*base);
-      } else {
-        return &base;
-      }
+        return psl::make_shared<VariableModel<R, psl::ref_wrapper<T>>>(
+            *reinterpret_cast<R*>(ptr()));
     }
     void* ptr() override {
-      if constexpr (psl::is_psl_ref<T>) {
-        if constexpr (psl::same_as<R, Variable>)
-          return (*base).ptr();
-        else
-          return &(*base);
-      } else {
+      if constexpr (psl::is_psl_ref<T>)
+        return &(*base);
+      else
         return &base;
-      }
     }
     size_t type_id() const override {
       return psl::type_id<R>();
@@ -123,17 +112,17 @@ struct Variable {
   // requires psl::one_of<T, PodTypes>
   // Variable(T x) : pod(x) {
   // }
-  Variable shallow_clone() const {
-    // if (pod.is_valid())
-    //   return *this;
-    DCHECK(model);
-    return Variable(model->shallow_clone());
-  }
   Variable clone() const {
     // if (pod.is_valid())
     //   return *this;
     DCHECK(model);
     return Variable(model->clone());
+  }
+  Variable make_ref() const {
+    // if (pod.is_valid())
+    //   return *this;
+    DCHECK(model);
+    return Variable(model->make_ref());
   }
   size_t type_id() const {
     // if (pod.is_valid())
@@ -172,34 +161,12 @@ struct Variable {
 #endif
     return *reinterpret_cast<Base*>(model->ptr());
   }
-  template <typename T>
-  T shallow_as() const {
-    // if constexpr (psl::one_of<psl::Decay<T>, PodTypes>) {
-    //   DCHECK(model.is_valid());
-    //   DCHECK(pod.is<psl::Decay<T>>());
-    //   return const_cast<Variable&>(*this).pod.as<psl::Decay<T>>();
-    // }
-    DCHECK(model);
-    using Base = psl::Decay<T>;
-#ifndef NDEBUG
-    if (!is<Base>())
-      Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
-#endif
-    return *reinterpret_cast<Base*>(model->shallow_ptr());
-  }
 
   void* ptr() const {
     // if (pod.is_valid())
     //   return const_cast<Variable&>(*this).pod.ptr();
     DCHECK(model);
     return model->ptr();
-  }
-
-  void* shallow_ptr() const {
-    // if (pod.is_valid())
-    //   return const_cast<Variable&>(*this).pod.ptr();
-    DCHECK(model);
-    return model->shallow_ptr();
   }
 
 private:
@@ -242,8 +209,8 @@ struct Function {
       if constexpr (sizeof...(Args) == 0) {
         return {};
       } else {
-        static psl::TypeId arg_type_ids_[]{psl::type_id_full<Args>()...};
-        return arg_type_ids_;
+        static psl::TypeId atids_[]{psl::type_id_full<Args>()...};
+        return atids_;
       }
     }
     size_t return_type_id() const override {
@@ -259,19 +226,17 @@ struct Function {
 
   template <typename T>
   struct LowLevelFunctionModel : FunctionConcept {
-    LowLevelFunctionModel(T base, size_t return_type_id_, psl::vector<psl::TypeId> param_type_ids_)
-        : base(psl::move(base)),
-          return_type_id_(return_type_id_),
-          param_type_ids_(psl::move(param_type_ids_)){};
+    LowLevelFunctionModel(T base, size_t return_type_id_, psl::vector<psl::TypeId> ptids_)
+        : base(psl::move(base)), return_type_id_(return_type_id_), ptids_(psl::move(ptids_)){};
 
     Variable call(psl::span<const Variable*> args) override {
       return base(args);
     }
     size_t n_parameters() const override {
-      return param_type_ids_.size();
+      return ptids_.size();
     }
     psl::span<const psl::TypeId> parameter_type_ids() const override {
-      return param_type_ids_;
+      return ptids_;
     }
     size_t return_type_id() const override {
       return return_type_id_;
@@ -280,7 +245,7 @@ struct Function {
   private:
     T base;
     size_t return_type_id_;
-    psl::vector<psl::TypeId> param_type_ids_;
+    psl::vector<psl::TypeId> ptids_;
   };
 
   template <typename R, typename... Args>
@@ -328,8 +293,7 @@ struct Function {
   }
   template <typename F>
   Function(LowLevel<F> f)
-      : model(psl::make_shared<LowLevelFunctionModel<F>>(f.lambda, f.return_type_id_,
-                                                         f.param_type_ids_)) {
+      : model(psl::make_shared<LowLevelFunctionModel<F>>(f.lambda, f.return_type_id_, f.ptids_)) {
   }
 
   Variable call(psl::span<const Variable*> args) const {
@@ -543,52 +507,21 @@ struct Context {
 
   template <typename T>
   auto type() {
-    return TypeProxy<T>(*this, find_type(psl::type_id<T>()));
+    return TypeProxy<T>(*this, get_type(psl::type_id<T>()));
   }
   template <typename T, TypeClass type_class = TypeClass::None>
-  auto type(psl::string alias) {
-    types[psl::type_id<T>()].alias = alias;
-    types[psl::type_id<T*>()].alias = alias + "*";
-    if constexpr (type_class == TypeClass::Float || type_class == TypeClass::Complex) {
-      add_f(
-          "+", +[](T a, T b) { return a + b; });
-      add_f(
-          "-", +[](T a, T b) { return a - b; });
-      add_f(
-          "*", +[](T a, T b) { return a * b; });
-      add_f(
-          "/", +[](T a, T b) { return a / b; });
-      add_f(
-          "+=", +[](T& a, T b) -> T& { return a += b; });
-      add_f(
-          "-=", +[](T& a, T b) -> T& { return a -= b; });
-      add_f(
-          "*=", +[](T& a, T b) -> T& { return a *= b; });
-      add_f(
-          "/=", +[](T& a, T b) -> T& { return a /= b; });
-      add_f(
-          "-x", +[](T x) -> T { return -x; });
-      add_f(
-          "==", +[](T a, T b) -> bool { return a == b; });
-      add_f(
-          "!=", +[](T a, T b) -> bool { return a != b; });
-      add_f(
-          "=", +[](T& a, T b) -> T& { return a = b; });
-      if constexpr (type_class == TypeClass::Float) {
-        add_f(
-            "<", +[](T a, T b) -> bool { return a < b; });
-        add_f(
-            ">", +[](T a, T b) -> bool { return a > b; });
-        add_f(
-            "<=", +[](T a, T b) -> bool { return a <= b; });
-        add_f(
-            ">=", +[](T a, T b) -> bool { return a >= b; });
-      }
-    }
-    return TypeProxy<T>(*this, types[psl::type_id<T>()]);
-  }
+  auto type(psl::string alias);
 
   size_t converter_index(size_t from_id, size_t to_id) const;
+
+  void add_f(psl::string name, Function func);
+
+  struct FindUniqueFResult {
+    size_t function_index;
+    enum Status { None, TooMany, Found } status;
+    psl::string candidates;
+  };
+  FindUniqueFResult find_unique_f(psl::string_view name) const;
 
   struct FindFResult {
     size_t function_index;
@@ -600,8 +533,7 @@ struct Context {
     };
     psl::vector<ArgumentConversion> converts;
   };
-  FindFResult find_f(psl::string_view name, psl::span<size_t> arg_type_ids) const;
-  void add_f(psl::string name, Function func);
+  FindFResult find_f(psl::string_view name, psl::span<size_t> atids) const;
   Variable call(psl::string_view name, psl::span<const Variable*> args) const;
 
   size_t find_variable(psl::string_view name) const;
@@ -610,9 +542,10 @@ struct Context {
   psl::vector<psl::string> candidates(psl::string part) const;
   psl::string complete(psl::string part) const;
 
-  const TypeTrait& find_type(size_t type_id) const;
-  TypeTrait& find_type(size_t type_id);
-  size_t get_type_id(psl::string name) const;
+  const TypeTrait& get_type(size_t type_id) const;
+  TypeTrait& get_type(size_t type_id);
+  size_t find_type_id(psl::string_view name) const;
+  size_t get_type_id(psl::string_view name) const;
 
   size_t next_internal_class_id() const {
     return internal_class_n;
@@ -621,13 +554,40 @@ struct Context {
     return internal_class_n++;
   }
 
-  psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Function> functions;
-  psl::multimap<psl::string, size_t> variables_map;
+  psl::multimap<psl::string, size_t> functions_map;
   psl::vector<Variable> variables;
-  psl::vector<Variable> function_variables;
+  psl::multimap<psl::string, size_t> variables_map;
   psl::unordered_map<size_t, TypeTrait> types;
   size_t internal_class_n = 0;
 };
+
+template <typename T, Context::TypeClass type_class>
+auto Context::type(psl::string alias) {
+  types[psl::type_id<T>()].alias = alias;
+  // clang-format off
+  if constexpr (type_class == TypeClass::Float || type_class == TypeClass::Complex) {
+    add_f("+", +[](T a, T b) { return a + b; });
+    add_f("-", +[](T a, T b) { return a - b; });
+    add_f("*", +[](T a, T b) { return a * b; });
+    add_f("/", +[](T a, T b) { return a / b; });
+    add_f("+=", +[](T& a, T b) -> T& { return a += b; });
+    add_f("-=", +[](T& a, T b) -> T& { return a -= b; });
+    add_f("*=", +[](T& a, T b) -> T& { return a *= b; });
+    add_f("/=", +[](T& a, T b) -> T& { return a /= b; });
+    add_f("-x", +[](T x) -> T { return -x; });
+    add_f("==", +[](T a, T b) -> bool { return a == b; });
+    add_f("!=", +[](T a, T b) -> bool { return a != b; });
+    add_f("=", +[](T& a, T b) -> T& { return a = b; });
+    if constexpr (type_class == TypeClass::Float) {
+      add_f("<", +[](T a, T b) -> bool { return a < b; });
+      add_f(">", +[](T a, T b) -> bool { return a > b; });
+      add_f("<=", +[](T a, T b) -> bool { return a <= b; });
+      add_f(">=", +[](T a, T b) -> bool { return a >= b; });
+    }
+  }
+  // clang-format on
+  return TypeProxy<T>(*this, types[psl::type_id<T>()]);
+}
 
 }  // namespace pine

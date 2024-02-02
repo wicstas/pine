@@ -9,13 +9,23 @@ struct Any {};
 Context::Context() {
   auto& context = *this;
   context.type<Any>("any");
+  context.type<Variable>("variable");
+  context("=") = low_level(
+      [](psl::span<const Variable*> args) {
+        args[0]->as<Variable&>() = *args[1];
+        return psl::Empty();
+      },
+      psl::type_id<void>(),
+      psl::vector_of(psl::TypeId(psl::type_id<Variable>(), false, true),
+                     psl::TypeId(psl::type_id<Any>(), false, false)));
   context("__typename") = low_level(
       [](psl::span<const Variable*> args) -> psl::string { return args[0]->type_name(); },
       psl::type_id<psl::string>(), psl::vector_of(psl::TypeId(psl::type_id<Any>(), false, false)));
-  context.type<size_t>("size_t");
+  context.type<size_t>("u64");
   context.type<psl::Empty>("void");
+  context.type<void>("void");
   context.type<Function>("function");
-  context.type<int, Context::Float>("int").ctor_variant<float>(true);
+  context.type<int32_t, Context::Float>("i32").ctor_variant<float>(true);
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
   context("--x") = +[](int& x) -> decltype(auto) { return --x; };
@@ -40,7 +50,7 @@ Context::Context() {
   context("*=") = +[](float& a, int b) -> float& { return a *= b; };
   context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  context.type<float, Context::Float>("float").ctor_variant<int>();
+  context.type<float, Context::Float>("f32").ctor_variant<int32_t>();
   context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
   context.type<bool>("bool");
@@ -52,7 +62,7 @@ Context::Context() {
       "=", +[](bool& a, bool b) -> bool& { return a = b; });
   context.type<bool>("bool");
 
-  context.type<psl::string>("string");
+  context.type<psl::string>("str");
   context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
   context("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
   context("+") = +[](psl::string a, psl::string b) { return a + b; };
@@ -89,107 +99,136 @@ size_t Context::converter_index(size_t from_id, size_t to_id) const {
   return index;
 }
 
-static bool is_id_part(char c) {
-  return psl::isalpha(c) || psl::isdigit(c) || c == '_';
+// static bool is_id_part(char c) {
+//   return psl::isalpha(c) || psl::isdigit(c) || c == '_';
+// }
+
+static int common_prefix_length(psl::string_view a, psl::string_view b) {
+  auto i = size_t(0);
+  for (; i < psl::min(a.size(), b.size()); i++) {
+    if (a[i] != b[i])
+      break;
+  }
+  return i;
 }
 
-static int difference(psl::string_view a, psl::string_view b) {
-  auto diff = 0;
-  for (size_t i = 0; i < psl::max(a.size(), b.size()); i++) {
-    if (i >= a.size())
-      diff++;
-    else if (i >= b.size())
-      diff++;
-    else if (a[i] != b[i]) {
-      if (is_id_part(a[i]) && !is_id_part(b[i]))
-        diff += 1000;
-      if (!is_id_part(a[i]) && is_id_part(b[i]))
-        diff += 1000;
-      diff += 8;
+static int common_part_length(psl::string_view a, psl::string_view b) {
+  auto max_len = 0;
+  for (size_t i = 0; i < b.size(); i++) {
+    max_len = psl::max(common_prefix_length(a, b.substr(i)), max_len);
+  }
+  return max_len;
+}
+
+static psl::string function_signature(const Context& context, const Function& function) {
+  auto sig = psl::string("(");
+  for (const auto& ptid : function.parameter_type_ids()) {
+    sig += context.get_type(ptid.code).alias + ", ";
+  }
+  if (sig.size() != 0) {
+    sig.pop_back();
+    sig.pop_back();
+  }
+  sig += "): " + context.get_type(function.return_type_id()).alias;
+  return sig;
+}
+
+Context::FindUniqueFResult Context::find_unique_f(psl::string_view name) const {
+  auto result = FindUniqueFResult();
+  auto [first, last] = functions_map.equal_range(name);
+  if (first == last) {
+    result.status = FindUniqueFResult::None;
+  } else {
+    --last;
+    if (first == last) {
+      result.status = FindUniqueFResult::Found;
+      result.function_index = first->second;
+    } else {
+      result.status = FindUniqueFResult::TooMany;
+      ++last;
+      for (auto [name, fi] : psl::range(first, last))
+        result.candidates += name + function_signature(*this, functions[fi]) + "\n";
+      result.candidates.pop_back();
     }
   }
-  return diff;
+
+  return result;
 }
 
-Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> arg_type_ids) const {
+Context::FindFResult Context::find_f(psl::string_view name, psl::span<size_t> atids) const {
   auto [first, last] = functions_map.equal_range(name);
-  auto min_difference = size_t(-1);
-  auto best_match = last;
+  auto best_coeff = atids.size();
+  auto best_candidates = psl::vector<size_t>();
   auto best_converts = psl::vector<Context::FindFResult::ArgumentConversion>();
 
-  for (auto fi = first; fi != last; fi++) {
-    const auto& param_type_ids = functions[fi->second].parameter_type_ids();
-    if (param_type_ids.size() == 1 &&
-        param_type_ids[0].code == psl::type_id<psl::span<const Variable*>>()) {
+  auto arg_signature = psl::string();
+  for (auto atid : atids)
+    arg_signature += get_type(atid).alias + ", ";
+  if (arg_signature.size()) {
+    arg_signature.pop_back();
+    arg_signature.pop_back();
+  }
+
+  for (auto fi : psl::range(first, last)) {
+    const auto& ptids = functions[fi.second].parameter_type_ids();
+    if (ptids.size() == 1 && ptids[0].code == psl::type_id<psl::span<const Variable*>>()) {
       best_converts = {};
-      best_match = fi;
+      best_candidates.clear();
+      best_candidates.push_back(fi.second);
       break;
-    } else if (arg_type_ids.size() == param_type_ids.size()) {
+    } else if (atids.size() == ptids.size()) {
       auto converts = psl::vector<Context::FindFResult::ArgumentConversion>();
       auto difference = size_t{0};
-      auto match = true;
-      for (size_t i = 0; i < arg_type_ids.size(); i++) {
-        if (arg_type_ids[i] == param_type_ids[i].code) {
-        } else if (param_type_ids[i].code == psl::type_id<Any>()) {
-        } else if (auto idx = converter_index(arg_type_ids[i], param_type_ids[i].code);
-                   (!param_type_ids[i].is_ref || param_type_ids[i].is_const) && idx != size_t(-1)) {
-          Debug("`", name, "` need to convert ", find_type(arg_type_ids[i]).alias, " to ",
-                find_type(param_type_ids[i].code).alias);
-          converts.push_back({i, idx, param_type_ids[i].code});
+      for (size_t i = 0; i < atids.size(); i++) {
+        if (atids[i] == ptids[i].code) {
+        } else if (ptids[i].code == psl::type_id<Any>()) {
+        } else if (auto idx = converter_index(atids[i], ptids[i].code);
+                   (!ptids[i].is_ref || ptids[i].is_const) && idx != size_t(-1)) {
+          converts.push_back({i, idx, ptids[i].code});
           difference += 1;
         } else {
-          match = false;
+          difference = atids.size() + 1;
           break;
         }
       }
-      if (match && difference <= min_difference) {
-        min_difference = difference;
-        best_match = fi;
+      if (difference <= best_coeff) {
+        if (difference < best_coeff) {
+          best_candidates.clear();
+        }
+        best_coeff = difference;
+        best_candidates.push_back(fi.second);
         best_converts = converts;
       }
     }
   }
 
-  if (best_match != last) {
-    auto fi = best_match->second;
+  if (best_candidates.size() == 1) {
+    auto fi = best_candidates.front();
     return {fi, functions[fi].return_type_id(), best_converts};
+  } else if (best_candidates.size() > 1) {
+    auto candidates = psl::string();
+    for (auto fi : best_candidates)
+      candidates += name + function_signature(*this, functions[fi]) + "\n";
+    if (candidates.size())
+      candidates.pop_back();
+    exception("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n",
+              candidates);
   } else {
     if (first != last) {
-      auto arg_type_aliases = psl::string();
       auto candidates = psl::string();
-      for (auto arg_type_id : arg_type_ids) {
-        arg_type_aliases += find_type(arg_type_id).alias + ", ";
-      }
-      if (arg_type_aliases.size()) {
-        arg_type_aliases.pop_back();
-        arg_type_aliases.pop_back();
-      }
-      for (auto fi = first; fi != last; fi++) {
-        candidates += fi->first + '(';
-        for (auto param_type_id : functions[fi->second].parameter_type_ids()) {
-          candidates += find_type(param_type_id.code).alias + ", ";
-        }
-        if (functions[fi->second].n_parameters() != 0) {
-          candidates.pop_back();
-          candidates.pop_back();
-        }
-        candidates += ")\n";
-      }
+      for (auto [name, fi] : psl::range(first, last))
+        candidates += name + function_signature(*this, functions[fi]) + "\n";
       if (candidates.size())
         candidates.pop_back();
-      exception("Function `", name, "(", arg_type_aliases, ")` is not found, candidates:\n",
+      exception("Function `", name, "(", arg_signature, ")` is not found, candidates:\n",
                 candidates);
     } else {
       auto likely_func_name = psl::string();
-      auto min_difference = 8;
+      auto max_common_part_length = 0;
       for (const auto& f : functions_map) {
-        if (f.first == "x++")
-          continue;
-        if (f.first == "x--")
-          continue;
-        if (auto diff = difference(name, f.first); diff < min_difference) {
+        if (auto len = common_part_length(name, f.first); len > max_common_part_length) {
           likely_func_name = f.first;
-          min_difference = diff;
+          max_common_part_length = len;
         }
       }
 
@@ -207,9 +246,9 @@ void Context::add_f(psl::string name, Function func) {
 }
 
 Variable Context::call(psl::string_view name, psl::span<const Variable*> args) const {
-  auto arg_type_ids = psl::to<psl::vector<size_t>>(
-      psl::transform(args, [](const Variable* x) { return x->type_id(); }));
-  auto fr = find_f(name, arg_type_ids);
+  auto atids =
+      psl::to<psl::vector<size_t>>(psl::transform(args, [](auto x) { return x->type_id(); }));
+  auto fr = find_f(name, atids);
   CHECK(fr.converts.size() == 0);
   return functions[fr.function_index].call(args);
 }
@@ -232,28 +271,6 @@ static bool match_prefix(psl::string_view base, psl::string_view candidate) {
     if (base[i] != candidate[i])
       return false;
   return true;
-}
-
-psl::vector<psl::string> Context::candidates(psl::string part) const {
-  auto result = psl::vector<psl::string>();
-  for (const auto& f : functions_map) {
-    if (match_prefix(part, f.first)) {
-      auto signature = f.first + "(";
-      for (auto param_type_id : functions[f.second].parameter_type_ids()) {
-        if (auto it = types.find(param_type_id.code); it != types.end())
-          signature += it->second.alias + ", ";
-        else
-          Fatal("Some type trait is not set");
-      }
-      if (functions[f.second].n_parameters() != 0) {
-        signature.pop_back();
-        signature.pop_back();
-      }
-      result.push_back(signature + ")");
-    }
-  }
-
-  return result;
 }
 
 psl::string Context::complete(psl::string part) const {
@@ -282,22 +299,25 @@ psl::string Context::complete(psl::string part) const {
   return result.substr(part.size());
 }
 
-size_t Context::get_type_id(psl::string name) const {
-  for (const auto& type : types) {
-    if (type.second.alias == name) {
+size_t Context::find_type_id(psl::string_view name) const {
+  for (const auto& type : types)
+    if (type.second.alias == name)
       return type.first;
-    }
-  }
+  return size_t(-1);
+}
+size_t Context::get_type_id(psl::string_view name) const {
+  if (auto id = find_type_id(name); id != size_t(-1))
+    return id;
   exception("Type `", name, "` is not registered");
 }
 
-Context::TypeTrait& Context::find_type(size_t type_id) {
+Context::TypeTrait& Context::get_type(size_t type_id) {
   if (auto it = types.find(type_id); it != types.end())
     return it->second;
   else
     exception("Type with id ", type_id, " is not register");
 }
-const Context::TypeTrait& Context::find_type(size_t type_id) const {
+const Context::TypeTrait& Context::get_type(size_t type_id) const {
   if (auto it = types.find(type_id); it != types.end())
     return it->second;
   else

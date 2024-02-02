@@ -550,6 +550,19 @@ void test_algorithm() {
   ys = xs | psl::filter_([](int x) { return x % 2 == 1; }) | psl::to_<psl::vector<int>>();
   CHECK_EQ(ys, psl::vector_of(1, 3));
   SCOPE_END
+
+  SCOPE_BEGIN
+  auto xs = _xs_;
+  auto ys = xs | psl::reverse_() | psl::to_<psl::vector<int>>();
+  auto i = 0;
+  for(auto [x, y]: psl::tie(xs, ys)) {
+    CHECK_EQ(x, xs[i]);
+    CHECK_EQ(y, ys[i]);
+    i++;
+  }
+  CHECK_EQ(i, 5);
+  
+  SCOPE_END
 }
 
 int main() {
