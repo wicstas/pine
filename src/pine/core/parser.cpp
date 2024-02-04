@@ -20,10 +20,10 @@ Context get_default_context() {
   array2d_context(ctx);
   rng_context(ctx);
   geometry_context(ctx);
+  image_context(ctx);
   fileio_context(ctx);
   light_context(ctx);
   node_context(ctx);
-  image_context(ctx);
   material_context(ctx);
   film_context(ctx);
   camera_context(ctx);
@@ -37,6 +37,8 @@ Context get_default_context() {
           "reset", +[](psl::shared_ptr<Timer>& x) { return float(x->Reset()); });
   ctx.type<BVH>("BVH").ctor();
   ctx.type<Accel>("Accel").ctor_variant<BVH>();
+  ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
+  ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<Integrator>("Integrator");
   ctx.type<RTIntegrator>("RTIntegrator");
   ctx.type<PixelIntegrator>("PixelIntegrator");
@@ -57,11 +59,9 @@ Context get_default_context() {
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor<Accel, Sampler, psl::string>()
       .method("render", &VisualizerIntegrator::render);
-  ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
-  ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<psl::string>()
-      .ctor_variant<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
-                    psl::string>("str", [](const auto& x) {
+      .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
+                 psl::string>([](const auto& x) {
         using psl::to_string;
         return to_string(x);
       });

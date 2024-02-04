@@ -32,4 +32,3 @@ using nullptr_t = decltype(nullptr);
 
 }  // namespace psl
 #endif
-

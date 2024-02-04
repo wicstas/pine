@@ -4,8 +4,8 @@
 namespace pine {
 
 void math_context(Context &ctx) {
-  ctx("pi") = pi;
-  ctx("E") = psl::E;
+  // ctx("pi") = pi;
+  // ctx("E") = psl::E;
   ctx("min") = psl::min<float>;
   ctx("max") = psl::max<float>;
   ctx("abs") = psl::abs<float>;

@@ -23,6 +23,8 @@ vec3 NodeImage::eval(const NodeEvalCtx& ctx) const {
 }
 
 void node_context(Context& ctx) {
+  ctx.type<Nodef>("Nodef");
+  ctx.type<Node3f>("Node3f");
   ctx.type<NodePosition>("Position").ctor<>();
   ctx.type<NodeNormal>("Normal").ctor<>();
   ctx.type<NodeUV>("UV").ctor<>();
@@ -87,13 +89,13 @@ void node_context(Context& ctx) {
         NodeBinary<vec3, '*'>(t, psl::move(b)),
         NodeBinary<vec3, '*'>(NodeBinary<vec3, '-'>(Node3f(vec3(1.0f)), t), psl::move(a)));
   };
-  ctx.type<Nodef>("Nodef")
+  ctx.type<Nodef>()
       .ctor_variant<int, float, NodeConstant<float>, NodeBinary<float, '+'>, NodeBinary<float, '-'>,
                     NodeBinary<float, '*'>, NodeBinary<float, '/'>, NodeBinary<float, '^'>,
                     NodeUnary<float, '-'>, NodeUnary<float, 'a'>, NodeUnary<float, 's'>,
                     NodeUnary<float, 'r'>, NodeUnary<float, 'f'>, NodeComponent, NodeNoisef,
                     NodeCheckerboard>();
-  ctx.type<Node3f>("Node3f")
+  ctx.type<Node3f>()
       .ctor_variant<vec3i, vec3, NodeConstant<vec3>, NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>,
                     NodeBinary<vec3, '*'>, NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>,
                     NodeUnary<vec3, '-'>, NodeUnary<vec3, 'a'>, NodeUnary<vec3, 's'>,

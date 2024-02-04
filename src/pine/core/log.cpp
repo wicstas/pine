@@ -4,6 +4,13 @@
 
 namespace pine {
 
+void stop_program() {
+  // #ifndef NDEBUG
+  psl::abort();
+  // #endif
+  // throw FatalException{};
+}
+
 void cout_stream(psl::string_view data) {
   psl::cout << data;
 }

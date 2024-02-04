@@ -4,6 +4,7 @@
 #include <pine/core/material.h>
 #include <pine/core/ray.h>
 
+#include <psl/function.h>
 #include <psl/variant.h>
 
 namespace pine {
@@ -263,7 +264,7 @@ private:
 };
 
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
-TriangleMesh height_map_to_mesh(vec2i resolution, const Function& height_function);
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function);
 
 struct Shape : psl::Variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using Variant::Variant;

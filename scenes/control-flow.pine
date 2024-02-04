@@ -1,19 +1,19 @@
 var count = 0;
 while(count < 5)
-    print(count++, " ");
-println();
+    print(count++ + " ");
+println("");
 
 var count = 0;
 while(true) {
-    print(count++, " ");
+    print(count++ + " ");
     if(count >= 5)
         break;
 }
-println();
+println("");
 
 for(var i = 0; i < 5; i++)
-    print(i, " ");
-println();
+    print(i + " ");
+println("");
 
 for(var i = 0; i < 5; i++) {
     if(i < 2)
@@ -25,4 +25,4 @@ for(var i = 0; i < 5; i++) {
     else
         print("case3 ");
 }
-println();
+println("");

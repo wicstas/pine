@@ -4,15 +4,13 @@
 
 #include <psl/optional.h>
 #include <psl/memory.h>
-#include <psl/vector.h>
-#include <psl/string.h>
 #include <psl/array.h>
 
 namespace pine {
 
 struct SourceLines {
   SourceLines() = default;
-  SourceLines(psl::string_view tokens, size_t lines_padding);
+  SourceLines(psl::string_view tokens, size_t line_paddings);
 
   psl::optional<psl::string_view> next_line(size_t row) const;
 
@@ -27,7 +25,7 @@ struct SourceLines {
 
 private:
   psl::vector<psl::string> lines;
-  size_t lines_padding = invalid;
+  size_t line_paddings = invalid;
   static constexpr size_t invalid = static_cast<size_t>(-1);
 };
 
@@ -51,6 +49,7 @@ struct Bytecode {
     LoadBoolConstant,
     LoadStringConstant,
     Call,
+    InvokeAsFunction,
     Return,
     IntPreInc,
     IntPreDec,
@@ -122,21 +121,21 @@ struct Bytecodes {
   Bytecodes(const Context& context, SourceLines sl);
 
   size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
-  void add_typed(psl::string name, size_t type_id);
-  void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
+  void placehold_typed(TypeTag type, psl::string name);
+  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value,
                  psl::span<uint16_t> args = {});
-  void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id, uint16_t arg0) {
+  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value, uint16_t arg0) {
     uint16_t args[]{arg0};
-    add_typed(instruction, value, type_id, args);
+    add_typed(instruction, type, value, args);
   }
-  void add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id, uint16_t arg0,
+  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value, uint16_t arg0,
                  uint16_t arg1) {
     uint16_t args[]{arg0, arg1};
-    add_typed(instruction, value, type_id, args);
+    add_typed(instruction, type, value, args);
   }
 
   void name_top_var(psl::string name);
-  size_t var_type(size_t var_index) const;
+  const TypeTag& var_type(size_t var_index) const;
   uint16_t var_index_by_name(psl::string_view name) const;
   uint16_t top_var_index() const;
   void pop_stack();
@@ -180,7 +179,7 @@ private:
   };
   psl::vector<Bytecode> codes;
   psl::vector<psl::pair<psl::string, size_t>> variable_map;
-  psl::vector<size_t> stack;
+  psl::vector<TypeTag> stack;
   psl::vector<ScopeInfo> scope_stack;
   psl::vector<psl::string> string_region;
 

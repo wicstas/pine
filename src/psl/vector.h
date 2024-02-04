@@ -132,6 +132,10 @@ public:
   void pop_back() {
     resize(size() - 1);
   }
+  void pop_back(size_t n) {
+    psl_check(n <= size());
+    resize(size() - n);
+  }
   void pop_front() {
     erase(begin());
   }

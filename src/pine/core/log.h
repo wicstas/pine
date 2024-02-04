@@ -26,6 +26,7 @@ private:
 };
 
 struct FatalException {};
+[[noreturn]] void stop_program();
 
 template <typename... Args>
 void Debug(const Args&... args) {
@@ -56,10 +57,7 @@ template <typename... Args>
 [[noreturn]] void Fatal(const Args&... args) {
   using psl::to_string;
   fatal_stream(to_string(args...) + "\n");
-#ifndef NDEBUG
-  psl::abort();
-#endif
-  throw FatalException{};
+  stop_program();
 }
 template <typename... Args>
 [[noreturn]] void exception(const Args&... args) {

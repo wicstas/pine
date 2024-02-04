@@ -4,45 +4,53 @@
 
 namespace pine {
 void vecmath_context(Context& ctx) {
-  ctx.type<vec2i, Context::Complex>("vec2i")
+  ctx.type<vec2i, Context::Complex>("vec2i");
+  ctx.type<vec2, Context::Complex>("vec2");
+  ctx.type<vec3i, Context::Complex>("vec3i");
+  ctx.type<vec3, Context::Complex>("vec3");
+  ctx.type<vec4, Context::Complex>("vec4");
+  ctx.type<mat2>("mat2");
+  ctx.type<mat3>("mat3");
+  ctx.type<mat4>("mat4");
+
+  ctx.type<vec2i>()
       .ctor<int>()
       .ctor<int, int>()
       .member("x", &vec2i::x)
       .member("y", &vec2i::y)
       .method("[]", overloaded<int>(&vec2i::operator[]));
-  ctx.type<vec2, Context::Complex>("vec2")
+  ctx.type<vec2>()
       .ctor<float, float>()
       .ctor_variant<vec2i, int, float>()
       .member("x", &vec2::x)
       .member("y", &vec2::y)
       .method("[]", overloaded<int>(&vec2::operator[]));
-  ctx.type<vec3i, Context::Complex>("vec3i")
+  ctx.type<vec3i>()
       .ctor<int>()
       .ctor<int, int, int>()
       .member("x", &vec3i::x)
       .member("y", &vec3i::y)
       .member("z", &vec3i::z)
       .method("[]", overloaded<int>(&vec3i::operator[]));
-  ctx.type<vec3, Context::Complex>("vec3")
+  ctx.type<vec3>()
       .ctor<float, float, float>()
       .ctor_variant<vec3i, int, float>()
       .member("x", &vec3::x)
       .member("y", &vec3::y)
       .member("z", &vec3::z)
       .method("[]", overloaded<int>(&vec3::operator[]));
-  ctx.type<vec4, Context::Complex>("vec4")
+  ctx.type<vec4>()
       .ctor<float, float, float, float>()
-      .ctor_variant<vec4i, int, float>()
+      .ctor_variant<int, float>()
       .member("x", &vec4::x)
       .member("y", &vec4::y)
       .member("z", &vec4::z)
       .member("w", &vec4::w)
       .method("[]", overloaded<int>(&vec4::operator[]));
-  ctx.type<mat2>("mat2").ctor<vec2, vec2>().method("[]", overloaded<int>(&mat2::operator[]));
-  ctx.type<mat3>("mat3").ctor<vec3, vec3, vec3>().ctor<mat4>().method(
-      "[]", overloaded<int>(&mat3::operator[]));
-  ctx.type<mat4>("mat4").ctor<vec4, vec4, vec4, vec4>().method("[]",
-                                                               overloaded<int>(&mat4::operator[]));
+  ctx.type<mat2>().ctor<vec2, vec2>().method("[]", overloaded<int>(&mat2::operator[]));
+  ctx.type<mat3>().ctor<vec3, vec3, vec3>().ctor<mat4>().method("[]",
+                                                                overloaded<int>(&mat3::operator[]));
+  ctx.type<mat4>().ctor<vec4, vec4, vec4, vec4>().method("[]", overloaded<int>(&mat4::operator[]));
   ctx("*") = +[](const mat3& a, vec3 b) { return a * b; };
   ctx("*") = +[](const mat3& a, const mat3& b) { return a * b; };
   ctx("*") = +[](const mat4& a, vec4 b) { return a * b; };

@@ -1,6 +1,7 @@
 #include <psl/algorithm.h>
 #include <psl/iostream.h>
 #include <psl/optional.h>
+#include <psl/function.h>
 #include <psl/variant.h>
 #include <psl/memory.h>
 #include <psl/string.h>
@@ -21,6 +22,11 @@ void (*pine::warning_stream)(psl::string_view data) = +[](psl::string_view data)
 void (*pine::fatal_stream)(psl::string_view data) = +[](psl::string_view data) {
   printf("%s", psl::string(data).c_str());
 };
+namespace pine {
+[[noreturn]] void stop_program() {
+  abort();
+}
+}  // namespace pine
 
 #define SCOPE_BEGIN {
 #define SCOPE_END }
@@ -326,19 +332,16 @@ void test_memory() {
     a = psl::unique_ptr<MockA1, MockDeleter<MockA1>>(new MockA1{});
   }
   {
-    emitter.expect(psl::vector_of<psl::string>("Ac", "Bc", "B", "A"));
-    auto a = psl::shared_ptr<const MockA, MockDeleter<const MockA>>(new MockA{});
-    auto b = psl::shared_ptr<MockB, MockDeleter<MockB>>(new MockB{});
+    emitter.expect(psl::vector_of<psl::string>("Ac", "Bc"));
+    auto a = psl::shared_ptr<const MockA>(new MockA{});
+    auto b = psl::shared_ptr<MockB>(new MockB{});
   }
   {
-    emitter.expect(psl::vector_of<psl::string>("Ac", "Bc", "Ac", "A1c", "B", "A", "A"));
-    auto a = psl::shared_ptr<const MockA, MockDeleter<const MockA>>(new MockA{});
+    auto a = psl::make_shared<psl::vector<int>>(psl::vector_of(1, 2, 3));
+    auto b = psl::make_shared<psl::vector<int>>(psl::vector_of(4, 5));
     auto c = a;
-    a = c;
-    auto d = a;
-    { auto e = c; }
-    auto b = psl::shared_ptr<MockB, MockDeleter<MockB>>(new MockB{});
-    a = psl::shared_ptr<MockA1, MockDeleter<MockA1>>(new MockA1{});
+    c = b;
+    b = a;
   }
   {
     auto ov = psl::make_unique<psl::vector<int>>();
@@ -438,6 +441,16 @@ void test_array() {
   CHECK_EQ(ys[0], 1);
   CHECK_EQ(ys[1], 5);
   CHECK_EQ(ys[2], 3);
+}
+
+int add_one(int x) {
+  return x + 1;
+}
+void test_functional() {
+  auto f = psl::function<int, int>(add_one);
+  CHECK_EQ(f(10), 11);
+  f = psl::function<int, int>([](int x) { return x + 2; });
+  CHECK_EQ(f(10), 12);
 }
 
 void test_algorithm() {
@@ -555,13 +568,13 @@ void test_algorithm() {
   auto xs = _xs_;
   auto ys = xs | psl::reverse_() | psl::to_<psl::vector<int>>();
   auto i = 0;
-  for(auto [x, y]: psl::tie(xs, ys)) {
+  for (auto [x, y] : psl::tie(xs, ys)) {
     CHECK_EQ(x, xs[i]);
     CHECK_EQ(y, ys[i]);
     i++;
   }
   CHECK_EQ(i, 5);
-  
+
   SCOPE_END
 }
 
@@ -571,5 +584,6 @@ int main() {
   test_string();
   test_memory();
   test_optional();
+  test_functional();
   test_algorithm();
 }

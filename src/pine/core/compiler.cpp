@@ -41,18 +41,14 @@ psl::vector<psl::string> split(psl::string_view input, auto pred) {
   return parts;
 }
 
-SourceLines::SourceLines(psl::string_view tokens, size_t lines_padding)
-    : lines_padding{lines_padding} {
+SourceLines::SourceLines(psl::string_view tokens, size_t line_paddings)
+    : line_paddings{line_paddings} {
   lines = split(tokens, [](char c) { return c == '\n' || c == '\r' || c == '\f'; });
-  for (size_t i = 0; i < lines_padding; i++)
-    lines.insert(lines.begin(), "");
-  for (size_t i = 0; i < lines_padding; i++)
-    lines.push_back("");
 }
 
 psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
-  DCHECK_LE(row + lines_padding, lines.size());
-  if (row + lines_padding == lines.size())
+  CHECK_LE(row, lines.size());
+  if (row == lines.size())
     return psl::nullopt;
   return lines[row];
 }
@@ -67,14 +63,15 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
 
 [[noreturn]] void SourceLines::error_impl(size_t row, size_t column,
                                           psl::string_view message) const {
-  DCHECK(lines_padding != invalid);
-  auto vicinity = psl::string();
-  for (size_t i = row - lines_padding; i <= row; i++)
-    vicinity += " | " + lines[i] + "\n";
-  vicinity += "  -" + psl::string_n_of(column, '-') + "^\n";
-  for (size_t i = row + 1; i <= row + lines_padding; i++)
-    vicinity += " | " + lines[i] + "\n";
+  CHECK(line_paddings != invalid);
+  CHECK_LT(row, lines.size());
 
+  auto vicinity = psl::string();
+  for (int64_t i = row - line_paddings; i <= int64_t(row); i++)
+    vicinity += " | " + (i < 0 ? psl::string() : lines[i]) + "\n";
+  vicinity += "  -" + psl::string_n_of(column, '-') + "^\n";
+  for (size_t i = row + 1; i <= row + line_paddings; i++)
+    vicinity += " | " + (i >= lines.size() ? psl::string() : lines[i]) + "\n";
   if (vicinity.size())
     vicinity.pop_back();
 
@@ -83,7 +80,7 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
 
 Bytecodes::Bytecodes(const Context& context, SourceLines sl) : sl(psl::move(sl)) {
   for (const auto& var : context.variables)
-    stack.push_back(var.type_id());
+    stack.push_back(var.first);
   for (const auto& var : context.variables_map)
     variable_map.push_back({var.first, var.second});
 }
@@ -92,27 +89,26 @@ size_t Bytecodes::add(Bytecode::Instruction instruction, size_t value0, size_t v
   codes.push_back({instruction, value0, value1});
   return codes.size() - 1;
 }
-void Bytecodes::add_typed(psl::string name, size_t type_id) {
-  stack.push_back(type_id);
+void Bytecodes::placehold_typed(TypeTag type, psl::string name) {
+  stack.push_back(psl::move(type));
   name_top_var(psl::move(name));
 }
-void Bytecodes::add_typed(Bytecode::Instruction instruction, size_t value, size_t type_id,
+void Bytecodes::add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value,
                           psl::span<uint16_t> args) {
-  codes.push_back({instruction, value, type_id, args});
-  stack.push_back(type_id);
+  codes.push_back({instruction, value, 0, args});
+  stack.push_back(psl::move(type));
 }
 
 void Bytecodes::name_top_var(psl::string name) {
   CHECK(stack.size() != 0);
   variable_map.push_back({psl::move(name), stack.size() - 1});
 }
-size_t Bytecodes::var_type(size_t var_index) const {
+const TypeTag& Bytecodes::var_type(size_t var_index) const {
   CHECK_LE(var_index, top_var_index());
   return stack[var_index];
 }
 uint16_t Bytecodes::var_index_by_name(psl::string_view name) const {
-  using psl::pipe::operator|;
-  if (auto it = psl::find_if(variable_map | psl::reverse_(),
+  if (auto it = psl::find_if(psl::reverse_adapter(variable_map),
                              psl::composite(psl::equal_to(name), psl::first_of_pair));
       it.unwrap() != variable_map.end())
     return it->second;
@@ -174,7 +170,6 @@ struct Expr : ASTNode {
     DivE = 0000100011,
     ModE = 0000100100,
     Assi = 0000100101,
-    Init = 0000100110,
     // clang-format on
   } op;
 
@@ -307,7 +302,7 @@ struct ReturnStmt {
   }
   void emit(Context& context, Bytecodes& bytecodes) const {
     auto vi = expr.emit(context, bytecodes);
-    bytecodes.add(Bytecode::Return, vi, bytecodes.var_type(vi));
+    bytecodes.add(Bytecode::Return, vi);
   }
 
   Expr expr;
@@ -403,7 +398,7 @@ struct ClassDefinition : ASTNode {
         members(psl::move(members)) {
   }
 
-  size_t emit(Context& context, Bytecodes& bytecodes) const;
+  void emit(Context& context, Bytecodes& bytecodes) const;
 
 private:
   psl::string name;
@@ -429,7 +424,9 @@ uint16_t Id::emit(Context& context, Bytecodes& bytecodes) const {
       bytecodes.error(*this, "Reference to function `", value, "` is ambiguous, candidates:\n",
                       fr.candidates);
     } else {
-      bytecodes.add_typed(Bytecode::LoadFunction, fr.function_index, psl::type_id<Function>());
+      bytecodes.add_typed(Bytecode::LoadFunction,
+                          TypeTag(context.functions[fr.function_index].signature(), false),
+                          fr.function_index);
       return bytecodes.top_var_index();
     }
   }
@@ -441,47 +438,46 @@ NumberLiteral::NumberLiteral(const psl::string& str) {
   else
     valuei = psl::stoi(str);
 }
-uint16_t NumberLiteral::emit(Context&, Bytecodes& bytecodes) const {
+uint16_t NumberLiteral::emit(Context& context, Bytecodes& bytecodes) const {
   if (is_float)
-    bytecodes.add_typed(Bytecode::LoadFloatConstant, psl::bitcast<uint32_t>(valuef),
-                        psl::type_id<float>());
+    bytecodes.add_typed(Bytecode::LoadFloatConstant, context.tag<float>(),
+                        psl::bitcast<uint32_t>(valuef));
   else
-    bytecodes.add_typed(Bytecode::LoadIntConstant, psl::bitcast<uint32_t>(valuei),
-                        psl::type_id<int>());
+    bytecodes.add_typed(Bytecode::LoadIntConstant, context.tag<int>(),
+                        psl::bitcast<uint32_t>(valuei));
   return bytecodes.top_var_index();
 }
-uint16_t BooleanLiteral::emit(Context&, Bytecodes& bytecodes) const {
-  bytecodes.add_typed(Bytecode::LoadBoolConstant, value, psl::type_id<bool>());
+uint16_t BooleanLiteral::emit(Context& context, Bytecodes& bytecodes) const {
+  bytecodes.add_typed(Bytecode::LoadBoolConstant, context.tag<bool>(), value);
   return bytecodes.top_var_index();
 }
-uint16_t StringLiteral::emit(Context&, Bytecodes& bytecodes) const {
-  auto p = bytecodes.add_string(value);
-  bytecodes.add_typed(Bytecode::LoadStringConstant, p, psl::type_id<psl::string>());
+uint16_t StringLiteral::emit(Context& context, Bytecodes& bytecodes) const {
+  auto si = bytecodes.add_string(value);
+  bytecodes.add_typed(Bytecode::LoadStringConstant, context.tag<psl::string>(), si);
   return bytecodes.top_var_index();
 }
 uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
   auto arg_indices = psl::vector<uint16_t>(args.size());
   if (args.size() >= 2 && args.size() <= 4) {
-    auto atids = psl::vector<size_t>(args.size());
+    auto atypes = psl::vector<TypeTag>(args.size());
     for (size_t i = 0; i < args.size(); i++) {
       arg_indices[i] = args[i].emit(context, bytecodes);
-      atids[i] = bytecodes.var_type(arg_indices[i]);
+      atypes[i] = bytecodes.var_type(arg_indices[i]);
     }
     auto float_ = false;
-    for (auto id : atids)
-      if (id == psl::type_id<float>()) {
+    for (auto id : atypes)
+      if (id.name == "f32") {
         float_ = true;
         break;
       }
-    auto [fi, rtid, converts] =
-        context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), atids);
+    auto [fi, rtype, converts] =
+        context.find_f("vec" + psl::to_string(args.size()) + (float_ ? "" : "i"), atypes);
     for (auto convert : converts) {
-      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+      bytecodes.add_typed(Bytecode::Call, convert.rtype, convert.converter_index,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      atids[convert.position] = convert.to_type_id;
     }
-    bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
+    bytecodes.add_typed(Bytecode::Call, rtype, fi, arg_indices);
     return bytecodes.top_var_index();
   } else {
     bytecodes.error(*this, "Only 2, 3, or 4 items should exist inside []");
@@ -489,35 +485,59 @@ uint16_t Vector::emit(Context& context, Bytecodes& bytecodes) const {
 
   return bytecodes.top_var_index();
 }
+static psl::string extract_return_type(psl::string_view type) {
+  auto depth = 0;
+  for (size_t i = 0; i < type.size(); i++) {
+    if (type[i] == '(')
+      depth++;
+    if (type[i] == ')')
+      depth--;
+    if (depth == 0 && type[i] == ':')
+      return psl::string(type.substr(i + 2));
+  }
+  return "";
+}
 uint16_t FunctionCall::emit(Context& context, Bytecodes& bytecodes) const {
   try {
-    // If `x` is a variable, then `x(...)` will be transformed to `()(x, ...)`,
-    // i.e. call the operator() with x as the first argument
     if (name != "()")
       if (auto vi = bytecodes.var_index_by_name(name); vi != uint16_t(-1)) {
-        auto args_ = args;
-        args_.push_front(Id(row, column, name));
-        return FunctionCall(row, column, "()", args_).emit(context, bytecodes);
+        if (psl::contains(bytecodes.var_type(vi).name, ':')) {
+          auto arg_indices = psl::vector<uint16_t>(args.size());
+
+          for (size_t i = 0; i < args.size(); i++) {
+            auto vi = args[i].emit(context, bytecodes);
+            arg_indices[i] = vi;
+          }
+          bytecodes.add_typed(Bytecode::InvokeAsFunction,
+                              TypeTag(extract_return_type(bytecodes.var_type(vi).name), false), vi,
+                              arg_indices);
+          return bytecodes.top_var_index();
+        } else {
+          // If `x` is a non-function variable, then `x(...)` will be transformed to `()(x, ...)`,
+          // i.e. call the operator() with x as the first argument
+          auto args_ = args;
+          args_.push_front(Id(row, column, name));
+          return FunctionCall(row, column, "()", args_).emit(context, bytecodes);
+        }
       }
     if (args.size() > 8)
       bytecodes.error(*this, "Functions can accept no more than 8 arguments, got ", args.size());
     auto arg_indices = psl::vector<uint16_t>(args.size());
-    auto atids = psl::vector<size_t>(args.size());
+    auto atypes = psl::vector<TypeTag>(args.size());
 
     for (size_t i = 0; i < args.size(); i++) {
       auto vi = args[i].emit(context, bytecodes);
       arg_indices[i] = vi;
-      atids[i] = bytecodes.var_type(vi);
+      atypes[i] = bytecodes.var_type(vi);
     }
 
-    auto [fi, rtid, converts] = context.find_f(name, atids);
+    auto [fi, rtype, converts] = context.find_f(name, atypes);
     for (auto convert : converts) {
-      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+      bytecodes.add_typed(Bytecode::Call, convert.rtype, convert.converter_index,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      atids[convert.position] = convert.to_type_id;
     }
-    bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices);
+    bytecodes.add_typed(Bytecode::Call, rtype, fi, arg_indices);
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -529,12 +549,11 @@ MemberAccess::MemberAccess(size_t row, size_t column, PExpr pexpr, Id id)
 uint16_t MemberAccess::emit(Context& context, Bytecodes& bytecodes) const {
   auto vi = pexpr->emit(context, bytecodes);
   try {
-    auto tid = bytecodes.var_type(vi);
-    auto fi = context.get_type(tid).find_member_accessor_index(id.value);
+    auto type = bytecodes.var_type(vi);
+    auto fi = context.get_type_trait(type.name).find_member_accessor_index(id.value);
     if (fi == size_t(-1))
-      bytecodes.error(*this, "Can't find member `", id.value, "` in type `",
-                      context.get_type(tid).alias, '`');
-    bytecodes.add_typed(Bytecode::Call, fi, context.functions[fi].return_type_id(), vi);
+      bytecodes.error(*this, "Can't find member `", id.value, "` in type `", type.name, '`');
+    bytecodes.add_typed(Bytecode::Call, context.functions[fi].rtype(), fi, vi);
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -545,16 +564,15 @@ Subscript::Subscript(size_t row, size_t column, PExpr pexpr, Expr index)
 }
 uint16_t Subscript::emit(Context& context, Bytecodes& bytecodes) const {
   uint16_t arg_indices[]{pexpr->emit(context, bytecodes), index.emit(context, bytecodes)};
-  size_t atids[]{bytecodes.var_type(arg_indices[0]), bytecodes.var_type(arg_indices[1])};
+  TypeTag atypes[]{bytecodes.var_type(arg_indices[0]), bytecodes.var_type(arg_indices[1])};
   try {
-    auto [fi, rtid, converts] = context.find_f("[]", atids);
+    auto [fi, rtype, converts] = context.find_f("[]", atypes);
     for (const auto& convert : converts) {
-      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+      bytecodes.add_typed(Bytecode::Call, convert.rtype, convert.converter_index,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      atids[convert.position] = convert.to_type_id;
     }
-    bytecodes.add_typed(Bytecode::Call, fi, rtid, arg_indices[0], arg_indices[1]);
+    bytecodes.add_typed(Bytecode::Call, rtype, fi, arg_indices[0], arg_indices[1]);
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
@@ -577,20 +595,20 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
   auto it = psl::next(ctor_body.elems.insert(
       ctor_body.elems.begin(),
       Stmt(Declaration("self", FunctionCall(row, column, "__" + class_name, {})))));
+
   for (const auto& capture : captures) {
     auto vi = bytecodes.var_index_by_name(capture.value);
     if (vi == uint16_t(-1))
       bytecodes.error(capture, "Variable `", capture.value, "` is not found");
-    auto tname = context.get_type(bytecodes.var_type(vi)).alias;
+    auto tname = bytecodes.var_type(vi).name;
     // Create a member that corresponds to each captured variable
     members.push_back(MemberDefinition(capture, Id(capture.row, capture.column, tname)));
 
     // In ctor: Initialize each member with their corresponding captured variable
-    auto member_name = Id(capture.row, capture.column, "__" + capture.value);
     it = psl::next(ctor_body.elems.insert(
         it, Stmt(Expr(Expr(MemberAccess(capture.row, capture.column, Id(row, column, "self"),
-                                        member_name)),
-                      Expr(capture), Expr::Init))));
+                                        Id(capture.row, capture.column, "__" + capture.value))),
+                      Expr(capture), Expr::Assi))));
     ctor_params.push_back(ParameterDeclaration(capture, Id(capture.row, capture.column, tname)));
     ctor_args.push_back(Expr(capture));
   }
@@ -602,37 +620,39 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
         Declaration(member.name.value,
                     Expr(MemberAccess(row, column, Id(row, column, "self"), member.name)), true)));
   }
-  auto lambda_class = ClassDefinition(
+  ClassDefinition(
       row, column, class_name,
       psl::vector_of(FunctionDefinition(row, column, class_name, Id(row, column, class_name),
                                         ctor_params, ctor_body)),
-      psl::vector_of(*body), members);
-  auto class_id = lambda_class.emit(context, bytecodes);
-  context.get_type(class_id).convert_tos[psl::type_id<Function>()] = context.functions.size();
-  auto atids = psl::vector<size_t>();
-  auto ptids = psl::vector<psl::TypeId>();
+      psl::vector_of(*body), members)
+      .emit(context, bytecodes);
+  auto atypes = psl::vector<TypeTag>();
+  auto ptypes = psl::vector<TypeTag>();
   for (size_t i = 0; i < body->params.size(); i++) {
-    auto tid = context.get_type_id(body->params[i].type.value);
-    atids.push_back(tid);
+    atypes.push_back(TypeTag(body->params[i].type.value, false));
     if (i != 0)
-      ptids.push_back(psl::TypeId(tid, false, false));
+      ptypes.push_back(TypeTag(body->params[i].type.value, false));
   }
-  auto fr = context.find_f("()", atids);
-  auto fid = fr.function_index;
-  context.functions.push_back(low_level(
-      [f = context.functions[fid], rid = fr.return_type_id,
-       ptids](psl::span<const Variable*> args) {
-        return Function(low_level(
-            [self = *args[0], f](psl::span<const Variable*> args) {
-              auto args_ =
-                  psl::vector<const Variable*, psl::static_allocator<const Variable*, 10>>();
-              args_.push_back(&self);
-              args_.insert_range(args_.end(), args);
-              return f.call(args_);
-            },
-            rid, ptids));
-      },
-      psl::type_id<Function>(), psl::vector_of(psl::TypeId(class_id, false, false))));
+  auto fr = context.find_f("()", atypes);
+  auto fi = fr.function_index;
+  auto signature = signature_from(fr.rtype, ptypes);
+  auto& type_trait = context.types[signature] = Context::TypeTrait(signature);
+  type_trait.add_from_converter(class_name, context.functions.size());
+  context.functions.push_back(Function(
+      tag<Function, psl::span<const Variable*>>(
+          [f = context.functions[fi], rtype = fr.rtype, ptypes](psl::span<const Variable*> args) {
+            return Function(
+                lambda<psl::span<const Variable*>>([self = *args[0],
+                                                    f](psl::span<const Variable*> args) {
+                  auto args_ =
+                      psl::vector<const Variable*, psl::static_allocator<const Variable*, 10>>();
+                  args_.push_back(&self);
+                  args_.insert_range(args_.end(), args);
+                  return f.call(args_);
+                }),
+                rtype, ptypes);
+          }),
+      TypeTag(signature, false), psl::vector_of(TypeTag(class_name, false))));
   // Create the lambda object
   return Expr(FunctionCall(row, column, class_name, ctor_args)).emit(context, bytecodes);
 }
@@ -643,26 +663,26 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto vi = x.emit(context, bytecodes);
     uint16_t arg_indices[]{vi};
-    size_t atids[]{bytecodes.var_type(vi)};
+    TypeTag atypes[]{bytecodes.var_type(vi)};
     auto fr = Context::FindFResult();
     switch (op) {
       case None: break;
-      case PreInc: fr = context.find_f("++x", atids); break;
-      case PreDec: fr = context.find_f("--x", atids); break;
-      case PostInc: fr = context.find_f("x++", atids); break;
-      case PostDec: fr = context.find_f("x--", atids); break;
-      case Positive: fr = context.find_f("+x", atids); break;
-      case Negate: fr = context.find_f("-x", atids); break;
-      case Invert: fr = context.find_f("!x", atids); break;
+      case PreInc: fr = context.find_f("++x", atypes); break;
+      case PreDec: fr = context.find_f("--x", atypes); break;
+      case PostInc: fr = context.find_f("x++", atypes); break;
+      case PostDec: fr = context.find_f("x--", atypes); break;
+      case Positive: fr = context.find_f("+x", atypes); break;
+      case Negate: fr = context.find_f("-x", atypes); break;
+      case Invert: fr = context.find_f("!x", atypes); break;
     }
     CHECK(fr.function_index != size_t(-1));
     for (auto convert : fr.converts) {
-      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+      bytecodes.add_typed(Bytecode::Call, convert.rtype, convert.converter_index,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      atids[convert.position] = convert.to_type_id;
+      atypes[convert.position] = convert.rtype;
     }
-    if (atids[0] == psl::type_id<int>() && op != Invert) {
+    if (atypes[0] == context.tag<int>() && op != Invert) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -674,8 +694,8 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
         case Positive: inst = Bytecode::IntPositive; break;
         case Negate: inst = Bytecode::IntNegate; break;
       }
-      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
-    } else if (atids[0] == psl::type_id<float>() && (op == Positive || op == Negate)) {
+      bytecodes.add_typed(inst, fr.rtype, fr.function_index, arg_indices);
+    } else if (atypes[0] == context.tag<float>() && (op == Positive || op == Negate)) {
       auto inst = Bytecode::Instruction();
       switch (op) {
         case None: CHECK(false); break;
@@ -687,9 +707,9 @@ uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
         case Positive: inst = Bytecode::FloatPositive; break;
         case Negate: inst = Bytecode::FloatNegate; break;
       }
-      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
+      bytecodes.add_typed(inst, fr.rtype, fr.function_index, arg_indices);
     } else {
-      bytecodes.add_typed(Bytecode::Call, fr.function_index, fr.return_type_id, arg_indices);
+      bytecodes.add_typed(Bytecode::Call, fr.rtype, fr.function_index, arg_indices);
     }
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
@@ -711,40 +731,39 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
     auto a_index = a->emit(context, bytecodes);
     auto b_index = b->emit(context, bytecodes);
     uint16_t arg_indices[]{a_index, b_index};
-    size_t atids[]{bytecodes.var_type(a_index), bytecodes.var_type(b_index)};
+    TypeTag atypes[]{bytecodes.var_type(a_index), bytecodes.var_type(b_index)};
     auto fr = Context::FindFResult();
     switch (op) {
       case None: CHECK(false); break;
-      case Mul: fr = context.find_f("*", atids); break;
-      case Div: fr = context.find_f("/", atids); break;
-      case Mod: fr = context.find_f("%", atids); break;
-      case Pow: fr = context.find_f("^", atids); break;
-      case Add: fr = context.find_f("+", atids); break;
-      case Sub: fr = context.find_f("-", atids); break;
-      case Lt: fr = context.find_f("<", atids); break;
-      case Gt: fr = context.find_f(">", atids); break;
-      case Le: fr = context.find_f("<=", atids); break;
-      case Ge: fr = context.find_f(">=", atids); break;
-      case Eq: fr = context.find_f("==", atids); break;
-      case Ne: fr = context.find_f("!=", atids); break;
-      case And: fr = context.find_f("&&", atids); break;
-      case Or: fr = context.find_f("||", atids); break;
-      case AddE: fr = context.find_f("+=", atids); break;
-      case SubE: fr = context.find_f("-=", atids); break;
-      case MulE: fr = context.find_f("*=", atids); break;
-      case DivE: fr = context.find_f("/=", atids); break;
-      case ModE: fr = context.find_f("%=", atids); break;
-      case Assi: fr = context.find_f("=", atids); break;
-      case Init: CHECK(false);
+      case Mul: fr = context.find_f("*", atypes); break;
+      case Div: fr = context.find_f("/", atypes); break;
+      case Mod: fr = context.find_f("%", atypes); break;
+      case Pow: fr = context.find_f("^", atypes); break;
+      case Add: fr = context.find_f("+", atypes); break;
+      case Sub: fr = context.find_f("-", atypes); break;
+      case Lt: fr = context.find_f("<", atypes); break;
+      case Gt: fr = context.find_f(">", atypes); break;
+      case Le: fr = context.find_f("<=", atypes); break;
+      case Ge: fr = context.find_f(">=", atypes); break;
+      case Eq: fr = context.find_f("==", atypes); break;
+      case Ne: fr = context.find_f("!=", atypes); break;
+      case And: fr = context.find_f("&&", atypes); break;
+      case Or: fr = context.find_f("||", atypes); break;
+      case AddE: fr = context.find_f("+=", atypes); break;
+      case SubE: fr = context.find_f("-=", atypes); break;
+      case MulE: fr = context.find_f("*=", atypes); break;
+      case DivE: fr = context.find_f("/=", atypes); break;
+      case ModE: fr = context.find_f("%=", atypes); break;
+      case Assi: fr = context.find_f("=", atypes); break;
     }
     CHECK(fr.function_index != size_t(-1));
     for (auto convert : fr.converts) {
-      bytecodes.add_typed(Bytecode::Call, convert.converter_id, convert.to_type_id,
+      bytecodes.add_typed(Bytecode::Call, convert.rtype, convert.converter_index,
                           arg_indices[convert.position]);
       arg_indices[convert.position] = bytecodes.top_var_index();
-      atids[convert.position] = convert.to_type_id;
+      atypes[convert.position] = convert.rtype;
     }
-    if (atids[0] == psl::type_id<int>() && atids[1] == psl::type_id<int>() && op != And &&
+    if (atypes[0] == context.tag<int>() && atypes[1] == context.tag<int>() && op != And &&
         op != Or) {
       auto inst = Bytecode::Instruction();
       switch (op) {
@@ -769,10 +788,9 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
         case DivE: inst = Bytecode::IntDivE; break;
         case ModE: inst = Bytecode::IntModE; break;
         case Assi: inst = Bytecode::IntAssi; break;
-        case Init: CHECK(false); break;
       }
-      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
-    } else if (atids[0] == psl::type_id<float>() && atids[1] == psl::type_id<float>() &&
+      bytecodes.add_typed(inst, fr.rtype, fr.function_index, arg_indices);
+    } else if (atypes[0] == context.tag<float>() && atypes[1] == context.tag<float>() &&
                op != And && op != Or && op != Mod && op != ModE) {
       auto inst = Bytecode::Instruction();
       switch (op) {
@@ -797,11 +815,10 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
         case DivE: inst = Bytecode::FloatDivE; break;
         case ModE: CHECK(false); break;
         case Assi: inst = Bytecode::FloatAssi; break;
-        case Init: CHECK(false); break;
       }
-      bytecodes.add_typed(inst, fr.function_index, fr.return_type_id, arg_indices);
+      bytecodes.add_typed(inst, fr.rtype, fr.function_index, arg_indices);
     } else {
-      bytecodes.add_typed(Bytecode::Call, fr.function_index, fr.return_type_id, arg_indices);
+      bytecodes.add_typed(Bytecode::Call, fr.rtype, fr.function_index, arg_indices);
     }
     return bytecodes.top_var_index();
   } catch (const Exception& e) {
@@ -811,9 +828,9 @@ uint16_t Expr::emit(Context& context, Bytecodes& bytecodes) const {
 void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
   auto vi = expr.emit(context, bytecodes);
   if (as_ref)
-    bytecodes.add_typed(Bytecode::MakeRef, vi, bytecodes.var_type(vi));
+    bytecodes.add_typed(Bytecode::MakeRef, bytecodes.var_type(vi), vi);
   else
-    bytecodes.add_typed(Bytecode::Copy, vi, bytecodes.var_type(vi));
+    bytecodes.add_typed(Bytecode::Copy, bytecodes.var_type(vi), vi);
   bytecodes.name_top_var(name);
 }
 void Stmt::emit(Context& context, Bytecodes& bytecodes) const {
@@ -837,7 +854,7 @@ void While::emit(Context& context, Bytecodes& bytecodes) const {
   bytecodes.enter_scope();
   auto condition_begin = bytecodes.code_position();
   auto condition_vi = condition.emit(context, bytecodes);
-  if (bytecodes.var_type(condition_vi) != psl::type_id<bool>())
+  if (bytecodes.var_type(condition_vi) != context.tag<bool>())
     bytecodes.error(condition, "Expect boolean expression");
   auto ci = bytecodes.add(Bytecode::JumpIfNot, 0 /*placeholder*/, condition_vi);
   pblock->emit(context, bytecodes);
@@ -873,7 +890,7 @@ void For::emit(Context& context, Bytecodes& bytecodes) const {
   auto sp = bytecodes.stack_size();
   auto condition_begin = bytecodes.code_position();
   auto condition_vi = condition.emit(context, bytecodes);
-  if (bytecodes.var_type(condition_vi) != psl::type_id<bool>())
+  if (bytecodes.var_type(condition_vi) != context.tag<bool>())
     bytecodes.error(condition, "Expect boolean expression");
   auto ci = bytecodes.add(Bytecode::JumpIfNot, 0 /*placeholder*/, condition_vi);
   block->emit(context, bytecodes);
@@ -913,7 +930,8 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
   bytecodes.enter_scope();
   {
     auto vi = if_.condition.emit(context, bytecodes);
-    CHECK_EQ(bytecodes.var_type(vi), psl::type_id<bool>());
+    if (bytecodes.var_type(vi) != context.tag<bool>())
+      bytecodes.error(if_.condition, "Expect boolean expression");
     auto ci_cond = bytecodes.add(Bytecode::JumpIfNot, 0 /*placeholder*/, vi);
     bytecodes.enter_scope();
     if_.block->emit(context, bytecodes);
@@ -926,6 +944,8 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
   else_if_ci_outs.reserve(else_ifs.size());
   for (const auto& else_if : else_ifs) {
     auto vi = else_if.condition.emit(context, bytecodes);
+    if (bytecodes.var_type(vi) != context.tag<bool>())
+      bytecodes.error(else_if.condition, "Expect boolean expression");
     auto ci_cond = bytecodes.add(Bytecode::JumpIfNot, 0 /*placeholder*/, vi);
     bytecodes.enter_scope();
     else_if.block->emit(context, bytecodes);
@@ -946,65 +966,69 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
 }
 void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   try {
-    auto f_bytecodes = Bytecodes(context, bytecodes.sl);
-    auto ptids = psl::vector<psl::TypeId>();
+    auto fbcodes = Bytecodes(context, bytecodes.sl);
+    auto rtype = TypeTag(return_type.value, false);
+    auto ptypes = psl::vector<TypeTag>();
     for (const auto& param : params) {
-      auto tid = context.get_type_id(param.type.value);
-      if (tid == size_t(-1))
-        bytecodes.error(param.type, "Type `", param.type.value, "` is not found");
-      f_bytecodes.add_typed(param.name.value, tid);
-      ptids.push_back(psl::TypeId(tid, false, false));
+      auto ptype = TypeTag(param.type.value, false);
+      fbcodes.placehold_typed(ptype, param.name.value);
+      ptypes.push_back(ptype);
     }
-    block.emit(context, f_bytecodes);
-    auto rtid = context.find_type_id(return_type.value);
-    if (rtid == size_t(-1))
-      bytecodes.error(return_type, "Type `", return_type.value, "` is not found");
-    context(name) = low_level(
-        [&context, f_bytecodes, *this](psl::span<const Variable*> args) mutable {
+    block.emit(context, fbcodes);
+    // for (const auto& code : fbcodes) {
+    //   if (code.instruction == code.Return) {
+    //     Logs(bytecodes.stack_size(), code.value);
+    //     if (bytecodes.var_type(code.value).name != rtype.name)
+    //       bytecodes.error(*this, "Some return statements are returning `",
+    //                       bytecodes.var_type(code.value).name, "` instead of `", rtype.name,
+    //                       "`");
+    //   }
+    // }
+    context(name) = Function(
+        tag<Variable, psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
+                                                   *this](psl::span<const Variable*> args) mutable {
           CHECK_EQ(args.size(), params.size());
           auto vm = VirtualMachine();
           for (const auto& var : context.variables)
-            vm.stack.push(var);
+            vm.stack.push(var.second);
           for (size_t i = 0; i < args.size(); i++)
             vm.stack.push(*args[i]);
-          return execute(context, f_bytecodes, vm);
-        },
-        rtid, ptids);
+          return execute(context, fbcodes, vm);
+        }),
+        rtype, ptypes);
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
   }
 }
-size_t ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
-  auto type_id = context.new_internal_class();
-  auto& type_trait = context.types[type_id];
-  type_trait.alias = name;
-  context("__" + name) = low_level(
-      [n = members.size()](psl::span<const Variable*>) {
-        return InternalClass{psl::vector_n_of(n, Variable(psl::Empty()))};
-      },
-      type_id, {});
+void ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
+  auto& type_trait = context.types[name] = Context::TypeTrait(name);
+  context("__" + name) =
+      Function(tag<InternalClass, psl::span<const Variable*>>(
+                   [n = members.size()](psl::span<const Variable*>) {
+                     return InternalClass{psl::vector_n_of(n, Variable(psl::Empty()))};
+                   }),
+               TypeTag(name, false), context.tags<>());
 
   for (size_t i = 0; i < members.size(); i++) {
-    type_trait.member_accessors[members[i].name.value] = context.functions.size();
-    auto mtid = context.find_type_id(members[i].type.value);
-    if (mtid == size_t(-1))
+    if (!context.is_registered_type(members[i].type.value))
       bytecodes.error(members[i].type, "Type `", members[i].type.value, "` is not found");
-    context.functions.push_back(low_level(
-        [i](psl::span<const Variable*> args) {
-          DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
-          return args[0]->as<InternalClass&>().members[i];
-        },
-        mtid, psl::vector_of(psl::TypeId(type_id, false, true))));
+    type_trait.add_member_accessor(members[i].name.value, context.functions.size());
+    context.functions.push_back(
+        Function(tag<Variable, psl::span<const Variable*>>([i](psl::span<const Variable*> args) {
+                   DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
+                   return args[0]->as<InternalClass&>().members[i];
+                 }),
+                 TypeTag(members[i].type.value, true), psl::vector_of(TypeTag(name, true))));
   }
 
   for (size_t i = 0; i < members.size(); i++) {
-    type_trait.member_accessors["__" + members[i].name.value] = context.functions.size();
-    context.functions.push_back(low_level(
-        [i](psl::span<const Variable*> args) {
-          DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
-          return psl::ref(args[0]->as<InternalClass&>().members[i]);
-        },
-        psl::type_id<Variable>(), psl::vector_of(psl::TypeId(type_id, false, true))));
+    type_trait.add_member_accessor("__" + members[i].name.value, context.functions.size());
+    context.functions.push_back(
+        Function(tag<Variable, psl::span<const Variable*>>([i](psl::span<const Variable*> args) {
+                   DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
+                   return psl::ref(args[0]->as<InternalClass&>().members[i]);
+                 }),
+                 context.tag<Variable&>(), psl::vector_of(TypeTag(name, true))));
   }
 
   for (const auto& ctor : ctors)
@@ -1012,11 +1036,27 @@ size_t ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   for (const auto& method : methods)
     method.emit(context, bytecodes);
 
-  return type_id;
+  context.get_type_trait<psl::string>().add_from_converter(name, context.functions.size());
+  auto to_str = [&context, *this](const InternalClass& x) {
+    CHECK_EQ(x.members.size(), members.size());
+    auto r = psl::string("{");
+    for (size_t i = 0; i < members.size(); i++) {
+      auto str = context
+                     .call("str", psl::vector_of(TypeTag(members[i].type.value, false)),
+                           psl::vector_of(x.members[i]))
+                     .as<psl::string>();
+      r += members[i].name.value + ": " + str + ", ";
+    }
+    if (members.size())
+      r.pop_back(2);
+    return r + "}";
+  };
+  context("str") = Function(lambda<const InternalClass&>(to_str), context.tag<psl::string>(),
+                            psl::vector_of(TypeTag(name, false)));
 }
 
 struct Parser {
-  Parser(psl::string_view tokens) : sl{tokens, row_padding} {
+  Parser(psl::string_view tokens) : sl(tokens, row_padding) {
     to_valid_pos();
   }
 
@@ -1057,10 +1097,10 @@ struct Parser {
   }
   While while_() {
     consume("while");
-    consume("(");
+    consume("(", "to begin condition");
     auto r = row, c = column;
     auto cond = expr();
-    consume(")");
+    consume(")", "to end condition");
     auto body = pblock();
     return While{r, c, psl::move(cond), psl::move(body)};
   }
@@ -1081,7 +1121,7 @@ struct Parser {
       auto id_ = id();
       consume("in");
       auto range_a = expr();
-      consume("..");
+      consume("..", "to specify end point");
       auto range_b = expr();
       auto init = Stmt(Declaration(id_.value, range_a));
       auto cond = Expr(Expr(Expr0(r, c, PExpr(id_), Expr0::None)), range_b, Expr::Lt);
@@ -1119,20 +1159,20 @@ struct Parser {
   }
   If if_() {
     consume("if");
-    consume("(");
+    consume("(", "to begin condition");
     auto r = row, c = column;
     auto cond = expr();
-    consume(")");
+    consume(")", "to end condition");
     auto body = pblock();
     return If{r, c, psl::move(cond), psl::move(body)};
   }
   ElseIf else_if_() {
     consume("else");
     consume("if");
-    consume("(");
+    consume("(", "to begin condition");
     auto r = row, c = column;
     auto cond = expr();
-    consume(")");
+    consume(")", "to end condition");
     auto body = pblock();
     return ElseIf{r, c, psl::move(cond), psl::move(body)};
   }
@@ -1144,7 +1184,7 @@ struct Parser {
     auto r = row, c = column;
     consume("class");
     auto name = id().value;
-    consume("{");
+    consume("{", "to begin class definition");
 
     auto ctors = psl::vector<FunctionDefinition>();
     auto ctor_init_sizes = psl::vector<size_t>();
@@ -1160,7 +1200,7 @@ struct Parser {
         methods.push_back(method_definition(name));
       } else {
         members.push_back(member_definition());
-        consume(";");
+        consume(";", "to end the previous member definition");
       }
       while (accept(";"))
         ;
@@ -1186,7 +1226,7 @@ struct Parser {
   }
   MemberDefinition member_definition() {
     auto name = id();
-    consume(":");
+    consume(":", "to specify its type");
     auto type = id();
     return MemberDefinition(psl::move(name), psl::move(type));
   };
@@ -1194,9 +1234,9 @@ struct Parser {
     auto r = row, c = column;
     consume("ctor");
     auto ctor_name = id().value;
-    consume("(");
+    consume("(", "to begin parameter definition");
     auto params = param_list();
-    consume(")");
+    consume(")", "to end parameter definition");
     auto init_stmts = psl::vector<Stmt>();
     // Initialize each member variables
     if (accept(":")) {
@@ -1228,13 +1268,13 @@ struct Parser {
   }
   FunctionDefinition method_definition(psl::string class_name) {
     auto r = row, c = column;
-    consume("fn");
+    consume("fn", "to start method definition");
     auto name = id().value;
-    consume("(");
+    consume("(", "to begin parameter definition");
     auto params = param_list();
     params.push_front(ParameterDeclaration(Id(r, c, "self"), Id(r, c, class_name)));
-    consume(")");
-    consume(":");
+    consume(")", "to end parameter definition");
+    consume(":", "to specify return type");
     auto type = id();
     auto block_ = block();
     return FunctionDefinition(r, c, psl::move(name), psl::move(type), psl::move(params),
@@ -1242,12 +1282,12 @@ struct Parser {
   }
   FunctionDefinition function_definition() {
     auto r = row, c = column;
-    consume("fn");
+    consume("fn", "to start function definition");
     auto name = id().value;
-    consume("(");
+    consume("(", "to begin parameter definition");
     auto params = param_list();
-    consume(")");
-    consume(":");
+    consume(")", "to end parameter definition");
+    consume(":", "to specify return type");
     auto return_type = id();
     auto block_ = block();
     return FunctionDefinition(r, c, psl::move(name), psl::move(return_type), psl::move(params),
@@ -1264,10 +1304,6 @@ struct Parser {
       stmt = Stmt(ContinueStmt());
     } else if (accept("return")) {
       stmt = Stmt(ReturnStmt(expr()));
-    } else if (accept("var")) {
-      auto id_ = id();
-      consume("=");
-      stmt = Stmt(declaration(id_));
     } else {
       if (auto n = next(); psl::isalpha(*n) || *n == '_') {
         backup();
@@ -1282,7 +1318,7 @@ struct Parser {
         stmt = Stmt(expr());
       }
     }
-    consume(";");
+    consume(";", "to end statement");
     return stmt;
   }
 
@@ -1378,7 +1414,7 @@ struct Parser {
       if (accept("[")) {
         auto r = row, c = column;
         auto index = expr();
-        consume("]");
+        consume("]", "to end subscription operator");
         pexpr_ = Subscript{r, c, psl::move(pexpr_), psl::move(index)};
       } else if (expect("..")) {
         break;
@@ -1428,7 +1464,7 @@ struct Parser {
       }
     } else if (accept("(")) {
       auto pexpr = PExpr{expr()};
-      consume(")");
+      consume(")", "to balance the parenthesis");
       return pexpr;
     } else if ((expect(psl::isdigit, 0) || expect("-") || expect(".")) && !expect(".."))
       return PExpr{number()};
@@ -1440,23 +1476,23 @@ struct Parser {
   }
   LambdaExpr lambda() {
     auto r = row, c = column;
-    consume("[");
+    consume("[", "to specify capture list");
     auto captures = psl::vector<Id>();
     while (!accept("]")) {
       captures.push_back(id());
       accept(",");
     }
-    consume("(");
+    consume("(", "to start parameter defintion");
     auto params = param_list();
-    consume(")");
-    consume(":");
+    consume(")", "to end parameter defintion");
+    consume(":", "to specify return type");
     auto return_type = id();
     auto body = block();
     return LambdaExpr(r, c, captures, FunctionDefinition(r, c, "()", return_type, params, body));
   }
   Vector vector() {
     auto r = row, c = column;
-    consume("[");
+    consume("[", "to start short vector definition");
     auto args = psl::vector<Expr>{};
     if (!accept("]"))
       while (true) {
@@ -1473,8 +1509,8 @@ struct Parser {
     if (!expect(")"))
       while (true) {
         auto name = id();
-        consume(":");
-        auto type = id();
+        consume(":", "to specify its type");
+        auto type = type_name();
         args.push_back({psl::move(name), psl::move(type)});
         if (expect(")"))
           break;
@@ -1482,6 +1518,26 @@ struct Parser {
           consume(",", "to continue specify parameter");
       }
     return args;
+  }
+  psl::string type_names() {
+    auto r = psl::string();
+    while (!expect(")"))
+      r += type_name().value + ", ";
+    if (r.size())
+      r.pop_back(2);
+    return r;
+  }
+  Id type_name() {
+    auto r = row, c = column;
+    if (accept("(")) {
+      auto params = type_names();
+      consume(")");
+      consume(":");
+      auto rtype = type_name().value;
+      return Id(r, c, "(" + params + "): " + rtype);
+    } else {
+      return id();
+    }
   }
   psl::vector<Expr> arg_list() {
     auto args = psl::vector<Expr>();
@@ -1491,7 +1547,7 @@ struct Parser {
         if (expect(")"))
           break;
         else
-          consume(",", "to continue specify argument");
+          consume(",", "to continue specifying argument");
       }
     return args;
   }
@@ -1560,7 +1616,7 @@ struct Parser {
       str.push_back(*n);
       escape = *n == '\\';
     }
-    consume("\"");
+    consume("\"", "to end string literal");
     return StringLiteral(str);
   }
 
@@ -1707,7 +1763,7 @@ private:
     sl.error(row, column, args...);
   }
 
-  size_t row = row_padding;
+  size_t row = 0;
   size_t column = 0;
   psl::vector<psl::pair<size_t, size_t>> backup_stack;
   static constexpr size_t row_padding = 1;
@@ -1731,7 +1787,6 @@ Bytecodes compile(Context& context, psl::string source) {
 }
 
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm) {
-  auto return_value = Variable(psl::Empty());
   try {
     for (size_t p = 0; p < bytecodes.length();) {
       const auto& code = bytecodes[p];
@@ -1883,7 +1938,25 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
             case 9: CHECK(false); break;
           }
         } break;
-        case Bytecode::Return: return_value = vm.stack[code.value]; break;
+        case Bytecode::InvokeAsFunction: {
+          auto f = [&]<int... I>(psl::IntegerSequence<int, I...>) {
+            const Variable* arr[]{&vm.stack[code.args[I]]...};
+            push(vm.stack[code.value].as<const Function&>().call(arr));
+          };
+          switch (code.nargs) {
+            case 0: push(vm.stack[code.value].as<const Function&>().call({})); break;
+            case 1: f(psl::make_integer_sequence<int, 1>()); break;
+            case 2: f(psl::make_integer_sequence<int, 2>()); break;
+            case 3: f(psl::make_integer_sequence<int, 3>()); break;
+            case 4: f(psl::make_integer_sequence<int, 4>()); break;
+            case 5: f(psl::make_integer_sequence<int, 5>()); break;
+            case 6: f(psl::make_integer_sequence<int, 6>()); break;
+            case 7: f(psl::make_integer_sequence<int, 7>()); break;
+            case 8: f(psl::make_integer_sequence<int, 8>()); break;
+            case 9: CHECK(false); break;
+          }
+        } break;
+        case Bytecode::Return: return vm.stack[code.value]; break;
         case Bytecode::Jump:
           p = code.value;
           inc_p = false;
@@ -1904,14 +1977,14 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
     Log(e.what());
   }
 
-  return return_value;
+  return Variable();
 }
 
 Variable execute(const Context& context, const Bytecodes& bytecodes) {
   Profiler _("[Interpreter]Execute");
   auto vm = VirtualMachine();
   for (const auto& var : context.variables)
-    vm.stack.push(var);
+    vm.stack.push(var.second);
   return execute(context, bytecodes, vm);
 }
 

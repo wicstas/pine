@@ -601,11 +601,10 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   return TriangleMesh(vertices, indices);
 }
 
-TriangleMesh height_map_to_mesh(vec2i resolution, const Function& height_function) {
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function) {
   auto height_map = Array2df(resolution);
-  for_2d(resolution, [&](vec2i p) {
-    height_map[p] = height_function((p + vec2(0.5f)) / resolution).as<float>();
-  });
+  for_2d(resolution,
+         [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
   return height_map_to_mesh(height_map);
 }
 
@@ -634,7 +633,7 @@ void geometry_context(Context& ctx) {
   ctx.type<TriangleMesh>("TriangleMesh").method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
-  ctx("height_map_to_mesh") = overloaded<vec2i, const Function&>(height_map_to_mesh);
+  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2>>(height_map_to_mesh);
 }
 
 }  // namespace pine

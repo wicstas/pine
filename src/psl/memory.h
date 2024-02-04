@@ -5,8 +5,6 @@
 #include <psl/stdint.h>
 #include <psl/new.h>
 
-#include <memory>
-
 namespace psl {
 
 inline constexpr void memcpy(void* dst, const void* src, size_t size) {
@@ -159,142 +157,133 @@ unique_ptr<T> make_unique(Args&&... args) {
   return unique_ptr<T>{new T{forward<Args>(args)...}};
 }
 
-template <typename T, typename Deleter = DefaultDeleter<T>>
-using shared_ptr = std::shared_ptr<T>;
-using std::make_shared;
-// template <typename T, typename Deleter = DefaultDeleter<T>>
-// class shared_ptr {
-// public:
-//   using Pointer = RemoveExtent<T>*;
-//   using Reference = RemoveExtent<T>&;
+template <typename T>
+class shared_ptr {
+public:
+  using Pointer = RemoveExtent<T>*;
+  using Reference = RemoveExtent<T>&;
 
-//   template <typename U, typename UDeleter>
-//   friend class shared_ptr;
+  template <typename U>
+  friend class shared_ptr;
 
-//   ~shared_ptr() {
-//     decrement();
-//   }
+  ~shared_ptr() {
+    decrement();
+  }
 
-//   shared_ptr() = default;
+  shared_ptr() = default;
 
-//   shared_ptr(nullptr_t) {
-//   }
-//   explicit shared_ptr(Pointer ptr, Deleter deleter = {})
-//       : ptr(ptr), deleter(deleter), refcount(new size_t{1}) {
-//   }
+  shared_ptr(nullptr_t) {
+  }
+  explicit shared_ptr(Pointer ptr) : ptr(ptr), refcount(new size_t{1}) {
+  }
 
-//   shared_ptr(const shared_ptr& rhs) : shared_ptr() {
-//     copy(rhs);
-//   }
-//   shared_ptr(shared_ptr&& rhs) : shared_ptr() {
-//     take(rhs);
-//   }
-//   shared_ptr& operator=(shared_ptr rhs) {
-//     take(rhs);
-//     return *this;
-//   }
+  shared_ptr(const shared_ptr& rhs) : shared_ptr() {
+    copy(rhs);
+  }
+  shared_ptr(shared_ptr&& rhs) : shared_ptr() {
+    take(rhs);
+  }
+  shared_ptr& operator=(shared_ptr rhs) {
+    take(rhs);
+    return *this;
+  }
 
-//   template <DerivedFrom<T> U, typename DeleterU>
-//   requires(convertible<DeleterU, Deleter>)
-//   shared_ptr(shared_ptr<U, DeleterU> rhs) : shared_ptr() {
-//     take(rhs);
-//   }
-//   template <DerivedFrom<T> U, typename DeleterU>
-//   requires(convertible<DeleterU, Deleter>)
-//   shared_ptr& operator=(shared_ptr<U, DeleterU> rhs) {
-//     take(rhs);
-//     return *this;
-//   }
+  template <DerivedFrom<T> U>
+  shared_ptr(shared_ptr<U> rhs) : shared_ptr() {
+    take(rhs);
+  }
+  template <DerivedFrom<T> U>
+  shared_ptr& operator=(shared_ptr<U> rhs) {
+    take(rhs);
+    return *this;
+  }
 
-//   Reference operator*() const {
-//     return *ptr;
-//   }
-//   Pointer operator->() const {
-//     return ptr;
-//   }
-//   Reference operator[](size_t i) const {
-//     static_assert(psl::is_array<T>,
-//                   "operator[] can only as used when the underlying type is array");
-//     return ptr[i];
-//   }
+  Reference operator*() const {
+    return *ptr;
+  }
+  Pointer operator->() const {
+    return ptr;
+  }
+  Reference operator[](size_t i) const {
+    static_assert(psl::is_array<T>,
+                  "operator[] can only as used when the underlying type is array");
+    return ptr[i];
+  }
 
-//   explicit operator bool() const {
-//     return get() != Pointer();
-//   }
+  explicit operator bool() const {
+    return get() != Pointer();
+  }
 
-//   Pointer get() const {
-//     return ptr;
-//   }
+  Pointer get() const {
+    return ptr;
+  }
 
-//   void reset(Pointer p = {}) {
-//     decrement();
+  void reset(Pointer p = {}) {
+    decrement();
 
-//     ptr = p;
-//     refcount = new size_t(1);
-//   }
+    ptr = p;
+    refcount = new size_t(1);
+  }
 
-//   template <typename U, typename UDeleter>
-//   friend bool operator==(const shared_ptr& lhs, const shared_ptr<U, UDeleter>& rhs) {
-//     return lhs.get() == rhs.get();
-//   }
-//   template <typename U, typename UDeleter>
-//   friend bool operator!=(const shared_ptr& lhs, const shared_ptr<U, UDeleter>& rhs) {
-//     return lhs.get() != rhs.get();
-//   }
-//   template <typename U, typename UDeleter>
-//   friend bool operator>(const shared_ptr& lhs, const shared_ptr<U, UDeleter>& rhs) {
-//     return lhs.get() > rhs.get();
-//   }
-//   template <typename U, typename UDeleter>
-//   friend bool operator<(const shared_ptr& lhs, const shared_ptr<U, UDeleter>& rhs) {
-//     return lhs.get() < rhs.get();
-//   }
-//   bool operator==(nullptr_t) const {
-//     return ptr == nullptr;
-//   }
-//   bool operator!=(nullptr_t) const {
-//     return ptr != nullptr;
-//   }
+  template <typename U>
+  friend bool operator==(const shared_ptr& lhs, const shared_ptr<U>& rhs) {
+    return lhs.get() == rhs.get();
+  }
+  template <typename U>
+  friend bool operator!=(const shared_ptr& lhs, const shared_ptr<U>& rhs) {
+    return lhs.get() != rhs.get();
+  }
+  template <typename U>
+  friend bool operator>(const shared_ptr& lhs, const shared_ptr<U>& rhs) {
+    return lhs.get() > rhs.get();
+  }
+  template <typename U>
+  friend bool operator<(const shared_ptr& lhs, const shared_ptr<U>& rhs) {
+    return lhs.get() < rhs.get();
+  }
+  bool operator==(nullptr_t) const {
+    return ptr == nullptr;
+  }
+  bool operator!=(nullptr_t) const {
+    return ptr != nullptr;
+  }
 
-// private:
-//   template <typename U, typename UDeleter>
-//   void copy(const shared_ptr<U, UDeleter>& rhs) {
-//     decrement();
+private:
+  template <typename U>
+  void copy(const shared_ptr<U>& rhs) {
+    decrement();
 
-//     ptr = rhs.ptr;
-//     deleter = rhs.deleter;
-//     refcount = rhs.refcount;
+    ptr = rhs.ptr;
+    refcount = rhs.refcount;
 
-//     if (refcount)
-//       ++(*refcount);
-//   }
+    if (refcount)
+      ++(*refcount);
+  }
 
-//   template <typename U, typename UDeleter>
-//   void take(shared_ptr<U, UDeleter>& rhs) {
-//     decrement();
+  template <typename U>
+  void take(shared_ptr<U>& rhs) {
+    decrement();
 
-//     ptr = psl::exchange(rhs.ptr, nullptr);
-//     deleter = psl::move(rhs.deleter);
-//     refcount = psl::exchange(rhs.refcount, nullptr);
-//   }
+    ptr = psl::exchange(rhs.ptr, nullptr);
+    refcount = psl::exchange(rhs.refcount, nullptr);
+  }
 
-//   void decrement() {
-//     if (ptr != Pointer()) {
-//       if (--(*refcount) == 0) {
-//         deleter(ptr);
-//         delete refcount;
-//       }
-//     }
-//   }
+  void decrement() {
+    if (ptr != Pointer()) {
+      if (--(*refcount) == 0) {
+        delete ptr;
+        delete refcount;
+      }
+    }
+  }
 
-//   Pointer ptr = {};
-//   Deleter deleter = {};
-//   size_t* refcount = nullptr;
-// };
-// template <typename T, typename... Args>
-// shared_ptr<T> make_shared(Args&&... args) {
-//   return shared_ptr<T>{new T{psl::forward<Args>(args)...}};
-// }
+  Pointer ptr = {};
+  size_t* refcount = nullptr;
+};
+template <typename T, typename... Args>
+shared_ptr<T> make_shared(Args&&... args) {
+  return shared_ptr<T>{new T{psl::forward<Args>(args)...}};
+}
 
 template <typename T>
 struct ref_wrapper {
