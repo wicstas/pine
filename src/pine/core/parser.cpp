@@ -13,6 +13,10 @@
 
 namespace pine {
 
+int f(double) {
+    return 3;
+}
+
 Context get_default_context() {
   auto ctx = Context{};
   math_context(ctx);

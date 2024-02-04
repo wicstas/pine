@@ -240,10 +240,6 @@ Variable Context::call(psl::string_view name, psl::span<const TypeTag> atypes,
 void Context::add_f(Function func) {
   functions.push_back(psl::move(func));
 }
-void Context::add_f(psl::string name, Function func) {
-  functions_map.insert({psl::move(name), functions.size()});
-  functions.push_back(psl::move(func));
-}
 
 size_t Context::find_variable(psl::string_view name) const {
   if (auto it = variables_map.find(name); it != variables_map.end())

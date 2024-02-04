@@ -16,7 +16,7 @@ namespace pine {
 
 struct TypeTag {
   TypeTag() = default;
-  TypeTag(psl::string name, bool is_ref) : name(psl::move(name)), is_ref(is_ref) {
+  TypeTag(psl::string name, bool is_ref = false) : name(psl::move(name)), is_ref(is_ref) {
   }
 
   friend bool operator==(const TypeTag& lhs, const TypeTag& rhs) {
@@ -345,37 +345,14 @@ struct Context {
           }.template operator()<Us>(),
           ...);
     }
-    template <typename R, typename... Args>
-    void add(R (*f)(Args...)) const {
+    template <typename F>
+    requires psl::is_function<F>
+    void add(F f) const {
       ctx.add_f(psl::move(name), f);
     }
-    template <typename T, typename R, typename... Args>
-    void add(R (T::*f)(Args...)) const {
-      auto lambda = [f](T& x, Args... args) { return (x.*f)(static_cast<Args>(args)...); };
-      ctx.add_f(psl::move(name), pine::tag<R, T&, Args...>(lambda));
-    }
-    template <typename T, typename R, typename... Args>
-    void add(R (T::*f)(Args...) const) const {
-      auto lambda = [f](const T& x, Args... args) { return (x.*f)(static_cast<Args>(args)...); };
-      ctx.add_f(psl::move(name), pine::tag<R, const T&, Args...>(lambda));
-    }
-    template <typename T, typename R, typename... Args>
-    void add(R& (T::*f)(Args...)) const {
-      auto lambda = [f](T& x, Args... args) {
-        return psl::ref((x.*f)(static_cast<Args>(args)...));
-      };
-      ctx.add_f(psl::move(name), pine::tag<R, T&, Args...>(lambda));
-    }
-    template <typename T, typename R, typename... Args>
-    void add(R& (T::*f)(Args...) const) const {
-      auto lambda = [f](const T& x, Args... args) {
-        return psl::ref((x.*f)(static_cast<Args>(args)...));
-      };
-      ctx.add_f(psl::move(name), pine::tag<R, const T&, Args...>(lambda));
-    }
-    template <typename T, typename R, typename... Args>
-    void add(Lambda<T, R, Args...> f) const {
-      ctx.add_f(psl::move(name), psl::move(f));
+    template <typename F, typename R, typename... Args>
+    void add(Lambda<F, R, Args...> lambda) const {
+      ctx.add_f(psl::move(name), psl::move(lambda));
     }
     void add(Function f) const {
       ctx.add_f(psl::move(name), psl::move(f));
@@ -518,24 +495,33 @@ struct Context {
   template <typename T, TypeClass type_class = TypeClass::None>
   auto type(psl::string alias);
 
+  template <typename F>
+  void add_f(psl::string name, F f) {
+    functions_map.insert({psl::move(name), functions.size()});
+    add_f(psl::move(f));
+  }
   template <typename R, typename... Args>
   void add_f(R (*f)(Args...)) {
     add_f(Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...)));
   }
   template <typename T, typename R, typename... Args>
+  void add_f(R (T::*f)(Args...)) {
+    auto lambda = pine::tag<R, T&, Args...>(
+        [f](T& x, Args... args) -> decltype(auto) { return (x.*f)(static_cast<Args>(args)...); });
+    add_f(Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...)));
+  }
+  template <typename T, typename R, typename... Args>
+  void add_f(R (T::*f)(Args...) const) {
+    auto lambda = pine::tag<R, const T&, Args...>([f](const T& x, Args... args) -> decltype(auto) {
+      return (x.*f)(static_cast<Args>(args)...);
+    });
+    add_f(Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...)));
+  }
+  template <typename T, typename R, typename... Args>
   void add_f(Lambda<T, R, Args...> f) {
     add_f(Function(psl::move(f), tag<R>(), psl::vector_of(tag<Args>()...)));
   }
-  template <typename R, typename... Args>
-  void add_f(psl::string name, R (*f)(Args...)) {
-    add_f(psl::move(name), Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...)));
-  }
-  template <typename T, typename R, typename... Args>
-  void add_f(psl::string name, Lambda<T, R, Args...> f) {
-    add_f(psl::move(name), Function(psl::move(f), tag<R>(), psl::vector_of(tag<Args>()...)));
-  }
   void add_f(Function func);
-  void add_f(psl::string name, Function func);
 
   struct FindUniqueFResult {
     size_t function_index;
@@ -593,10 +579,7 @@ struct Context {
   }
   template <typename R, typename... Args>
   psl::string name_of_function_type(psl::function<R, Args...>*) const {
-    auto str = "(" + ((name_of<Args>() + ", ") + ...);
-    if (sizeof...(Args) != 0)
-      str.pop_back(2);
-    return str + "): " + name_of<R>();
+    return signature_from(tag<R>(), tags<Args...>());
   }
   bool is_registered_type(psl::string_view name) const {
     if (auto it = types.find(name); it != types.end())

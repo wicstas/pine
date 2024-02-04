@@ -68,6 +68,12 @@ template <typename T>
 struct _IsFunction : FalseType {};
 template <typename R, typename... Args>
 struct _IsFunction<R(Args...)> : TrueType {};
+template <typename R, typename... Args>
+struct _IsFunction<R(*)(Args...)> : TrueType {};
+template <typename T, typename R, typename... Args>
+struct _IsFunction<R (T::*)(Args...)> : TrueType {};
+template <typename T, typename R, typename... Args>
+struct _IsFunction<R (T::*)(Args...) const> : TrueType {};
 template <typename T>
 constexpr bool is_function = _IsFunction<T>::value;
 
@@ -157,7 +163,7 @@ constexpr bool is_const = _IsConst<T>::value;
 template <typename T>
 struct _IsConstRef : FalseType {};
 template <typename T>
-struct _IsConstRef<const T&> : TrueType {};
+struct _IsConstRef<const T &> : TrueType {};
 template <typename T>
 constexpr bool is_const_ref = _IsConstRef<T>::value;
 
@@ -496,16 +502,5 @@ concept RandomAccessIterator =
     BidirectionalIterator<T> && requires(T it, IteratorDifferenceType<T> n) {
       { it[n] } -> SameAs<IteratorReferenceType<T>>;
     };
-
-template <typename Container, typename T>
-struct ChangeBasis {
-  using Type = typename Container::template ChangeBasis<T>;
-};
-template <typename R, typename U, typename T>
-struct ChangeBasis<R (*)(U), T> {
-  using Type = R (*)(T);
-};
-template <typename Container, typename T>
-using ChangeBasisT = typename ChangeBasis<Container, T>::Type;
 
 }  // namespace psl

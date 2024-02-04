@@ -300,6 +300,9 @@ protected:
   Allocator allocator;
 };
 
+template <typename T, size_t capacity>
+using static_vector = vector<T, static_allocator<T, capacity>>;
+
 template <typename T>
 vector<T> vector_n_of(size_t n, const T& x) {
   auto v = vector<T>();

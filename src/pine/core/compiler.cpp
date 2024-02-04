@@ -582,79 +582,54 @@ LambdaExpr::LambdaExpr(size_t row, size_t column, psl::vector<Id> captures, Func
     : ASTNode(row, column), captures(psl::move(captures)), body(psl::move(body)) {
 }
 uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
-  auto class_name = psl::string("__lambda") + psl::to_string(context.next_internal_class_id());
-  auto ctor_params = psl::vector<ParameterDeclaration>();
-  auto ctor_args = psl::vector<Expr>();
-  auto ctor_body = Block({});
-  auto members = psl::vector_of<MemberDefinition>();
-  auto body = this->body;
-  // In operator(): Add the lambda object itself as the first argument
-  body->params.push_front(
-      ParameterDeclaration(Id(row, column, "self"), Id(row, column, class_name)));
-  // In ctor: Initialize `self`
-  auto it = psl::next(ctor_body.elems.insert(
-      ctor_body.elems.begin(),
-      Stmt(Declaration("self", FunctionCall(row, column, "__" + class_name, {})))));
+  try {
+    auto name = psl::string("__lambda") + psl::to_string(context.new_internal_class());
+    auto fbcodes = Bytecodes(context, bytecodes.sl);
+    auto rtype = TypeTag(body->return_type.value, false);
+    auto ptypes = psl::vector<TypeTag>();
+    auto lambda_builder_ptypes = psl::vector<TypeTag>();
+    auto args = psl::vector<Expr>();
 
-  for (const auto& capture : captures) {
-    auto vi = bytecodes.var_index_by_name(capture.value);
-    if (vi == uint16_t(-1))
-      bytecodes.error(capture, "Variable `", capture.value, "` is not found");
-    auto tname = bytecodes.var_type(vi).name;
-    // Create a member that corresponds to each captured variable
-    members.push_back(MemberDefinition(capture, Id(capture.row, capture.column, tname)));
+    for (const auto& capture : captures) {
+      auto vi = bytecodes.var_index_by_name(capture.value);
+      if (vi == uint16_t(-1))
+        bytecodes.error(capture, "Variable `", capture.value, "` is not found");
+      auto ptype = bytecodes.var_type(vi);
+      fbcodes.placehold_typed(ptype, capture.value);
+      lambda_builder_ptypes.push_back(ptype);
+      args.push_back(capture);
+    }
+    for (const auto& param : body->params) {
+      auto ptype = TypeTag(param.type.value, false);
+      fbcodes.placehold_typed(ptype, param.name.value);
+      ptypes.push_back(ptype);
+    }
+    body->block.emit(context, fbcodes);
 
-    // In ctor: Initialize each member with their corresponding captured variable
-    it = psl::next(ctor_body.elems.insert(
-        it, Stmt(Expr(Expr(MemberAccess(capture.row, capture.column, Id(row, column, "self"),
-                                        Id(capture.row, capture.column, "__" + capture.value))),
-                      Expr(capture), Expr::Assi))));
-    ctor_params.push_back(ParameterDeclaration(capture, Id(capture.row, capture.column, tname)));
-    ctor_args.push_back(Expr(capture));
+    context(name) = Function(
+        lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
+                                            ptypes](psl::span<const Variable*> args) mutable {
+          auto capture_args = psl::static_vector<const Variable*, 8>(args);
+          return Function(lambda<psl::span<const Variable*>>(
+                              [&context, fbcodes = psl::move(fbcodes),
+                               capture_args](psl::span<const Variable*> args) mutable {
+                                auto vm = VirtualMachine();
+                                for (const auto& var : context.variables)
+                                  vm.stack.push(var.second);
+                                for (size_t i = 0; i < capture_args.size(); i++)
+                                  vm.stack.push(*capture_args[i]);
+                                for (size_t i = 0; i < args.size(); i++)
+                                  vm.stack.push(*args[i]);
+                                return execute(context, fbcodes, vm);
+                              }),
+                          rtype, ptypes);
+        }),
+        TypeTag(signature_from(rtype, ptypes)), lambda_builder_ptypes);
+
+    return FunctionCall(row, column, name, args).emit(context, bytecodes);
+  } catch (const Exception& e) {
+    bytecodes.error(*this, e.what());
   }
-  // In ctor: Return self
-  ctor_body.elems.push_back(Stmt(ReturnStmt(Id(row, column, "self"))));
-  // In operator(): Create references to members so that we can write x instead of self.x
-  for (const auto& member : members) {
-    body->block.elems.push_front(Stmt(
-        Declaration(member.name.value,
-                    Expr(MemberAccess(row, column, Id(row, column, "self"), member.name)), true)));
-  }
-  ClassDefinition(
-      row, column, class_name,
-      psl::vector_of(FunctionDefinition(row, column, class_name, Id(row, column, class_name),
-                                        ctor_params, ctor_body)),
-      psl::vector_of(*body), members)
-      .emit(context, bytecodes);
-  auto atypes = psl::vector<TypeTag>();
-  auto ptypes = psl::vector<TypeTag>();
-  for (size_t i = 0; i < body->params.size(); i++) {
-    atypes.push_back(TypeTag(body->params[i].type.value, false));
-    if (i != 0)
-      ptypes.push_back(TypeTag(body->params[i].type.value, false));
-  }
-  auto fr = context.find_f("()", atypes);
-  auto fi = fr.function_index;
-  auto signature = signature_from(fr.rtype, ptypes);
-  auto& type_trait = context.types[signature] = Context::TypeTrait(signature);
-  type_trait.add_from_converter(class_name, context.functions.size());
-  context.functions.push_back(Function(
-      tag<Function, psl::span<const Variable*>>(
-          [f = context.functions[fi], rtype = fr.rtype, ptypes](psl::span<const Variable*> args) {
-            return Function(
-                lambda<psl::span<const Variable*>>([self = *args[0],
-                                                    f](psl::span<const Variable*> args) {
-                  auto args_ =
-                      psl::vector<const Variable*, psl::static_allocator<const Variable*, 10>>();
-                  args_.push_back(&self);
-                  args_.insert_range(args_.end(), args);
-                  return f.call(args_);
-                }),
-                rtype, ptypes);
-          }),
-      TypeTag(signature, false), psl::vector_of(TypeTag(class_name, false))));
-  // Create the lambda object
-  return Expr(FunctionCall(row, column, class_name, ctor_args)).emit(context, bytecodes);
 }
 uint16_t Expr0::emit(Context& context, Bytecodes& bytecodes) const {
   if (op == None)
