@@ -98,7 +98,7 @@ struct TrowbridgeReitzDistribution {
         if (cos4Theta < 1e-6f)
             return 0.0f;
         float e = tan2Theta * (psl::sqr(CosPhi(wm) / alphaX) + psl::sqr(SinPhi(wm) / alphaY));
-        return 1.0f / (pi * alphaX * alphaY * cos4Theta * psl::sqr(1 + e));
+        return 1.0f / (Pi * alphaX * alphaY * cos4Theta * psl::sqr(1 + e));
     }
     float Lambda(vec3 w) const {
         float tan2Theta = Tan2Theta(w);

@@ -126,7 +126,7 @@ struct Sphere {
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
   float area() const {
-    return 4 * pi * r * r;
+    return 4 * Pi * r * r;
   }
   ShapeSample sample(vec3, vec2 u) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
@@ -147,7 +147,7 @@ struct Disk {
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
   float area() const {
-    return pi * r * r;
+    return Pi * r * r;
   }
   ShapeSample sample(vec3, vec2) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
@@ -165,7 +165,7 @@ struct Line {
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
   float area() const {
-    return thickness * 2 * pi * len;
+    return thickness * 2 * Pi * len;
   }
   ShapeSample sample(vec3, vec2) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;

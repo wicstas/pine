@@ -31,7 +31,7 @@ psl::vector<psl::string> split(psl::string_view input, auto pred) {
   auto start = input.begin();
   while (true) {
     auto end = psl::find_if(psl::range(start, input.end()), pred);
-    parts.push_back(psl::string{start, end});
+    parts.push_back(psl::string(start, end));
     if (end == input.end())
       break;
     else
@@ -41,9 +41,9 @@ psl::vector<psl::string> split(psl::string_view input, auto pred) {
   return parts;
 }
 
-SourceLines::SourceLines(psl::string_view tokens, size_t line_paddings)
-    : line_paddings{line_paddings} {
-  lines = split(tokens, [](char c) { return c == '\n' || c == '\r' || c == '\f'; });
+SourceLines::SourceLines(psl::string_view tokens, size_t paddings)
+    : lines(split(tokens, [](char c) { return c == '\n' || c == '\r' || c == '\f'; })),
+      paddings(paddings) {
 }
 
 psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
@@ -63,14 +63,14 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
 
 [[noreturn]] void SourceLines::error_impl(size_t row, size_t column,
                                           psl::string_view message) const {
-  CHECK(line_paddings != invalid);
+  CHECK(paddings != invalid);
   CHECK_LT(row, lines.size());
 
   auto vicinity = psl::string();
-  for (int64_t i = row - line_paddings; i <= int64_t(row); i++)
+  for (int64_t i = row - paddings; i <= int64_t(row); i++)
     vicinity += " | " + (i < 0 ? psl::string() : lines[i]) + "\n";
   vicinity += "  -" + psl::string_n_of(column, '-') + "^\n";
-  for (size_t i = row + 1; i <= row + line_paddings; i++)
+  for (size_t i = row + 1; i <= row + paddings; i++)
     vicinity += " | " + (i >= lines.size() ? psl::string() : lines[i]) + "\n";
   if (vicinity.size())
     vicinity.pop_back();
@@ -78,11 +78,7 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
   Fatal(message, "\n", vicinity);
 }
 
-Bytecodes::Bytecodes(const Context& context, SourceLines sl) : sl(psl::move(sl)) {
-  for (const auto& var : context.variables)
-    stack.push_back(var.first);
-  for (const auto& var : context.variables_map)
-    variable_map.push_back({var.first, var.second});
+Bytecodes::Bytecodes(SourceLines sl) : sl(psl::move(sl)) {
 }
 
 size_t Bytecodes::add(Bytecode::Instruction instruction, size_t value0, size_t value1) {
@@ -301,8 +297,7 @@ struct ReturnStmt {
   ReturnStmt(Expr expr) : expr(psl::move(expr)) {
   }
   void emit(Context& context, Bytecodes& bytecodes) const {
-    auto vi = expr.emit(context, bytecodes);
-    bytecodes.add(Bytecode::Return, vi);
+    bytecodes.add(Bytecode::Return, expr.emit(context, bytecodes));
   }
 
   Expr expr;
@@ -416,21 +411,28 @@ struct PBlock
 
 uint16_t Id::emit(Context& context, Bytecodes& bytecodes) const {
   auto var_index = bytecodes.var_index_by_name(value);
-  if (var_index == uint16_t(-1)) {
-    auto fr = context.find_unique_f(value);
-    if (fr.status == fr.None)
-      bytecodes.error(*this, "Variable `", value, "` is not found");
-    else if (fr.status == fr.TooMany) {
-      bytecodes.error(*this, "Reference to function `", value, "` is ambiguous, candidates:\n",
-                      fr.candidates);
-    } else {
-      bytecodes.add_typed(Bytecode::LoadFunction,
-                          TypeTag(context.functions[fr.function_index].signature(), false),
-                          fr.function_index);
-      return bytecodes.top_var_index();
-    }
+  if (var_index != uint16_t(-1))
+    return var_index;
+
+  var_index = context.find_variable(value);
+  if (var_index != uint16_t(-1)) {
+    bytecodes.add_typed(Bytecode::LoadGlobalVariable, context.variables[var_index].first,
+                        var_index);
+    return bytecodes.top_var_index();
   }
-  return var_index;
+
+  auto fr = context.find_unique_f(value);
+  if (fr.status == fr.None) {
+    bytecodes.error(*this, "Variable `", value, "` is not found");
+  } else if (fr.status == fr.TooMany) {
+    bytecodes.error(*this, "Reference to function `", value, "` is ambiguous, candidates:\n",
+                    fr.candidates);
+  } else {
+    bytecodes.add_typed(Bytecode::LoadFunction,
+                        TypeTag(context.functions[fr.function_index].signature(), false),
+                        fr.function_index);
+    return bytecodes.top_var_index();
+  }
 }
 NumberLiteral::NumberLiteral(const psl::string& str) {
   if ((is_float = psl::find(str, '.') != str.end()))
@@ -584,7 +586,7 @@ LambdaExpr::LambdaExpr(size_t row, size_t column, psl::vector<Id> captures, Func
 uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto name = psl::string("__lambda") + psl::to_string(context.new_internal_class());
-    auto fbcodes = Bytecodes(context, bytecodes.sl);
+    auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = TypeTag(body->return_type.value, false);
     auto ptypes = psl::vector<TypeTag>();
     auto lambda_builder_ptypes = psl::vector<TypeTag>();
@@ -614,8 +616,6 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
                               [&context, fbcodes = psl::move(fbcodes),
                                capture_args](psl::span<const Variable*> args) mutable {
                                 auto vm = VirtualMachine();
-                                for (const auto& var : context.variables)
-                                  vm.stack.push(var.second);
                                 for (size_t i = 0; i < capture_args.size(); i++)
                                   vm.stack.push(*capture_args[i]);
                                 for (size_t i = 0; i < args.size(); i++)
@@ -941,7 +941,7 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
 }
 void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   try {
-    auto fbcodes = Bytecodes(context, bytecodes.sl);
+    auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = TypeTag(return_type.value, false);
     auto ptypes = psl::vector<TypeTag>();
     for (const auto& param : params) {
@@ -964,8 +964,6 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
                                                    *this](psl::span<const Variable*> args) mutable {
           CHECK_EQ(args.size(), params.size());
           auto vm = VirtualMachine();
-          for (const auto& var : context.variables)
-            vm.stack.push(var.second);
           for (size_t i = 0; i < args.size(); i++)
             vm.stack.push(*args[i]);
           return execute(context, fbcodes, vm);
@@ -1753,7 +1751,7 @@ psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
 Bytecodes compile(Context& context, psl::string source) {
   try {
     auto [block, sl] = parse_as_block(psl::move(source));
-    auto bytecodes = Bytecodes(context, psl::move(sl));
+    auto bytecodes = Bytecodes(psl::move(sl));
     block.emit(context, bytecodes);
     return bytecodes;
   } catch (const Exception& e) {
@@ -1774,6 +1772,9 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
       switch (code.instruction) {
         case Bytecode::Break: break;
         case Bytecode::Continue: break;
+        case Bytecode::LoadGlobalVariable:
+          vm.stack.push(context.variables[code.value].second);
+          break;
         case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
         case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
         case Bytecode::MakeRef: push(vm.stack[code.value].make_ref()); break;
@@ -1958,8 +1959,6 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
 Variable execute(const Context& context, const Bytecodes& bytecodes) {
   Profiler _("[Interpreter]Execute");
   auto vm = VirtualMachine();
-  for (const auto& var : context.variables)
-    vm.stack.push(var.second);
   return execute(context, bytecodes, vm);
 }
 

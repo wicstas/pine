@@ -179,11 +179,11 @@ ShapeSample Plane::sample(vec3 p, vec2 u2) const {
   ss.n = n;
   ss.uv = vec2{ex, ey};
   ss.w = normalize(ss.p - p, ss.distance);
-  ss.pdf = 1.0f / (2 * pi);
+  ss.pdf = 1.0f / (2 * Pi);
   return ss;
 }
 float Plane::pdf(const Interaction&, const Ray&, vec3) const {
-  return 1.0f / (2 * pi);
+  return 1.0f / (2 * Pi);
 }
 
 bool Disk::hit(const Ray& ray) const {
@@ -279,7 +279,7 @@ bool Line::intersect(Ray& ray, Interaction& it) const {
 }
 ShapeSample Line::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
-  auto phi = u2[1] * 2 * pi;
+  auto phi = u2[1] * 2 * Pi;
   ss.p =
       lerp(u2[0], p0, p1) + thickness * psl::cos(phi) * tbn.x + thickness * psl::sin(phi) * tbn.y;
   ss.n = psl::cos(phi) * tbn.x + psl::sin(phi) * tbn.y;
@@ -393,7 +393,7 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   auto g3 = psl::acos(-dot(n3, n0));
   auto b0 = n0.z;
   auto b1 = n2.z;
-  auto k = 2 * pi - g2 - g3;
+  auto k = 2 * Pi - g2 - g3;
   auto S = g0 + g1 - k;
   auto au = u[0] * S + k;
   auto fu = (psl::cos(au) * b0 - b1) / psl::sin(au);
@@ -440,7 +440,7 @@ float Rect::pdf(const Interaction& it, const Ray& ray, vec3) const {
   auto g1 = psl::acos(-dot(n1, n2));
   auto g2 = psl::acos(-dot(n2, n3));
   auto g3 = psl::acos(-dot(n3, n0));
-  auto k = 2 * pi - g2 - g3;
+  auto k = 2 * Pi - g2 - g3;
   auto S = g0 + g1 - k;
   S = psl::max(S, epsilon);
   return 1.0f / S;

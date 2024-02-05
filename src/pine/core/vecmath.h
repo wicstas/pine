@@ -1259,19 +1259,19 @@ inline vec3 spherical_to_cartesian(float phi, float theta) {
   return vec3(sinTheta * psl::cos(phi), sinTheta * psl::sin(phi), psl::cos(theta));
 }
 inline vec3 unit_square_to_cartesian(vec2 sc) {
-  return spherical_to_cartesian(sc[0] * pi * 2, sc[1] * pi);
+  return spherical_to_cartesian(sc[0] * Pi * 2, sc[1] * Pi);
 }
 
 inline float phi2pi(float x, float y) {
   float phi = psl::atan2(y, x);
-  return phi < 0.0f ? pi * 2 + phi : phi;
+  return phi < 0.0f ? Pi * 2 + phi : phi;
 }
 
 inline vec2 cartesian_to_spherical(vec3 d) {
   return vec2(phi2pi(d.x, d.y), psl::acos(d.z));
 }
 inline vec2 cartesian_to_unit_square(vec3 d) {
-  return cartesian_to_spherical(d) / vec2{2 * pi, pi};
+  return cartesian_to_spherical(d) / vec2{2 * Pi, Pi};
 }
 
 inline vec3 face_same_hemisphere(vec3 v, vec3 ref) {

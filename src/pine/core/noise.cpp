@@ -13,7 +13,7 @@ float perlin_noise(vec3 np, float frequency, int seed) {
     for (int y = 0; y < 2; y++)
       for (int z = 0; z < 2; z++) {
         auto u = RNG{hash(vec3i((floor(np) + vec3i(x, y, z))), seed)}.uniform2f();
-        noise[x][y][z] = spherical_to_cartesian(u.x * pi * 2, u.y * pi);
+        noise[x][y][z] = spherical_to_cartesian(u.x * Pi * 2, u.y * Pi);
       }
   return 0.5f * (1.0f + perlin_interp(noise, uvw));
 }

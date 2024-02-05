@@ -44,8 +44,8 @@ vec3 atmosphere_color(vec3 direction, vec3 sun_dir, int nSamples, bool simulate_
   const float Hr = 1.0f / 7995.0f, Hm = 1.0f / 1200.0f;
   const int nSamplesLight = nSamples / 2;
   const float mu = dot(direction, sun_dir);
-  const float phaseR = 3.0f / (16.0f * pi) * (1.0f + mu * mu), g = 0.76f,
-              phaseM = 3.0f / (8.0f * pi) * (1.0f - g * g) * (1.0f + mu * mu) /
+  const float phaseR = 3.0f / (16.0f * Pi) * (1.0f + mu * mu), g = 0.76f,
+              phaseM = 3.0f / (8.0f * Pi) * (1.0f - g * g) * (1.0f + mu * mu) /
                        ((2.0f + g * g) * psl::pow(1.0f + g * g - 2.0f * g * mu, 1.5f));
 
   Ray ray = Ray(vec3(0.0f, planet_radius, 0.0f), direction);

@@ -12,8 +12,8 @@ psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const Node
   DCHECK(SameHemisphere(wi, wo));
 
   bs.wo = wo;
-  bs.pdf = AbsCosTheta(bs.wo) / pi;
-  bs.f = albedo(nc) / pi;
+  bs.pdf = AbsCosTheta(bs.wo) / Pi;
+  bs.f = albedo(nc) / Pi;
   if (bs.pdf == 0.0f)
     return psl::nullopt;
   return bs;
@@ -22,12 +22,12 @@ psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const Node
 vec3 DiffuseBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   if (!SameHemisphere(wi, wo))
     return vec3(0.0f);
-  return albedo(nc) / pi;
+  return albedo(nc) / Pi;
 }
 float DiffuseBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx&) const {
   if (!SameHemisphere(wi, wo))
     return epsilon;
-  return AbsCosTheta(wo) / pi;
+  return AbsCosTheta(wo) / Pi;
 }
 
 psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,

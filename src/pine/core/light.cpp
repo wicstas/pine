@@ -41,13 +41,13 @@ LightSample Sky::sample(vec3 n, vec2 u2) const {
   auto ls = LightSample{};
   ls.wo = coordinate_system(n) * uniform_hemisphere(u2);
   ls.distance = float_max;
-  ls.pdf = 1 / (2 * pi);
+  ls.pdf = 1 / (2 * Pi);
   ls.le = color(ls.wo);
   return ls;
 }
 float Sky::pdf(vec3 n, vec3 wo) const {
   if (dot(n, wo) > 0.0f)
-    return 1 / (2 * pi);
+    return 1 / (2 * Pi);
   else
     return 0.0f;
 }
@@ -83,7 +83,7 @@ LightSample Atmosphere::sample(vec3, vec2 u2) const {
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
   ls.distance = float_max;
-  ls.pdf = ds.pdf / (4 * pi);
+  ls.pdf = ds.pdf / (4 * Pi);
   ls.le = sun_color * atmosphere_color(ls.wo, sun_direction, 8, true);
   return ls;
 }
@@ -91,7 +91,7 @@ float Atmosphere::pdf(vec3, vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image_size);
-  return distr.pdf(ic) / (4 * pi);
+  return distr.pdf(ic) / (4 * Pi);
 }
 
 ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint)
@@ -115,7 +115,7 @@ LightSample ImageSky::sample(vec3, vec2 u2) const {
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
   ls.distance = float_max;
-  ls.pdf = ds.pdf / (4 * pi);
+  ls.pdf = ds.pdf / (4 * Pi);
   ls.le = tint * (*image)[ds.p];
   return ls;
 }
@@ -123,7 +123,7 @@ float ImageSky::pdf(vec3, vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
-  return distr.pdf(ic) / (4 * pi);
+  return distr.pdf(ic) / (4 * Pi);
 }
 
 void light_context(Context& ctx) {

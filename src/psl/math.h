@@ -13,7 +13,7 @@ inline constexpr float Log2E = 1.4426950408889634074f;
 inline constexpr float Log10E = 0.43429448190325182765f;
 inline constexpr float Ln2 = 0.69314718055994530942f;
 inline constexpr float Ln10 = 2.30258509299404568402f;
-inline constexpr float pi = 3.14159265358979323846f;
+inline constexpr float Pi = 3.14159265358979323846f;
 inline constexpr float Sqrt2 = 1.41421356237309504880f;
 
 template <typename T>
@@ -281,21 +281,21 @@ inline T cos(T x) {
   if (x < 0)
     x = -x;
   // TODO
-  CorrespondingInt<T> y = x / (pi * 2);
-  x -= y * (pi * 2);
-  if (x > pi)
-    x = pi * 2 - x;
+  CorrespondingInt<T> y = x / (Pi * 2);
+  x -= y * (Pi * 2);
+  if (x > Pi)
+    x = Pi * 2 - x;
 
-  if (x < pi / 2)
+  if (x < Pi / 2)
     return cos_0_pi_2(x);
   else
-    return -cos_0_pi_2(pi - x);
+    return -cos_0_pi_2(Pi - x);
 }
 
 template <FloatingPoint T>
 inline T sin(T x) {
   return std::sin(x);
-  return psl::cos(x - pi / 2);
+  return psl::cos(x - Pi / 2);
 }
 
 template <FloatingPoint T>
@@ -312,7 +312,7 @@ inline T acos(T y) {
   if (y < -1 || y > 1)
     return 0;
 
-  T x = (1 - y) * pi / 2;
+  T x = (1 - y) * Pi / 2;
 
   const int n = 8;
 
@@ -332,7 +332,7 @@ inline T asin(T y) {
   if (y < -1 || y > 1)
     return 0;
 
-  T x = y * pi / 2;
+  T x = y * Pi / 2;
 
   const int n = 8;
 
@@ -349,7 +349,7 @@ template <FloatingPoint T>
 inline T atan(T y) {
   return std::atan(y);
   // TODO
-  T x = (y > 0 ? 1 - 1 / (1 + y) : -1 + 1 / (1 - y)) * pi / 2;
+  T x = (y > 0 ? 1 - 1 / (1 + y) : -1 + 1 / (1 - y)) * Pi / 2;
 
   const int n = 8;
 
@@ -368,9 +368,9 @@ inline T atan2(T y, T x) {
   if (x > 0)
     return psl::atan(y / x);
   else if (y > 0)
-    return pi - psl::atan(-y / x);
+    return Pi - psl::atan(-y / x);
   else
-    return -pi - psl::atan(-y / x);
+    return -Pi - psl::atan(-y / x);
 }
 
 }  // namespace psl

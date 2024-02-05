@@ -10,7 +10,7 @@ namespace pine {
 
 struct SourceLines {
   SourceLines() = default;
-  SourceLines(psl::string_view tokens, size_t line_paddings);
+  SourceLines(psl::string_view tokens, size_t paddings);
 
   psl::optional<psl::string_view> next_line(size_t row) const;
 
@@ -25,7 +25,7 @@ struct SourceLines {
 
 private:
   psl::vector<psl::string> lines;
-  size_t line_paddings = invalid;
+  size_t paddings = invalid;
   static constexpr size_t invalid = static_cast<size_t>(-1);
 };
 
@@ -44,6 +44,7 @@ struct Bytecode {
     Copy,
     MakeRef,
     LoadFunction,
+    LoadGlobalVariable,
     LoadFloatConstant,
     LoadIntConstant,
     LoadBoolConstant,
@@ -118,7 +119,7 @@ struct Bytecode {
 };
 
 struct Bytecodes {
-  Bytecodes(const Context& context, SourceLines sl);
+  Bytecodes(SourceLines sl);
 
   size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
   void placehold_typed(TypeTag type, psl::string name);
@@ -195,26 +196,26 @@ struct Stack {
     storage.push_back(psl::move(x));
   }
   T& top() {
-    CHECK(storage.size() != 0);
+    DCHECK(storage.size() != 0);
     return storage.back();
   }
   T& top(size_t index) {
-    CHECK_LE(index + 1, storage.size());
+    DCHECK_LE(index + 1, storage.size());
     return storage[storage.size() - (1 + index)];
   }
   psl::span<T> top_n(int n) {
-    CHECK_GE(n, 0);
+    DCHECK_GE(n, 0);
     auto span = psl::span<T>(storage);
     return span.subspan(span.size() - n, n);
   }
   void unwind(size_t position) {
     if (position == size_t(-1) || position == storage.size())
       return;
-    CHECK_LE(position, storage.size());
+    DCHECK_LE(position, storage.size());
     storage.resize_less(position);
   }
   T& operator[](size_t index) {
-    CHECK_LT(index, storage.size());
+    DCHECK_LT(index, storage.size());
     return storage[index];
   }
   void reserve(size_t size) {
@@ -230,7 +231,6 @@ private:
 
 struct VirtualMachine {
   Stack<Variable, psl::default_allocator<Variable>> stack;
-  // Stack<Variable, psl::static_allocator<Variable, 32>> stack;
 };
 
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm);

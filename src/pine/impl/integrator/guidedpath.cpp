@@ -119,7 +119,7 @@ struct QuadNode {
     if (flux == 0.0f)
       return psl::nullopt;
     if (is_leaf()) {
-      return QuadTreeSample{lerp(vec2{u}, lower, upper), pdf / (4 * pi)};
+      return QuadTreeSample{lerp(vec2{u}, lower, upper), pdf / (4 * Pi)};
     } else {
       auto rx = (child(nodes, 0).flux + child(nodes, 2).flux) / flux;
       if (u[0] < rx) {
@@ -147,7 +147,7 @@ struct QuadNode {
   }
   float pdf(const QuadNodes& nodes, vec2 sc) const {
     if (is_leaf()) {
-      return 1.0f / (4 * pi);
+      return 1.0f / (4 * Pi);
     } else {
       if (flux == 0.0f)
         return 0.0f;
@@ -159,7 +159,7 @@ struct QuadNode {
     if (flux == 0)
       return flux;
     if (is_leaf())
-      return flux / (4 * pi * area(upper - lower));
+      return flux / (4 * Pi * area(upper - lower));
     else
       return child(nodes, sc).flux_density(nodes, sc);
   }

@@ -76,8 +76,12 @@ Context::Context() {
       .member("id", &Type::id);
   context("type") =
       Function(lambda<psl::span<const Variable*>>([&context](psl::span<const Variable*> args) {
-                 return Type{context.name_from_id(args[0]->type_id()), args[0]->type_name(),
-                             args[0]->type_id()};
+                 if (args[0]->type_id() == psl::type_id<Function>())
+                   return Type{args[0]->as<const Function&>().signature(), args[0]->type_name(),
+                               args[0]->type_id()};
+                 else
+                   return Type{context.name_from_id(args[0]->type_id()), args[0]->type_name(),
+                               args[0]->type_id()};
                }),
                context.tag<Type>(), context.tags<Any>());
 

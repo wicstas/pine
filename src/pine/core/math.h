@@ -7,9 +7,9 @@
 
 namespace pine {
 
-static constexpr float pi = psl::pi;
-static constexpr float pi2 = pi * 2;
-static constexpr float pi4 = pi * 4;
+static constexpr float Pi = psl::Pi;
+static constexpr float Pi2 = Pi * 2;
+static constexpr float Pi4 = Pi * 4;
 static constexpr float epsilon = psl::numeric_limits<float>::epsilon();
 static constexpr float one_minus_epsilon = 0x1.fffffep-1;
 static constexpr float float_max = psl::numeric_limits<float>::max();
