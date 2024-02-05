@@ -33,7 +33,7 @@ struct Distribution2D {
   psl::shared_ptr<Node> root;
 
 private:
-  int max_depth = 6;
+  int max_depth = 0;
   float density_to_pdf_ = 0.0;
 };
 

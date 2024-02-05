@@ -185,7 +185,7 @@ struct Variable {
 
 private:
   psl::shared_ptr<VariableConcept> model;
-  // psl::CopyTemplateArguments<psl::Variant, PodTypes> pod;
+  // psl::CopyTemplateArguments<psl::variant, PodTypes> pod;
 };
 
 inline psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes) {
@@ -228,7 +228,7 @@ struct Function {
         const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
           if constexpr (psl::is_psl_function<typename P::Type>)
             return (typename P::Type)([f = var.template as<Function>()](auto&&... args) {
-              return f(FWD(args)...).template as<psl::psl_function_return_type<typename P::Type>>();
+              return f(FWD(args)...).template as<psl::PslFunctionReturnType<typename P::Type>>();
             });
           else
             return var.template as<typename P::Type>();

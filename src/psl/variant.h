@@ -116,8 +116,8 @@ decltype(auto) dispatch(VariantType&& object [[maybe_unused]], int index [[maybe
 }
 
 template <typename... Ts>
-struct Variant {
-  static_assert(sizeof...(Ts) < (1 << 8), "Variant only support 1 ~ 255 possible types");
+struct variant {
+  static_assert(sizeof...(Ts) < (1 << 8), "variant only support 1 ~ 255 possible types");
   using Aggregate = detail::Union<Ts...>;
 
   template <typename T>
@@ -125,24 +125,24 @@ struct Variant {
     return (psl::SameAs<T, Ts> && ...);
   }
 
-  Variant() = default;
-  ~Variant() {
+  variant() = default;
+  ~variant() {
     reset();
   }
 
-  Variant(const Variant& rhs) {
+  variant(const variant& rhs) {
     rhs.try_dispatch([&](const auto& x) {
       value.construct_from(x);
       tag_ = rhs.tag_;
     });
   }
-  Variant(Variant&& rhs) {
+  variant(variant&& rhs) {
     rhs.try_dispatch([&](auto& x) {
       value.construct_from(psl::move(x));
       tag_ = rhs.tag_;
     });
   }
-  Variant& operator=(Variant rhs) {
+  variant& operator=(variant rhs) {
     reset();
     rhs.try_dispatch([&](auto& rx) {
       value.construct_from(psl::move(rx));
@@ -151,12 +151,12 @@ struct Variant {
     return *this;
   }
   template <typename T>
-  Variant(T x) {
+  variant(T x) {
     value.construct_from(psl::move(x));
     tag_ = psl::index<Decay<T>, Ts...>();
   }
   template <typename T>
-  Variant& operator=(T x) {
+  variant& operator=(T x) {
     reset();
     value.construct_from(psl::move(x));
     tag_ = psl::index<Decay<T>, Ts...>();

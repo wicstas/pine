@@ -59,34 +59,25 @@ using Array2d3f = Array2d<vec3>;
 using Array2d4f = Array2d<vec4>;
 
 template <typename F>
-void for_2d(vec2i lower, vec2i upper, F f, bool horizontal = false) {
+void for_2d(vec2i lower, vec2i upper, F f) {
   auto size = upper - lower;
-  if (horizontal)
-    for (int i = 0; i < size[0]; i++)
-      for (int j = 0; j < size[1]; j++) {
-        if constexpr (psl::IsVoid<decltype(f(vec2i{}))>)
-          f(lower + vec2i{i, j});
-        else if (!f(lower + vec2i{i, j}))
-          return;
-      }
-  else
-    for (int j = 0; j < size[1]; j++)
-      for (int i = 0; i < size[0]; i++) {
-        if constexpr (psl::IsVoid<decltype(f(vec2i{}))>)
-          f(lower + vec2i{i, j});
-        else if (!f(lower + vec2i{i, j}))
-          return;
-      }
+  for (int j = 0; j < size[1]; j++)
+    for (int i = 0; i < size[0]; i++) {
+      if constexpr (psl::IsVoid<psl::ReturnType<F, vec2i>>)
+        f(lower + vec2i{i, j});
+      else if (!f(lower + vec2i{i, j}))
+        return;
+    }
 }
 
 template <typename F>
-void for_2d(vec2i size, F f, bool horizontal = false) {
-  return for_2d(vec2i{}, size, f, horizontal);
+void for_2d(vec2i size, F f) {
+  return for_2d(vec2i(), size, f);
 }
 
 inline Array2d2f grid(vec2 a, vec2 b, vec2i size) {
   auto arr = Array2d2f(size);
-  for_2d(size, [&](vec2i p) { arr[p] = lerp((p + vec2{0.5f}) / size, a, b); });
+  for_2d(size, [&](vec2i p) { arr[p] = lerp((p + vec2(0.5f)) / size, a, b); });
   return arr;
 }
 

@@ -223,9 +223,9 @@ private:
   int64_t lastLargeStepIndex = 0;
 };
 
-struct Sampler : psl::Variant<UniformSampler, StratifiedSampler, HaltonSampler,
+struct Sampler : psl::variant<UniformSampler, StratifiedSampler, HaltonSampler,
                               ZeroTwoSequenceSampler, MltSampler> {
-  using Variant::Variant;
+  using variant::variant;
 
   int spp() const {
     return dispatch([&](auto&& x) { return x.spp(); });

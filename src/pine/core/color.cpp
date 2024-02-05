@@ -33,7 +33,7 @@ vec3 color_map(float v) {
     return vec3(1, 0, 0);
   }
 }
-vec3 color_map_smooth(float v) {
+vec3 color_map_auto(float v) {
   v = 1 - 1 / psl::max(v, epsilon);
   return color_map(v);
 }

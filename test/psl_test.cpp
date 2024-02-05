@@ -196,7 +196,7 @@ void test_vector() {
     auto v2 = v;
   }
   {
-    auto v = psl::vector<psl::Variant<psl::vector<int>, psl::vector<float>>>{};
+    auto v = psl::vector<psl::variant<psl::vector<int>, psl::vector<float>>>{};
     v.push_back(psl::vector_of(1, 3));
     v.push_back(psl::vector_of(1, 7));
     v.push_back(psl::vector_of(1, 8));
@@ -266,7 +266,7 @@ void test_string() {
 
 void test_variant() {
   emitter.expect(psl::vector_of<psl::string>("Ac", "Bc"));
-  auto x = psl::Variant<MockA, MockB>{};
+  auto x = psl::variant<MockA, MockB>{};
   CHECK(!x.is_valid());
   x = MockA();
   CHECK(x.is<MockA>());
@@ -281,15 +281,15 @@ void test_variant() {
   d = 5;
   CHECK_EQ(b, 5);
   {
-    auto a = psl::Variant<psl::vector<int>, psl::vector<float>>();
-    auto c = psl::Variant<psl::vector<int>, psl::vector<float>>(psl::vector_of(3.0f, 1.0f, 7.0f));
+    auto a = psl::variant<psl::vector<int>, psl::vector<float>>();
+    auto c = psl::variant<psl::vector<int>, psl::vector<float>>(psl::vector_of(3.0f, 1.0f, 7.0f));
     auto b = a;
     a = psl::vector_of(1, 3);
     b = c;
   }
   {
-    auto a = psl::Variant<psl::Box<int>, psl::Box<float>>();
-    auto c = psl::Variant<psl::Box<int>, psl::Box<float>>(psl::Box(7.0f));
+    auto a = psl::variant<psl::Box<int>, psl::Box<float>>();
+    auto c = psl::variant<psl::Box<int>, psl::Box<float>>(psl::Box(7.0f));
     {
       auto b = a;
       a = psl::Box(1);

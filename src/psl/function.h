@@ -39,12 +39,12 @@ constexpr bool is_psl_function = _is_psl_function<T>::value;
 
 
 template <typename T>
-struct _psl_function_return_type;
+struct _PslFunctionReturnType;
 template <typename R, typename... Args>
-struct _psl_function_return_type<function<R, Args...>>  {
+struct _PslFunctionReturnType<function<R, Args...>>  {
   using Type = R;
 };
 template <typename T>
-using psl_function_return_type = typename _psl_function_return_type<T>::Type;
+using PslFunctionReturnType = typename _PslFunctionReturnType<T>::Type;
 
 }  // namespace psl

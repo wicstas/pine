@@ -240,10 +240,10 @@ struct EmissiveMaterial {
   Node3f color;
 };
 
-struct Material : psl::Variant<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial,
+struct Material : psl::variant<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial,
                                GlossyMaterial, MirrorMaterial, WaterMaterial, EmissiveMaterial> {
 public:
-  using Variant::Variant;
+  using variant::variant;
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& c) const {
     return dispatch([&](auto&& x) {

@@ -17,7 +17,7 @@ vec3 uncharted2_filmic(vec3 v);
 vec3 ACES(vec3 v);
 
 vec3 color_map(float v);
-vec3 color_map_smooth(float v);
+vec3 color_map_auto(float v);
 
 vec3 atmosphere_color(vec3 direction, vec3 sun_direction, int nsamples, bool simulate_real_sun = false);
 vec3 sky_color(vec3 direction);

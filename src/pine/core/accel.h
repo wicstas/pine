@@ -4,17 +4,17 @@
 
 namespace pine {
 
-struct Accel : psl::Variant<BVH> {
-  using Variant::Variant;
+struct Accel : psl::variant<BVH> {
+  using variant::variant;
 
   void build(const Scene* scene) {
-    return dispatch([&](auto&& x) -> decltype(auto) { return x.build(scene); });
+    return dispatch([&](auto&& x) { return x.build(scene); });
   }
   bool hit(Ray ray) const {
-    return dispatch([&](auto&& x) -> decltype(auto) { return x.hit(ray); });
+    return dispatch([&](auto&& x) { return x.hit(ray); });
   }
   bool intersect(Ray& ray, Interaction& it) const {
-    return dispatch([&](auto&& x) -> decltype(auto) { return x.intersect(ray, it); });
+    return dispatch([&](auto&& x) { return x.intersect(ray, it); });
   }
 };
 

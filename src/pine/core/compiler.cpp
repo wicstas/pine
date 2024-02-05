@@ -252,9 +252,9 @@ struct LambdaExpr : ASTNode {
   psl::Box<FunctionDefinition> body;
 };
 using Grouped = Expr;
-struct PExpr : psl::Variant<Id, NumberLiteral, BooleanLiteral, StringLiteral, Vector, FunctionCall,
+struct PExpr : psl::variant<Id, NumberLiteral, BooleanLiteral, StringLiteral, Vector, FunctionCall,
                             MemberAccess, Subscript, Grouped, LambdaExpr> {
-  using Variant::Variant;
+  using variant::variant;
   uint16_t emit(Context& context, Bytecodes& bytecodes) const {
     return dispatch([&](auto&& x) { return x.emit(context, bytecodes); });
   }
@@ -302,8 +302,8 @@ struct ReturnStmt {
 
   Expr expr;
 };
-struct Stmt : psl::Variant<Semicolon, Expr, Declaration, BreakStmt, ContinueStmt, ReturnStmt> {
-  using Variant::Variant;
+struct Stmt : psl::variant<Semicolon, Expr, Declaration, BreakStmt, ContinueStmt, ReturnStmt> {
+  using variant::variant;
   void emit(Context& context, Bytecodes& bytecodes) const;
 };
 struct Block {
@@ -402,8 +402,8 @@ private:
   psl::vector<MemberDefinition> members;
 };
 struct PBlock
-    : psl::Variant<Block, Stmt, While, For, IfElseChain, FunctionDefinition, ClassDefinition> {
-  using Variant::Variant;
+    : psl::variant<Block, Stmt, While, For, IfElseChain, FunctionDefinition, ClassDefinition> {
+  using variant::variant;
   void emit(Context& context, Bytecodes& bytecodes) const {
     return dispatch([&](auto&& x) { x.emit(context, bytecodes); });
   }

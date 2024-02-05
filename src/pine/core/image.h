@@ -6,8 +6,8 @@
 
 namespace pine {
 
-struct Image : psl::Variant<Array2d<vec3u8>, Array2d<vec3>> {
-  using Variant::Variant;
+struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec3>> {
+  using variant::variant;
 
   vec3 operator[](vec2i p) const {
     return dispatch([p](auto&& x) {

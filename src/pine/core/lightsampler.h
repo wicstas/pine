@@ -18,8 +18,8 @@ private:
   psl::vector<Light> lights;
 };
 
-struct LightSampler : private psl::Variant<UniformLightSampler> {
-  using Variant::Variant;
+struct LightSampler : private psl::variant<UniformLightSampler> {
+  using variant::variant;
 
   void build(const Scene* scene) {
     return dispatch([&](auto&& x) { return x.build(scene); });

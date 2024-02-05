@@ -249,11 +249,10 @@ struct TriangleMesh {
   }
   AABB get_aabb(size_t index) const;
 
-  TriangleMesh apply(mat4 m) const {
-    auto copy = *this;
-    for (auto& v : copy.vertices)
-      v = vec3{m * vec4{v, 1.0f}};
-    return copy;
+  TriangleMesh& apply(mat4 m) {
+    for (auto& v : vertices)
+      v = vec3(m * vec4(v, 1.0f));
+    return *this;
   }
 
 private:
@@ -266,8 +265,8 @@ private:
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
 TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function);
 
-struct Shape : psl::Variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
-  using Variant::Variant;
+struct Shape : psl::variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
+  using variant::variant;
 
   bool hit(const Ray& ray) const {
     return dispatch([&](auto&& x) { return x.hit(ray); });

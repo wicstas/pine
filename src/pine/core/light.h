@@ -49,8 +49,8 @@ struct AreaLight {
   psl::shared_ptr<Geometry> geometry;
 };
 
-struct Light : psl::Variant<PointLight, DirectionalLight, AreaLight> {
-  using Variant::Variant;
+struct Light : psl::variant<PointLight, DirectionalLight, AreaLight> {
+  using variant::variant;
 
   LightSample sample(vec3 p, vec2 u2) const {
     return dispatch([&](auto&& x) { return x.sample(p, u2); });
@@ -99,8 +99,8 @@ private:
   vec3 tint;
 };
 
-struct EnvironmentLight : psl::Variant<Atmosphere, Sky, ImageSky> {
-  using Variant::Variant;
+struct EnvironmentLight : psl::variant<Atmosphere, Sky, ImageSky> {
+  using variant::variant;
 
   vec3 color(vec3 wo) const {
     return dispatch([&](auto&& x) { return x.color(wo); });
