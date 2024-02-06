@@ -3,6 +3,7 @@
 #include <pine/core/geometry.h>
 #include <pine/core/image.h>
 
+#include <psl/optional.h>
 #include <psl/fstream.h>
 #include <psl/string.h>
 #include <psl/vector.h>
@@ -29,11 +30,13 @@ inline void save_image(psl::string filename, const Array2d<vec4>& pixels) {
   save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
 }
 
-Image read_image(psl::string_view filename);
-Image read_image(void* data, size_t size);
+psl::shared_ptr<Image> load_image(psl::string_view filename);
+psl::optional<Image> load_image(void* data, size_t size);
 
-TriangleMesh load_mesh(void* data, size_t size);
+psl::optional<TriangleMesh> load_mesh(void* data, size_t size);
 TriangleMesh load_mesh(psl::string_view filename);
+
+void load_scene(Scene &scene_, psl::string_view filename);
 
 void interpret_file(Context& context, psl::string_view filename);
 

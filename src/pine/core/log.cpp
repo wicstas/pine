@@ -11,6 +11,8 @@ void stop_program() {
   // throw FatalException{};
 }
 
+void null_stream(psl::string_view) {
+}
 void cout_stream(psl::string_view data) {
   psl::cout << data;
 }

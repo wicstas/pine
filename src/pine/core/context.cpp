@@ -19,6 +19,7 @@ Context::Context() {
   context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
   context("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
   context("+") = +[](psl::string a, psl::string b) { return a + b; };
+  context.type<psl::string_view>("str_view").ctor_variant<const psl::string&>();
 
   context.type<bool>("bool");
   add_f(

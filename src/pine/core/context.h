@@ -54,7 +54,7 @@ auto derived(R (U::*f)(Args...)) {
   return static_cast<R (T::*)(Args...)>(f);
 }
 template <typename T, typename U, typename R, typename... Args>
-auto derived_const(R (U::*f)(Args...) const) {
+auto derived(R (U::*f)(Args...) const) {
   return static_cast<R (T::*)(Args...) const>(f);
 }
 template <typename... Args, typename R, typename T>
@@ -381,6 +381,16 @@ struct Context {
     TypeProxy& member(psl::string name, U T::*ptr) {
       trait.add_member_accessor(name, ctx.functions.size());
       ctx.add_f(pine::tag<U&, T&>([ptr](T& x) -> U& { return x.*ptr; }));
+      return *this;
+    }
+    template <typename U, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (U::*f)(Args...)) {
+      ctx(name) = derived<T>(f);
+      return *this;
+    }
+    template <typename U, typename R, typename... Args>
+    TypeProxy& method(psl::string name, R (U::*f)(Args...) const) {
+      ctx(name) = derived<T>(f);
       return *this;
     }
     template <typename F>

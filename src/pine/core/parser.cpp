@@ -21,7 +21,6 @@ Context get_default_context() {
   rng_context(ctx);
   geometry_context(ctx);
   image_context(ctx);
-  fileio_context(ctx);
   light_context(ctx);
   node_context(ctx);
   material_context(ctx);
@@ -29,6 +28,7 @@ Context get_default_context() {
   camera_context(ctx);
   scene_context(ctx);
   sampler_context(ctx);
+  fileio_context(ctx);
   ctx.type<psl::shared_ptr<Timer>>("Timer")
       .ctor(+[]() { return psl::make_shared<Timer>(); })
       .method(

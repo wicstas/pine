@@ -16,7 +16,7 @@ struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec3>> {
       if constexpr (psl::SameAs<decltype(value), vec3>)
         return value;
       else
-        return correct_gamma(value);
+        return correct_gamma(value / 255.0f);
     });
   }
 

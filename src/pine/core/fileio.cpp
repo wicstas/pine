@@ -71,45 +71,55 @@ void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *d
                    size.x * nchannel * sizeof(uint8_t));
   }
 }
-Image read_image(psl::string_view filename) {
+psl::shared_ptr<Image> load_image(psl::string_view filename) {
   Profiler _("[FileIO]Load image");
   auto data = read_binary_file(filename);
-  return read_image(data.data(), data.size());
+  if (auto image = load_image(data.data(), data.size()))
+    return psl::make_shared<Image>(psl::move(*image));
+  else
+    Fatal("Unable to load `", filename, "`");
 }
-Image read_image(void *buffer, size_t size) {
+
+psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const uint8_t *data) {
+  auto result = psl::vector<uint8_t>(size_t(area(size)) * target_comp);
+  for (int y = 0; y < size.y; y++)
+    for (int x = 0; x < size.x; x++)
+      for (int i = 0; i < psl::min(source_comp, target_comp); i++)
+        result[size_t(y) * size.x * target_comp + x * target_comp + i] =
+            data[size_t(y) * size.x * source_comp + x * source_comp + i];
+  return result;
+}
+psl::optional<Image> load_image(void *buffer, size_t size) {
+  Profiler _("[FileIO]Load image");
   int width, height, channels;
   if (stbi_is_hdr_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size)) {
     auto data = stbi_loadf_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size, &width,
                                        &height, &channels, 3);
     if (!data)
-      Fatal("Unable to load image");
-    CHECK_EQ(channels, 3);
-    auto image = Array2d<vec3>{vec2i{width, height}, reinterpret_cast<const vec3 *>(data)};
+      return psl::nullopt;
+    auto image = Array2d<vec3>{vec2i(width, height), reinterpret_cast<const vec3 *>(data)};
     STBI_FREE(data);
     return image;
   } else {
     auto data = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size, &width,
                                       &height, &channels, 3);
     if (!data)
-      Fatal("Unable to load image");
-    CHECK_EQ(channels, 3);
-    auto image = Array2d<vec3u8>{vec2i{width, height}, reinterpret_cast<const vec3u8 *>(data)};
+      return psl::nullopt;
+    auto image = Array2d<vec3u8>{vec2i(width, height), reinterpret_cast<const vec3u8 *>(data)};
     STBI_FREE(data);
     return image;
   }
 }
 
-TriangleMesh load_mesh(void *data, size_t size) {
+psl::optional<TriangleMesh> load_mesh(void *data, size_t size) {
   Assimp::Importer importer;
   const aiScene *scene =
       importer.ReadFileFromMemory(data, size,
                                   aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_FlipUVs |
                                       aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes);
 
-  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-    Fatal("Unable to load mesh");
-    return TriangleMesh{};
-  }
+  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+    return psl::nullopt;
 
   auto indices = psl::vector<vec3u32>{};
   auto vertices = psl::vector<vec3>{};
@@ -155,7 +165,102 @@ TriangleMesh load_mesh(void *data, size_t size) {
 TriangleMesh load_mesh(psl::string_view filename) {
   Profiler _("Loading mesh");
   auto data = read_binary_file(filename);
-  return load_mesh(data.data(), data.size());
+  if (auto mesh = load_mesh(data.data(), data.size()))
+    return *mesh;
+  else
+    Fatal("Unable to load `", filename, "`");
+}
+
+void load_scene(Scene &scene_, psl::string_view filename) {
+  auto p0 = psl::find_last_of(filename, '/');
+  if (auto p1 = psl::find_last_of(filename, '\\'); p1 != filename.end()) {
+    if (p0 != filename.end())
+      p0 = psl::max(p0, p1);
+    else
+      p0 = p1;
+  }
+  if (p0 == filename.end())
+    p0 = filename.begin();
+  else
+    p0 = psl::next(p0);
+  auto working_directory = psl::string_view(filename.begin(), p0);
+
+  Assimp::Importer importer;
+  const aiScene *scene =
+      importer.ReadFile(psl::string(filename).c_str(),
+                        aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_FlipUVs |
+                            aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes);
+
+  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+    Fatal("Unable to load `", filename, "`");
+  }
+
+  for (size_t i_mesh = 0; i_mesh < scene->mNumMeshes; i_mesh++) {
+    auto indices = psl::vector<vec3u32>{};
+    auto vertices = psl::vector<vec3>{};
+    auto normals = psl::vector<vec3>{};
+    auto texcoords = psl::vector<vec2>{};
+    aiMesh *mesh = scene->mMeshes[i_mesh];
+
+    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+      auto v = mesh->mVertices[i];
+      vertices.push_back(vec3{v.x, v.y, v.z});
+    }
+
+    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+      auto face = mesh->mFaces[i];
+      CHECK_EQ(face.mNumIndices, 3);
+      indices.push_back(vec3i(face.mIndices[0], face.mIndices[1], face.mIndices[2]));
+    }
+
+    if (mesh->HasTextureCoords(0)) {
+      Debug(mesh->mName.C_Str(), " has texture coords");
+      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+        aiVector3D aiTexCoords = mesh->mTextureCoords[0][i];
+        texcoords.push_back(vec2(aiTexCoords.x, aiTexCoords.y));
+      }
+    }
+
+    if (mesh->HasNormals()) {
+      Debug(mesh->mName.C_Str(), " has normals");
+      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+        aiVector3D aiNormal = mesh->mNormals[i];
+        normals.push_back(vec3(aiNormal.x, aiNormal.y, aiNormal.z));
+      }
+    }
+
+    CHECK_RANGE(mesh->mMaterialIndex, 0, scene->mNumMaterials - 1);
+    auto material = scene->mMaterials[mesh->mMaterialIndex];
+    auto bc = aiColor3D(0.5, 0.5, 0.5);
+    if (material->Get(AI_MATKEY_COLOR_DIFFUSE, bc) == aiReturn_SUCCESS)
+      Debug(mesh->mName.C_Str(), " has basecolor ", bc.r, ' ', bc.g, ' ', bc.b);
+    auto dc = aiColor3D(1.0, 1.0, 1.0);
+    if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
+      Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
+    auto sc = aiColor3D(1.0, 1.0, 1.0);
+    if (material->Get(AI_MATKEY_COLOR_SPECULAR, sc) == aiReturn_SUCCESS)
+      Debug(mesh->mName.C_Str(), " has specular ", sc.r, ' ', sc.g, ' ', sc.b);
+    auto diffuse_texture = aiString();
+    if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_DIFFUSE, 0), diffuse_texture) ==
+        aiReturn_SUCCESS)
+      Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
+    auto base_texture = aiString();
+    if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_BASE_COLOR, 0), base_texture) ==
+        aiReturn_SUCCESS)
+      Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
+
+    auto material_ = Material();
+    if (diffuse_texture.length != 0)
+      material_ = DiffuseMaterial(NodeBinary<vec3, '*'>(
+          Node3f(vec3(bc.r, bc.g, bc.b) * vec3(dc.r, dc.g, dc.b)),
+          NodeImage(NodeUV(), load_image(working_directory + diffuse_texture.C_Str()))));
+    else
+      material_ = DiffuseMaterial(vec3(bc.r, bc.g, bc.b) * vec3(dc.r, dc.g, dc.b));
+
+    scene_.add_geometry(TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords),
+                                     psl::move(normals)),
+                        psl::move(material_));
+  }
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
@@ -165,9 +270,9 @@ void interpret_file(Context &context, psl::string_view filename) {
 }
 
 void fileio_context(Context &ctx) {
-  ctx("load_mesh") = +[](psl::string filename) { return load_mesh(filename); };
-  ctx("load_image") =
-      +[](psl::string filepath) { return psl::make_shared<Image>(read_image(filepath)); };
+  ctx("load_mesh") = overloaded<psl::string_view>(load_mesh);
+  ctx("load_scene") = load_scene;
+  ctx("load_image") = overloaded<psl::string_view>(load_image);
   ctx("save_image") = overloaded<psl::string, const Array2d2f &>(save_image);
   ctx("save_image") = overloaded<psl::string, const Array2d3f &>(save_image);
   ctx("save_image") = overloaded<psl::string, const Array2d4f &>(save_image);

@@ -1,5 +1,6 @@
 #include <pine/core/geometry.h>
 #include <pine/core/context.h>
+#include <pine/core/fileio.h>
 
 namespace pine {
 
@@ -630,7 +631,9 @@ void geometry_context(Context& ctx) {
   ctx.type<Line>("Line").ctor<vec3, vec3, float>();
   ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
-  ctx.type<TriangleMesh>("TriangleMesh").method("apply", &TriangleMesh::apply);
+  ctx.type<TriangleMesh>("TriangleMesh")
+      .ctor(+[](psl::string_view filename) { return load_mesh(filename); })
+      .method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2>>(height_map_to_mesh);
