@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-add_compile_options(-Wall -Wextra -pedantic -fno-omit-frame-pointer)
+add_compile_options(-Wall -Wextra -pedantic -ffast-math)
 
 #psl Library
 add_library(psl

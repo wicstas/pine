@@ -13,10 +13,6 @@
 
 namespace pine {
 
-int f(double) {
-    return 3;
-}
-
 Context get_default_context() {
   auto ctx = Context{};
   math_context(ctx);
@@ -76,8 +72,9 @@ Context get_default_context() {
 }
 
 void interpret(Context& context, psl::string source) {
-  auto bytecode = compile(context, std::move(source));
-  execute(context, bytecode);
+  auto bytecodes = compile(context, std::move(source));
+//   Log(bytecodes.to_string(context));
+  execute(context, bytecodes);
 }
 
 }  // namespace pine

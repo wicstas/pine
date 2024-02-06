@@ -445,7 +445,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto initial_samples = size_t{1024 * 16};
   auto n_iterations =
       static_cast<int>(psl::ceil(psl::log2(total_samples / initial_samples + 1.0f)));
-  Debug(n_iterations, " rendering iterations");
+  Debug("[GuidedPath]", n_iterations, " learning iterations");
   sd_tree.root().n_samples = initial_samples * 4;
   sd_tree.refine(0);
 

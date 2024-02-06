@@ -7,10 +7,10 @@
 namespace psl {
 
 template <typename Key, typename Value, typename Pred = less<>>
-using map = std::map<Key, Value, Pred>;
+struct map : std::map<Key, Value, Pred> {};
 
 template <typename Key, typename Value, typename Pred = less<>>
-using multimap = std::multimap<Key, Value, Pred>;
+struct multimap : std::multimap<Key, Value, Pred> {};
 
 auto find_or(auto&& map, auto&& value, auto fallback) {
   if (auto it = map.find(value); it != map.end())

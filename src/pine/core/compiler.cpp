@@ -141,6 +141,79 @@ void Bytecodes::exit_scope() {
                      variable_map.end());
   scope_stack.pop_back();
 }
+psl::string Bytecodes::to_string(const Context& context) const {
+  auto result = psl::string();
+  for (const auto& code : codes) {
+    switch (code.instruction) {
+      case Bytecode::Break: result += "Break"; break;
+      case Bytecode::Continue: result += "Continue"; break;
+      case Bytecode::Return: result += "Return"; break;
+      case Bytecode::LoadGlobalVariable: result += "LoadGlobalVar"; break;
+      case Bytecode::LoadFunction: result += "LoadFunction"; break;
+      case Bytecode::Copy: result += "Copy"; break;
+      case Bytecode::MakeRef: result += "MakeRef"; break;
+      case Bytecode::LoadFloatConstant:
+        result += "Load " + psl::to_string(psl::bitcast<float>(uint32_t(code.value)));
+        break;
+      case Bytecode::LoadIntConstant:
+        result += "Load " + psl::to_string(psl::bitcast<int>(uint32_t(code.value)));
+        break;
+      case Bytecode::LoadBoolConstant: result += "Load " + psl::to_string(bool(code.value)); break;
+      case Bytecode::LoadStringConstant: result += "Load \"" + get_string(code.value) + "\""; break;
+      case Bytecode::IntPreInc:
+      case Bytecode::IntPreDec:
+      case Bytecode::IntPostInc:
+      case Bytecode::IntPostDec:
+      case Bytecode::IntPositive:
+      case Bytecode::IntNegate:
+      case Bytecode::IntEq:
+      case Bytecode::IntNe:
+      case Bytecode::IntLt:
+      case Bytecode::IntGt:
+      case Bytecode::IntLe:
+      case Bytecode::IntGe:
+      case Bytecode::IntAdd:
+      case Bytecode::IntSub:
+      case Bytecode::IntMul:
+      case Bytecode::IntDiv:
+      case Bytecode::IntPow:
+      case Bytecode::IntMod:
+      case Bytecode::IntAddE:
+      case Bytecode::IntSubE:
+      case Bytecode::IntMulE:
+      case Bytecode::IntDivE:
+      case Bytecode::IntModE:
+      case Bytecode::IntAssi: result += "IntOp"; break;
+      case Bytecode::FloatPositive:
+      case Bytecode::FloatNegate:
+      case Bytecode::FloatEq:
+      case Bytecode::FloatNe:
+      case Bytecode::FloatLt:
+      case Bytecode::FloatGt:
+      case Bytecode::FloatLe:
+      case Bytecode::FloatGe:
+      case Bytecode::FloatAdd:
+      case Bytecode::FloatSub:
+      case Bytecode::FloatMul:
+      case Bytecode::FloatDiv:
+      case Bytecode::FloatPow:
+      case Bytecode::FloatAddE:
+      case Bytecode::FloatSubE:
+      case Bytecode::FloatMulE:
+      case Bytecode::FloatDivE:
+      case Bytecode::FloatAssi: result += "FloatOp"; break;
+      case Bytecode::Call: result += "Call " + context.functions[code.value].signature(); break;
+      case Bytecode::InvokeAsFunction: result += "Invoke"; break;
+      case Bytecode::Jump: result += "Jump"; break;
+      case Bytecode::JumpIfNot: result += "JumpIfNot"; break;
+      case Bytecode::UnwindStack: result += "Unwind"; break;
+    }
+    result += "\n";
+  }
+  if (result.size())
+    result.pop_back();
+  return result;
+}
 
 struct Expr : ASTNode {
   enum Op {
@@ -293,14 +366,12 @@ struct ContinueStmt {
     bytecodes.add(Bytecode::Continue, 0);
   }
 };
-struct ReturnStmt {
-  ReturnStmt(Expr expr) : expr(psl::move(expr)) {
+struct ReturnStmt : ASTNode {
+  ReturnStmt(SourceLoc loc, psl::optional<Expr> expr) : ASTNode(loc), expr(psl::move(expr)) {
   }
-  void emit(Context& context, Bytecodes& bytecodes) const {
-    bytecodes.add(Bytecode::Return, expr.emit(context, bytecodes));
-  }
+  void emit(Context& context, Bytecodes& bytecodes) const;
 
-  Expr expr;
+  psl::optional<Expr> expr;
 };
 struct Stmt : psl::variant<Semicolon, Expr, Declaration, BreakStmt, ContinueStmt, ReturnStmt> {
   using variant::variant;
@@ -606,7 +677,9 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
       fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
+    context.function_rtype = rtype;
     body->block.emit(context, fbcodes);
+    context.function_rtype = psl::nullopt;
 
     context(name) = Function(
         lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
@@ -808,6 +881,20 @@ void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
     bytecodes.add_typed(Bytecode::Copy, bytecodes.var_type(vi), vi);
   bytecodes.name_top_var(name);
 }
+void ReturnStmt::emit(Context& context, Bytecodes& bytecodes) const {
+  if (expr) {
+    auto vi = expr->emit(context, bytecodes);
+    if (bytecodes.var_type(vi) != context.function_rtype)
+      bytecodes.error(*this, "Expression type `", bytecodes.var_type(vi),
+                      "` is inconsistent with function return type `", context.function_rtype, "`");
+    bytecodes.add(Bytecode::Return, vi);
+  } else {
+    if (TypeTag("void") != context.function_rtype)
+      bytecodes.error(*this, "Expression type `void`",
+                      " is inconsistent with function return type `", context.function_rtype, "`");
+    bytecodes.add(Bytecode::Return, size_t(-1));
+  }
+}
 void Stmt::emit(Context& context, Bytecodes& bytecodes) const {
   dispatch([&](auto&& x) { x.emit(context, bytecodes); });
 }
@@ -944,37 +1031,43 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
     auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = TypeTag(return_type.value, false);
     auto ptypes = psl::vector<TypeTag>();
+    auto params = this->params;
     for (const auto& param : params) {
-      auto ptype = TypeTag(param.type.value, false);
+      auto ptype = [&]() {
+        if (param.type.value.size() && param.type.value.back() == '&')
+          return TypeTag(param.type.value.substr(0, param.type.value.size() - 1), true);
+        else
+          return TypeTag(param.type.value, false);
+      }();
       fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
+    context.function_rtype = rtype;
     block.emit(context, fbcodes);
-    // for (const auto& code : fbcodes) {
-    //   if (code.instruction == code.Return) {
-    //     Logs(bytecodes.stack_size(), code.value);
-    //     if (bytecodes.var_type(code.value).name != rtype.name)
-    //       bytecodes.error(*this, "Some return statements are returning `",
-    //                       bytecodes.var_type(code.value).name, "` instead of `", rtype.name,
-    //                       "`");
-    //   }
-    // }
-    context(name) = Function(
-        tag<Variable, psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
-                                                   *this](psl::span<const Variable*> args) mutable {
-          CHECK_EQ(args.size(), params.size());
-          auto vm = VirtualMachine();
-          for (size_t i = 0; i < args.size(); i++)
-            vm.stack.push(*args[i]);
-          return execute(context, fbcodes, vm);
-        }),
-        rtype, ptypes);
+    context.function_rtype = psl::nullopt;
+
+    // clang-format off
+    context(name) = Function(tag<Variable, psl::span<const Variable*>>(
+                                 [&context, fbcodes = psl::move(fbcodes), ptypes]
+                                 (psl::span<const Variable*> args) mutable {
+      DCHECK_EQ(args.size(), ptypes.size());
+      auto vm = VirtualMachine();
+      vm.stack.reserve(args.size() * 2);
+      for (size_t i = 0; i < args.size(); i++) {
+        if(ptypes[i].is_ref)
+          vm.stack.push(args[i]->create_ref());
+        else
+          vm.stack.push(*args[i]);
+      }
+      return execute(context, fbcodes, vm);
+    }), rtype, ptypes);
+    // clang-format on
   } catch (const Exception& e) {
     bytecodes.error(*this, e.what());
   }
 }
 void ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
-  auto& type_trait = context.types[name] = Context::TypeTrait(name);
+  auto& trait = context.types[name] = Context::TypeTrait(name);
   context("__" + name) =
       Function(tag<InternalClass, psl::span<const Variable*>>(
                    [n = members.size()](psl::span<const Variable*>) {
@@ -985,17 +1078,17 @@ void ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   for (size_t i = 0; i < members.size(); i++) {
     if (!context.is_registered_type(members[i].type.value))
       bytecodes.error(members[i].type, "Type `", members[i].type.value, "` is not found");
-    type_trait.add_member_accessor(members[i].name.value, context.functions.size());
+    trait.add_member_accessor(members[i].name.value, context.functions.size());
     context.functions.push_back(
         Function(tag<Variable, psl::span<const Variable*>>([i](psl::span<const Variable*> args) {
                    DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
-                   return args[0]->as<InternalClass&>().members[i];
+                   return args[0]->as<InternalClass&>().members[i].create_ref();
                  }),
                  TypeTag(members[i].type.value, true), psl::vector_of(TypeTag(name, true))));
   }
 
   for (size_t i = 0; i < members.size(); i++) {
-    type_trait.add_member_accessor("__" + members[i].name.value, context.functions.size());
+    trait.add_member_accessor("__" + members[i].name.value, context.functions.size());
     context.functions.push_back(
         Function(tag<Variable, psl::span<const Variable*>>([i](psl::span<const Variable*> args) {
                    DCHECK_GT(args[0]->as<InternalClass&>().members.size(), i);
@@ -1234,7 +1327,7 @@ struct Parser {
     for (const auto& init_stmt : init_stmts)
       it = psl::next(block_.elems.insert(it, init_stmt));
     // Return `self` in the ctor
-    block_.elems.push_back(Stmt(ReturnStmt(Id(r, c, "self"))));
+    block_.elems.push_back(Stmt(ReturnStmt({r, c}, Id(r, c, "self"))));
     return {FunctionDefinition(r, c, ctor_name, Id(r, c, class_name), psl::move(params),
                                psl::move(block_)),
             1 + init_stmts.size()};
@@ -1268,6 +1361,7 @@ struct Parser {
   }
   Stmt stmt() {
     auto stmt = Stmt{};
+    auto loc = source_loc();
     if (accept(";")) {
       return Stmt(Semicolon());
     }
@@ -1276,7 +1370,10 @@ struct Parser {
     } else if (accept("continue")) {
       stmt = Stmt(ContinueStmt());
     } else if (accept("return")) {
-      stmt = Stmt(ReturnStmt(expr()));
+      if (expect(";"))
+        stmt = Stmt(ReturnStmt(loc, psl::nullopt));
+      else
+        stmt = Stmt(ReturnStmt(loc, expr()));
     } else {
       if (auto n = next(); psl::isalpha(*n) || *n == '_') {
         backup();
@@ -1509,7 +1606,10 @@ struct Parser {
       auto rtype = type_name().value;
       return Id(r, c, "(" + params + "): " + rtype);
     } else {
-      return id();
+      auto id_ = id();
+      if (accept("&"))
+        id_.value += "&";
+      return id_;
     }
   }
   psl::vector<Expr> arg_list() {
@@ -1724,12 +1824,15 @@ private:
     column = backup_stack.back().second;
     backup_stack.pop_back();
   }
-
   psl::optional<psl::string_view> next_line() const {
     return sl.next_line(row);
   }
   psl::optional<char> next() const {
     return sl.next(row, column);
+  }
+
+  SourceLoc source_loc() const {
+    return {row, column};
   }
   template <typename... Args>
   [[noreturn]] void error(const Args&... args) {
@@ -1772,12 +1875,15 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
       switch (code.instruction) {
         case Bytecode::Break: break;
         case Bytecode::Continue: break;
+        case Bytecode::Return:
+          return code.value == size_t(-1) ? Variable() : vm.stack[code.value];
+          break;
         case Bytecode::LoadGlobalVariable:
           vm.stack.push(context.variables[code.value].second);
           break;
         case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
         case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
-        case Bytecode::MakeRef: push(vm.stack[code.value].make_ref()); break;
+        case Bytecode::MakeRef: push(vm.stack[code.value].create_ref()); break;
         case Bytecode::LoadFloatConstant:
           push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
           break;
@@ -1932,7 +2038,6 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
             case 9: CHECK(false); break;
           }
         } break;
-        case Bytecode::Return: return vm.stack[code.value]; break;
         case Bytecode::Jump:
           p = code.value;
           inc_p = false;

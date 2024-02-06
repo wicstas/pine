@@ -13,7 +13,7 @@ Context::Context() {
   context.type<psl::Empty>("void");
   context.type<void>("void");
   context.type<Function>("function");
-  context.type<psl::span<const Variable*>>("__va_args");
+  context.type<psl::span<const Variable*>>("@args");
 
   context.type<psl::string>("str");
   context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
@@ -80,12 +80,10 @@ Context::Context() {
                    return Type{args[0]->as<const Function&>().signature(), args[0]->type_name(),
                                args[0]->type_id()};
                  else
-                   return Type{context.name_from_id(args[0]->type_id()), args[0]->type_name(),
+                   return Type{context.type_name_from_id(args[0]->type_id()), args[0]->type_name(),
                                args[0]->type_id()};
                }),
                context.tag<Type>(), context.tags<Any>());
-
-  context("apply_to_5") = +[](psl::function<int, int> f) { return f(5); };
 }
 
 static int common_prefix_length(psl::string_view a, psl::string_view b) {
@@ -108,10 +106,10 @@ static int common_part_length(psl::string_view a, psl::string_view b) {
 static psl::string function_signature(const Function& function) {
   auto sig = psl::string("(");
   for (const auto& ptype : function.ptypes())
-    sig += ptype.name + ", ";
+    sig += ptype.sig() + ", ";
   if (function.ptypes().size() != 0)
     sig.pop_back(2);
-  sig += "): " + function.rtype().name;
+  sig += "): " + function.rtype().sig();
   return sig;
 }
 
@@ -153,7 +151,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
 
   for (auto [name, fi] : psl::range(first, last)) {
     const auto& ptypes = functions[fi].ptypes();
-    if (ptypes.size() == 1 && ptypes[0].name == "__va_args") {
+    if (ptypes.size() == 1 && ptypes[0].name == "@args") {
       best_converts = {};
       best_candidates.clear();
       best_candidates.push_back(fi);
@@ -164,7 +162,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       for (size_t i = 0; i < atypes.size(); i++) {
         if (atypes[i].name == ptypes[i].name) {
         } else if (ptypes[i].name == "any") {
-        } else if (is_registered_type(ptypes[i].name)) {
+        } else if (!ptypes[i].is_ref && is_registered_type(ptypes[i].name)) {
           if (auto ci = get_type_trait(ptypes[i].name).find_from_converter_index(atypes[i].name);
               ci != size_t(-1)) {
             converts.push_back({i, ci, ptypes[i]});

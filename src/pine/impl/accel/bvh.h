@@ -8,32 +8,13 @@
 namespace pine {
 
 class BVHImpl {
-public:
+private:
   struct alignas(16) Node {
-    float surface_area() const {
-      return union_(aabbs[0], aabbs[1]).surface_area();
-    }
-    AABB get_aabb() const {
-      return union_(aabbs[0], aabbs[1]);
-    }
-    void UpdateAABB(Node* nodes) {
-      aabbs[0] = nodes[children[0]].get_aabb();
-      aabbs[1] = nodes[children[1]].get_aabb();
-      if (parent != -1)
-        nodes[parent].UpdateAABB(nodes);
-    }
-    float ComputeCost(Node* nodes) {
-      if (primitiveIndices.size())
-        return surface_area();
-      return surface_area() + nodes[children[0]].ComputeCost(nodes) +
-             nodes[children[1]].ComputeCost(nodes);
-    }
-    float Inefficiency() const {
-      float mSum = surface_area() / (2 * (aabbs[0].surface_area() + aabbs[1].surface_area()));
-      float mMin = surface_area() / psl::min(aabbs[0].surface_area(), aabbs[1].surface_area());
-      float mArea = surface_area();
-      return mSum * mMin * mArea;
-    }
+    float surface_area() const;
+    AABB get_aabb() const;
+    void update_aabb(Node* nodes);
+    float compute_cost(Node* nodes);
+    float inefficiency() const;
 
     AABB aabbs[2];
 
@@ -45,25 +26,32 @@ public:
 
     psl::vector<int> primitiveIndices;
   };
+
+public:
   struct Primitive {
     AABB aabb;
     int index = 0;
   };
 
-  void Build(psl::vector<Primitive> primitives);
+  void build(psl::vector<Primitive> primitives);
 
-  int BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb);
-  void Optimize();
+private:
+  int build_sah_binned(Primitive* begin, Primitive* end, AABB aabb);
+  void optimize();
 
+public:
   template <typename F>
   bool hit(const Ray& ray, F&& f) const;
   template <typename F>
   bool Intersect(Ray& ray, Interaction& it, F&& f) const;
+
   AABB get_aabb() const {
     return union_(nodes[rootIndex].aabbs[0], nodes[rootIndex].aabbs[1]);
   }
 
   int rootIndex = -1;
+
+private:
   psl::vector<Node> nodes;
 };
 
@@ -74,6 +62,7 @@ public:
   bool hit(Ray ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
 
+private:
   psl::vector<BVHImpl> lbvh;
   BVHImpl tbvh;
   psl::vector<int> indices;

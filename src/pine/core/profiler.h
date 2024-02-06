@@ -22,10 +22,6 @@ struct Profiler {
   Profiler& operator=(Profiler&&) = delete;
 
   struct Record {
-    friend bool operator==(const Record& lhs, const Record& rhs) {
-      return lhs.time == rhs.time && lhs.sampleCount == rhs.sampleCount && lhs.name == rhs.name;
-    }
-
     psl::shared_ptr<Record> parent;
     psl::map<psl::string, psl::shared_ptr<Record>> children;
     psl::string name;

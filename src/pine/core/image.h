@@ -1,6 +1,7 @@
 #pragma once
 
 #include <pine/core/array.h>
+#include <pine/core/color.h>
 
 #include <psl/variant.h>
 
@@ -15,7 +16,7 @@ struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec3>> {
       if constexpr (psl::SameAs<decltype(value), vec3>)
         return value;
       else
-        return pow(value / 255.0f, 2.2f);
+        return correct_gamma(value);
     });
   }
 

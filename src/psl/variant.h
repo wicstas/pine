@@ -100,6 +100,17 @@ constexpr int index() {
   else
     return 1 + index<T, Rest...>();
 }
+template <typename T, typename First, typename... Rest>
+constexpr int index_or(int fallback) {
+  if constexpr (SameAs<T, First>)
+    return 0;
+  else {
+    if constexpr (sizeof...(Rest) != 0)
+      return 1 + index<T, Rest...>();
+    else
+      return fallback;
+  }
+}
 
 template <typename VariantType, typename F, typename TargetType>
 constexpr decltype(auto) dispatch_helper(VariantType&& object, F&& f) {
@@ -200,7 +211,7 @@ struct variant {
 
   template <typename T>
   bool is() const {
-    return tag_ == index<T>();
+    return tag_ == psl::index_or<T, Ts...>(-1);
   }
 
   template <typename T>

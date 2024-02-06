@@ -23,10 +23,10 @@ inline constexpr void memset(void* dst, char value, size_t size) {
 void free(void* ptr);
 
 template <typename T>
-struct DefaultDeleter {
-  DefaultDeleter() = default;
+struct default_deleter {
+  default_deleter() = default;
   template <DerivedFrom<T> U>
-  DefaultDeleter(const DefaultDeleter<U>&) {
+  default_deleter(const default_deleter<U>&) {
   }
 
   void operator()(RemoveExtent<T>* ptr) const {
@@ -45,7 +45,7 @@ As bitcast(T&& x) {
   return *reinterpret_cast<As*>(storage);
 }
 
-template <typename T, typename Deleter = DefaultDeleter<T>>
+template <typename T, typename Deleter = default_deleter<T>>
 class unique_ptr {
 public:
   using Pointer = RemoveExtent<T>*;
@@ -286,13 +286,13 @@ shared_ptr<T> make_shared(Args&&... args) {
 }
 
 template <typename T>
-struct ref_wrapper {
+struct Ref {
   using BaseType = T;
-  ref_wrapper(T& x) : ptr{&x} {
+  Ref(T& x) : ptr{&x} {
   }
 
   template <typename U>
-  ref_wrapper& operator=(U rhs) {
+  Ref& operator=(U rhs) {
     *ptr = psl::move(rhs);
     return *this;
   }
@@ -310,13 +310,13 @@ private:
 
 template <typename T>
 auto ref(T& x) {
-  return ref_wrapper<T>(x);
+  return Ref<T>(x);
 }
 
 template <typename T>
 struct _is_psl_ref : FalseType {};
 template <typename T>
-struct _is_psl_ref<ref_wrapper<T>> : TrueType {};
+struct _is_psl_ref<Ref<T>> : TrueType {};
 template <typename T>
 constexpr bool is_psl_ref = _is_psl_ref<T>::value;
 

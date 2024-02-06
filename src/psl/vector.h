@@ -301,7 +301,9 @@ protected:
 };
 
 template <typename T, size_t capacity>
-using static_vector = vector<T, static_allocator<T, capacity>>;
+struct static_vector : vector<T, static_allocator<T, capacity>> {
+  using vector<T, static_allocator<T, capacity>>::vector;
+};
 
 template <typename T>
 vector<T> vector_n_of(size_t n, const T& x) {

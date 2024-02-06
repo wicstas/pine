@@ -7,9 +7,9 @@
 namespace psl {
 
 template <typename Key, typename Value>
-using unordered_map = std::unordered_map<Key, Value>;
+struct unordered_map : std::unordered_map<Key, Value> {};
 
 template <typename Key, typename Value>
-using unordered_multimap = std::unordered_multimap<Key, Value>;
+struct unordered_multimap : std::unordered_multimap<Key, Value> {};
 
 }  // namespace psl

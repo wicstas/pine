@@ -8,6 +8,14 @@
 
 namespace pine {
 
+struct SourceLoc {
+  SourceLoc() = default;
+  SourceLoc(size_t row, size_t column) : row(row), column(column) {
+  }
+  size_t row = size_t(-1);
+  size_t column = size_t(-1);
+};
+
 struct SourceLines {
   SourceLines() = default;
   SourceLines(psl::string_view tokens, size_t paddings);
@@ -32,6 +40,8 @@ private:
 struct ASTNode {
   ASTNode() = default;
   ASTNode(size_t row, size_t column) : row{row}, column{column} {
+  }
+  ASTNode(SourceLoc loc) : row{loc.row}, column{loc.column} {
   }
 
   size_t row = invalid;
@@ -172,6 +182,8 @@ struct Bytecodes {
   [[noreturn]] void error(const ASTNode& node, const Args&... args) const {
     sl.error(node.row, node.column, args...);
   }
+
+  psl::string to_string(const Context& context) const;
 
 private:
   struct ScopeInfo {

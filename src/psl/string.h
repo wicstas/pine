@@ -1,6 +1,7 @@
 #pragma once
 
 #include <psl/type_traits.h>
+#include <psl/optional.h>
 #include <psl/vector.h>
 #include <psl/limits.h>
 #include <psl/math.h>
@@ -289,19 +290,28 @@ string to_string(ARange&& range) {
   auto r = string{"["};
   for (auto&& x : range)
     r += to_string_forward(x) + " ";
-  if (psl::size(range))
+  if (r.back() == ' ')
     r.pop_back();
   r.push_back(']');
   return r;
 }
 
 template <typename T>
-string to_string(ref_wrapper<T> x) {
+string to_string(Ref<T> x) {
   return "ref{" + to_string_forward(x) + "}";
 }
 template <typename T>
 string to_string(T* x) {
   return "*{" + to_string_forward(*x) + "}";
+}
+template <typename T>
+string to_string(const psl::optional<T>& x) {
+  return x ? to_string_forward(*x) : "";
+}
+template <typename T>
+requires requires(const T& x) { x.to_string(); }
+string to_string(const T& x) {
+  return x.to_string();
 }
 template <typename T>
 string to_string_forward(const T& x) {

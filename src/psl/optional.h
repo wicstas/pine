@@ -2,6 +2,7 @@
 
 #include <psl/utility.h>
 #include <psl/memory.h>
+#include <psl/check.h>
 
 namespace psl {
 
@@ -14,10 +15,7 @@ struct optional {
   optional() = default;
   optional(nullopt_t){};
   ~optional() {
-    if (valid) {
-      value().~T();
-      valid = false;
-    }
+    reset();
   }
 
   template <typename U>
@@ -40,7 +38,7 @@ struct optional {
     }
   }
   optional& operator=(optional rhs) {
-    this->~optional();
+    this->reset();
     if (rhs) {
       psl::construct_at(ptr(), psl::move(rhs.value()));
       valid = psl::exchange(rhs.valid, false);
@@ -55,14 +53,36 @@ struct optional {
     return value();
   }
   T* operator->() {
-    return &value();
+    return ptr();
   }
   const T* operator->() const {
-    return &value();
+    return ptr();
+  }
+
+  void reset() {
+    if (valid) {
+      value().~T();
+      valid = false;
+    }
   }
 
   explicit operator bool() const {
     return valid;
+  }
+
+  friend bool operator==(const psl::optional<T>& lhs, const psl::optional<T>& rhs) {
+    if (!lhs && !rhs)
+      return true;
+    else if (lhs && rhs)
+      return *lhs == *rhs;
+    else
+      return false;
+  }
+  friend bool operator==(const T& lhs, const psl::optional<T>& rhs) {
+    return rhs && lhs == *rhs;
+  }
+  friend bool operator==(const psl::optional<T>& lhs, const T& rhs) {
+    return lhs && *lhs == rhs;
   }
 
 private:

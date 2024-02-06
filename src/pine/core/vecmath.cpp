@@ -21,7 +21,7 @@ void vecmath_context(Context& ctx) {
       .method("[]", overloaded<int>(&vec2i::operator[]));
   ctx.type<vec2>()
       .ctor<float, float>()
-      .ctor_variant<vec2i, int, float>()
+      .ctor_variant<vec2i, float>()
       .member("x", &vec2::x)
       .member("y", &vec2::y)
       .method("[]", overloaded<int>(&vec2::operator[]));
@@ -34,14 +34,14 @@ void vecmath_context(Context& ctx) {
       .method("[]", overloaded<int>(&vec3i::operator[]));
   ctx.type<vec3>()
       .ctor<float, float, float>()
-      .ctor_variant<vec3i, int, float>()
+      .ctor_variant<vec3i, float>()
       .member("x", &vec3::x)
       .member("y", &vec3::y)
       .member("z", &vec3::z)
       .method("[]", overloaded<int>(&vec3::operator[]));
   ctx.type<vec4>()
       .ctor<float, float, float, float>()
-      .ctor_variant<int, float>()
+      .ctor_variant<float>()
       .member("x", &vec4::x)
       .member("y", &vec4::y)
       .member("z", &vec4::z)
@@ -55,9 +55,6 @@ void vecmath_context(Context& ctx) {
   ctx("*") = +[](const mat3& a, const mat3& b) { return a * b; };
   ctx("*") = +[](const mat4& a, vec4 b) { return a * b; };
   ctx("*") = +[](const mat4& a, const mat4& b) { return a * b; };
-  ctx("translate") = overloaded<vec3>(translate);
-  ctx("scale") = overloaded<vec3>(scale);
-  ctx("look_at") = look_at;
   ctx("*") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mul_);
   ctx("/") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::div_);
   ctx("*") = overloads_set<Overloads<int>, Overloads<vec2i, vec3i>>(psl::mul_);
@@ -99,11 +96,20 @@ void vecmath_context(Context& ctx) {
   ctx("clamp") = overloaded<vec3, vec3, vec3>(clamp<float>);
   ctx("lerp") = overloaded<vec2, vec2, vec2>(lerp<float>);
   ctx("lerp") = overloaded<vec3, vec3, vec3>(lerp<float>);
+  ctx("pow") = overloaded<vec2, float>(pow<float>);
+  ctx("pow") = overloaded<vec3, float>(pow<float>);
+  ctx("pow") = overloaded<vec2, vec2>(pow<float>);
+  ctx("pow") = overloaded<vec3, vec3>(pow<float>);
   ctx("coordinate_system") = overloaded<vec3>(coordinate_system);
   ctx("rotate_x") = rotate_x;
   ctx("rotate_y") = rotate_y;
   ctx("rotate_z") = rotate_z;
   ctx("rotate") = rotate;
+  ctx("translate") = overloaded<vec3>(translate);
+  ctx("translate") = overloaded<float, float, float>(translate);
+  ctx("scale") = overloaded<vec3>(scale);
+  ctx("scale") = overloaded<float, float, float>(scale);
+  ctx("look_at") = look_at;
   ctx("identity3x3") = mat3::identity;
   ctx("identity4x4") = mat4::identity;
   ctx("transpose") = overloaded<const mat2&>(transpose<float>);

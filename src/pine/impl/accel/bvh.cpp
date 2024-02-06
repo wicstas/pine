@@ -8,7 +8,32 @@
 
 namespace pine {
 
-void BVHImpl::Build(psl::vector<Primitive> primitives) {
+float BVHImpl::Node::surface_area() const {
+  return union_(aabbs[0], aabbs[1]).surface_area();
+}
+AABB BVHImpl::Node::get_aabb() const {
+  return union_(aabbs[0], aabbs[1]);
+}
+void BVHImpl::Node::update_aabb(Node* nodes) {
+  aabbs[0] = nodes[children[0]].get_aabb();
+  aabbs[1] = nodes[children[1]].get_aabb();
+  if (parent != -1)
+    nodes[parent].update_aabb(nodes);
+}
+float BVHImpl::Node::compute_cost(Node* nodes) {
+  if (primitiveIndices.size())
+    return surface_area();
+  return surface_area() + nodes[children[0]].compute_cost(nodes) +
+         nodes[children[1]].compute_cost(nodes);
+}
+float BVHImpl::Node::inefficiency() const {
+  float mSum = surface_area() / (2 * (aabbs[0].surface_area() + aabbs[1].surface_area()));
+  float mMin = surface_area() / psl::min(aabbs[0].surface_area(), aabbs[1].surface_area());
+  float mArea = surface_area();
+  return mSum * mMin * mArea;
+}
+
+void BVHImpl::build(psl::vector<Primitive> primitives) {
   Profiler _("Build BVH");
   Timer timer;
 
@@ -17,12 +42,12 @@ void BVHImpl::Build(psl::vector<Primitive> primitives) {
     aabb.extend(primitive.aabb);
 
   nodes.reserve(primitives.size());
-  BuildSAHBinned(primitives.data(), primitives.data() + primitives.size(), aabb);
+  build_sah_binned(primitives.data(), primitives.data() + primitives.size(), aabb);
   rootIndex = int(nodes.size() - 1);
   // Optimize();
 }
 
-int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
+int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
   Node node;
   int numPrimitives = int(end - begin);
   CHECK_NE(numPrimitives, 0);
@@ -125,8 +150,8 @@ int BVHImpl::BuildSAHBinned(Primitive* begin, Primitive* end, AABB aabb) {
     node.aabbs[0].extend(prim->aabb);
   for (Primitive* prim = pmid; prim != end; prim++)
     node.aabbs[1].extend(prim->aabb);
-  node.children[0] = BuildSAHBinned(begin, pmid, node.aabbs[0]);
-  node.children[1] = BuildSAHBinned(pmid, end, node.aabbs[1]);
+  node.children[0] = build_sah_binned(begin, pmid, node.aabbs[0]);
+  node.children[1] = build_sah_binned(pmid, end, node.aabbs[1]);
   node.index = (int)nodes.size();
   nodes[node.children[0]].parent = node.index;
   nodes[node.children[1]].parent = node.index;
@@ -157,7 +182,7 @@ struct pair {
   int index = -1;
   float inefficiency;
 };
-void BVHImpl::Optimize() {
+void BVHImpl::optimize() {
   auto FindNodeForReinsertion = [&](int nodeIndex) {
     float eps = 1e-20f;
     float costBest = float_max;
@@ -198,12 +223,12 @@ void BVHImpl::Optimize() {
   };
 
   RNG sampler;
-  float startCost = nodes[rootIndex].ComputeCost(&nodes[0]) / 100000.0f;
+  float startCost = nodes[rootIndex].compute_cost(&nodes[0]) / 100000.0f;
   float lastCost = startCost;
   int numConvergedPasses = 0;
   for (int pass = 0; pass < 256; pass++) {
     if (pass % 5 == 1) {
-      float cost = nodes[rootIndex].ComputeCost(&nodes[0]) / 100000.0f;
+      float cost = nodes[rootIndex].compute_cost(&nodes[0]) / 100000.0f;
       if (cost < lastCost * 0.99f) {
         numConvergedPasses = 0;
         lastCost = cost;
@@ -220,7 +245,7 @@ void BVHImpl::Optimize() {
       psl::vector<pair> inefficiencies(nodes.size());
 
       for (int i = 0; i < (int)nodes.size(); i++)
-        inefficiencies[i] = {i, nodes[i].Inefficiency()};
+        inefficiencies[i] = {i, nodes[i].inefficiency()};
       std::partial_sort(inefficiencies.begin(), inefficiencies.end(),
                         inefficiencies.begin() + nodes.size() / 200, psl::less<pair>{});
 
@@ -243,7 +268,7 @@ void BVHImpl::Optimize() {
         grandparent.children[parent.indexAsChild] = secondChildOfParent;
         nodes[secondChildOfParent].indexAsChild = parent.indexAsChild;
         nodes[secondChildOfParent].parent = grandparent.index;
-        grandparent.UpdateAABB(&nodes[0]);
+        grandparent.update_aabb(&nodes[0]);
 
         nodes[node.children[0]].removed = true;
         nodes[node.children[1]].removed = true;
@@ -272,7 +297,7 @@ void BVHImpl::Optimize() {
         grandparent.children[parent.indexAsChild] = secondChildOfParent;
         nodes[secondChildOfParent].indexAsChild = parent.indexAsChild;
         nodes[secondChildOfParent].parent = grandparent.index;
-        grandparent.UpdateAABB(&nodes[0]);
+        grandparent.update_aabb(&nodes[0]);
 
         nodes[node.children[0]].removed = true;
         nodes[node.children[1]].removed = true;
@@ -309,7 +334,7 @@ void BVHImpl::Optimize() {
       x.indexAsChild = 0;
       l.indexAsChild = 1;
       l.removed = false;
-      n.UpdateAABB(&nodes[0]);
+      n.update_aabb(&nodes[0]);
     }
   }
 }
@@ -476,7 +501,7 @@ void BVH::build(const Scene* scene_) {
         primitives.push_back(primitive);
       }
       auto bvh = BVHImpl{};
-      bvh.Build(psl::move(primitives));
+      bvh.build(psl::move(primitives));
       lbvh.push_back(psl::move(bvh));
       indices.push_back(static_cast<int>(i));
     }
@@ -498,7 +523,7 @@ void BVH::build(const Scene* scene_) {
       indices.push_back(static_cast<int>(i));
     }
   }
-  tbvh.Build(primitives);
+  tbvh.build(primitives);
 }
 
 bool BVH::hit(Ray ray) const {
