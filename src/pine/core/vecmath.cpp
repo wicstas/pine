@@ -21,7 +21,7 @@ void vecmath_context(Context& ctx) {
       .method("[]", overloaded<int>(&vec2i::operator[]));
   ctx.type<vec2>()
       .ctor<float, float>()
-      .ctor_variant<vec2i, float>()
+      .ctor_variant<vec2i, int, float>()
       .member("x", &vec2::x)
       .member("y", &vec2::y)
       .method("[]", overloaded<int>(&vec2::operator[]));
@@ -34,14 +34,14 @@ void vecmath_context(Context& ctx) {
       .method("[]", overloaded<int>(&vec3i::operator[]));
   ctx.type<vec3>()
       .ctor<float, float, float>()
-      .ctor_variant<vec3i, float>()
+      .ctor_variant<vec3i, int, float>()
       .member("x", &vec3::x)
       .member("y", &vec3::y)
       .member("z", &vec3::z)
       .method("[]", overloaded<int>(&vec3::operator[]));
   ctx.type<vec4>()
       .ctor<float, float, float, float>()
-      .ctor_variant<float>()
+      .ctor_variant<int, float>()
       .member("x", &vec4::x)
       .member("y", &vec4::y)
       .member("z", &vec4::z)
@@ -61,12 +61,12 @@ void vecmath_context(Context& ctx) {
   ctx("/") = overloads_set<Overloads<int>, Overloads<vec2i, vec3i>>(psl::div_);
   ctx("*") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::mul_);
   ctx("/") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::div_);
-  ctx("*") = overloads_set<Overloads<float>, Overloads<vec2, vec3, vec4>>(psl::mul_);
-  ctx("/") = overloads_set<Overloads<float>, Overloads<vec2, vec3, vec4>>(psl::div_);
+  ctx("*") = overloads_set<Overloads<int, float>, Overloads<vec2, vec3, vec4>>(psl::mul_);
+  ctx("/") = overloads_set<Overloads<int, float>, Overloads<vec2, vec3, vec4>>(psl::div_);
   ctx("*=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mule_);
   ctx("/=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::dive_);
-  ctx("*=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::mule_);
-  ctx("/=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::dive_);
+  ctx("*=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(psl::mule_);
+  ctx("/=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(psl::dive_);
   ctx("normalize") = normalize<vec2>;
   ctx("normalize") = normalize<vec3>;
   ctx("length") = length<vec2>;

@@ -38,7 +38,7 @@ void PixelIntegrator::render(Scene& scene) {
 
   Profiler _("Rendering");
   for (int i = 0; i < samplesPerPixel; i++) {
-    ParallelFor(film.size(), [&](vec2i p) {
+    parallel_for(film.size(), [&](vec2i p) {
       Sampler& sampler = samplers[threadIdx];
       sampler.start_pixel(p, i);
       pixel_color(scene, p, sampler);

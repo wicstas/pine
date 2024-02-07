@@ -468,7 +468,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       auto iter_size = vec2i{film.size() * downsize};
       auto iter_n_pass = iter_samples / area(iter_size);
       for (size_t si = 0; si < iter_n_pass; si++) {
-        ParallelFor(iter_size, [&](vec2i p) {
+        parallel_for(iter_size, [&](vec2i p) {
           auto& sampler = samplers[threadIdx];
           sampler.start_pixel(p, current_sample_index);
 
@@ -506,7 +506,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   if (use_estimate) {
     film.clear();
     for (int si = 0; si < estimate_samples; si++) {
-      ParallelFor(film.size(), [&](vec2i p) {
+      parallel_for(film.size(), [&](vec2i p) {
         auto& sampler = samplers[threadIdx];
         sampler.start_pixel(p, current_sample_index);
         auto p_film = vec2{p + sampler.get2d()} / film.size();

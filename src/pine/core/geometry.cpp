@@ -1,4 +1,5 @@
 #include <pine/core/geometry.h>
+#include <pine/core/parallel.h>
 #include <pine/core/context.h>
 #include <pine/core/fileio.h>
 
@@ -578,20 +579,21 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;
   auto p2i = [width](int x, int y) { return y * width + x; };
   auto vertices = psl::vector<vec3>(width * (height_map.size().y + 1));
-  for (int x = 0; x <= height_map.size().x; x++)
-    for (int y = 0; y <= height_map.size().y; y++) {
-      auto n = 0;
-      vertices[p2i(x, y)].x = float(x - height_map.size().x / 2) / height_map.size().x;
-      vertices[p2i(x, y)].z = float(y - height_map.size().y / 2) / height_map.size().y;
-      for (int xi = -1; xi <= 1; xi++)
-        for (int yi = -1; yi <= 1; yi++) {
-          if (inside(vec2i(x + xi, y + yi), vec2i(0, 0), height_map.size())) {
-            vertices[p2i(x, y)].y += height_map[vec2i(x + xi, y + yi)];
-            n++;
-          }
+  parallel_for(height_map.size(), [&](vec2i p) {
+    auto x = p.x;
+    auto y = p.y;
+    vertices[p2i(x, y)].x = float(x - height_map.size().x / 2) / height_map.size().x;
+    vertices[p2i(x, y)].z = float(y - height_map.size().y / 2) / height_map.size().y;
+    auto n = 0;
+    for (int xi = -1; xi <= 1; xi++)
+      for (int yi = -1; yi <= 1; yi++) {
+        if (inside(vec2i(x + xi, y + yi), vec2i(0, 0), height_map.size())) {
+          vertices[p2i(x, y)].y += height_map[vec2i(x + xi, y + yi)];
+          n++;
         }
-      vertices[p2i(x, y)].y /= n;
-    }
+      }
+    vertices[p2i(x, y)].y /= n;
+  });
 
   auto indices = psl::vector<vec3u32>();
   for (int x = 0; x < height_map.size().x; x++)
@@ -604,8 +606,8 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
 
 TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function) {
   auto height_map = Array2df(resolution);
-  for_2d(resolution,
-         [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
+  parallel_for(resolution,
+               [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
   return height_map_to_mesh(height_map);
 }
 
@@ -631,7 +633,9 @@ void geometry_context(Context& ctx) {
   ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<TriangleMesh>("TriangleMesh")
-      .ctor(+[](psl::string_view filename) { return load_mesh(filename); })
+      .ctor(tag<TriangleMesh, psl::string>([&ctx](psl::string_view filename) {
+        return ctx.call<TriangleMesh>("load_mesh", filename);
+      }))
       .method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);

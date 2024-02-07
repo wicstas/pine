@@ -134,7 +134,6 @@ void light_context(Context& ctx) {
   ctx.type<Sky>("Sky").ctor<vec3>();
   ctx.type<Atmosphere>("Atmosphere").ctor<vec3, vec3>();
   ctx.type<ImageSky>("ImageSky")
-      .ctor(+[](psl::string_view filename) { return ImageSky(load_image(filename)); })
       .ctor<psl::shared_ptr<Image>>()
       .ctor<psl::shared_ptr<Image>, vec3>();
   ctx.type<EnvironmentLight>("EnvironmentLight").ctor_variant<Atmosphere, Sky, ImageSky>();

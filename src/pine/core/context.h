@@ -492,28 +492,18 @@ struct Context {
 
   template <typename F>
   void add_f(psl::string name, F f) {
+    auto func = wrap(f);
+    auto [first, last] = functions_map.equal_range(name);
+    for (const auto& [fname, fi] : psl::range(first, last)) {
+      if (functions[fi].signature() == func.signature())
+        return;
+    }
     functions_map.insert({psl::move(name), functions.size()});
-    add_f(psl::move(f));
+    add_f(psl::move(func));
   }
-  template <typename R, typename... Args>
-  void add_f(R (*f)(Args...)) {
-    add_f(Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...)));
-  }
-  template <typename T, typename R, typename... Args>
-  void add_f(R (T::*f)(Args...)) {
-    auto lambda = pine::tag<R, T&, Args...>(
-        [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
-    add_f(Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...)));
-  }
-  template <typename T, typename R, typename... Args>
-  void add_f(R (T::*f)(Args...) const) {
-    auto lambda = pine::tag<R, const T&, Args...>(
-        [f](const T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
-    add_f(Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...)));
-  }
-  template <typename T, typename R, typename... Args>
-  void add_f(Lambda<T, R, Args...> f) {
-    add_f(Function(psl::move(f), tag<R>(), psl::vector_of(tag<Args>()...)));
+  template <typename F>
+  void add_f(F f) {
+    add_f(wrap(psl::move(f)));
   }
   void add_f(Function func);
 
@@ -538,6 +528,10 @@ struct Context {
 
   Variable call(psl::string_view name, psl::span<const TypeTag> atypes,
                 psl::vector<Variable> args) const;
+  template <typename T, typename... Args>
+  T call(psl::string_view name, Args&&... args) const {
+    return call(name, tags<Args...>(), psl::vector_of<Variable>(FWD(args)...)).template as<T>();
+  }
 
   size_t find_variable(psl::string_view name) const;
   template <typename T>
@@ -577,10 +571,7 @@ struct Context {
     return signature_from(tag<R>(), tags<Args...>());
   }
   bool is_registered_type(psl::string_view name) const {
-    if (auto it = types.find(name); it != types.end())
-      return true;
-    else
-      return false;
+    return types.find(name) != types.end();
   }
   template <typename T>
   TypeTag tag() const {
@@ -608,6 +599,31 @@ struct Context {
   psl::map<psl::string, TypeTrait> types;
   size_t internal_class_n = 0;
   psl::optional<TypeTag> function_rtype;
+
+private:
+  Function wrap(Function f) const {
+    return f;
+  }
+  template <typename R, typename... Args>
+  Function wrap(R (*f)(Args...)) const {
+    return Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+  }
+  template <typename T, typename R, typename... Args>
+  Function wrap(R (T::*f)(Args...)) const {
+    auto lambda = pine::tag<R, T&, Args...>(
+        [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
+    return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...));
+  }
+  template <typename T, typename R, typename... Args>
+  Function wrap(R (T::*f)(Args...) const) const {
+    auto lambda = pine::tag<R, const T&, Args...>(
+        [f](const T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
+    return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...));
+  }
+  template <typename T, typename R, typename... Args>
+  Function wrap(Lambda<T, R, Args...> f) const {
+    return Function(psl::move(f), tag<R>(), psl::vector_of(tag<Args>()...));
+  }
 };
 
 template <typename T, Context::TypeClass type_class>

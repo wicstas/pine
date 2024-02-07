@@ -2,9 +2,9 @@
 #files. You can find more examples using 
 #the File button.
 
-var scene = Scene();
+scene := Scene();
 #Create a variable named image_size of type vec2i
-var image_size = [720, 360];
+image_size := [720, 360];
 
 #Add a shape of type Plane with material
 #of type DiffuseMaterial with albedo 0.8
@@ -19,13 +19,16 @@ scene.add(PointLight([4, 8, 0], 100));
 scene.set(ThinLenCamera(Film(image_size), [0, 4, 8], [0, 1, 0], 0.3));
 
 #Create an integrator that has as its:
-#acceleration structure: BVH()
-#sampler: HaltonSampler(4, image_size)
-#light_sampler: UniformLightSampler()
+#acceleration structure: BVH
+#sampler: HaltonSampler
+#light_sampler: UniformLightSampler
 #max_depth: 5
-var sampler = HaltonSampler(4, image_size);
-var light_sampler = UniformLightSampler();
-var integrator = PathIntegrator(BVH(), sampler, light_sampler, 5);
+integrator := PathIntegrator(
+    BVH(), 
+    HaltonSampler(4), 
+    UniformLightSampler(), 
+    5
+);
 
 integrator.render(scene);
-save("image.bpm", scene.camera.film());
+save("images/introduction.png", scene.camera.film());

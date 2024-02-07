@@ -1,6 +1,8 @@
 #include <pine/core/scene.h>
 #include <pine/core/context.h>
 
+#include <mutex>
+
 namespace pine {
 
 void Scene::add_material(psl::string name, Material material) {

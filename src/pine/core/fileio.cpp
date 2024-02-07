@@ -201,7 +201,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     Fatal("Unable to load `", filename, "`");
   }
 
-  ParallelFor(scene->mNumMeshes, [&](size_t i_mesh) {
+  parallel_for(scene->mNumMeshes, [&](size_t i_mesh) {
     auto indices = psl::vector<vec3u32>{};
     auto vertices = psl::vector<vec3>{};
     auto normals = psl::vector<vec3>{};
@@ -285,7 +285,7 @@ void interpret_file(Context &context, psl::string_view filename) {
 
 void fileio_context(Context &ctx) {
   ctx("load_mesh") = overloaded<psl::string_view>(load_mesh);
-  ctx("load_scene") = load_scene;
+  ctx("load") = load_scene;
   ctx("load_image") = overloaded<psl::string_view>(load_image);
   ctx("save_image") = overloaded<psl::string, const Array2d2f &>(save_image);
   ctx("save_image") = overloaded<psl::string, const Array2d3f &>(save_image);

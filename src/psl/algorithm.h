@@ -291,23 +291,23 @@ struct _greater_or_equal_to {
 };
 template <typename T>
 auto less_than(T value) {
-  return _less_than{psl::move(value)};
+  return _less_than<T>{psl::move(value)};
 }
 template <typename T>
 auto greater_than(T value) {
-  return _greater_than{psl::move(value)};
+  return _greater_than<T>{psl::move(value)};
 }
 template <typename T>
 auto equal_to(T value) {
-  return _equal_to{psl::move(value)};
+  return _equal_to<T>{psl::move(value)};
 }
 template <typename T>
 auto less_or_equal_to(T value) {
-  return _less_or_equal_to{psl::move(value)};
+  return _less_or_equal_to<T>{psl::move(value)};
 }
 template <typename T>
 auto greater_or_equal_to(T value) {
-  return _greater_or_equal_to{psl::move(value)};
+  return _greater_or_equal_to<T>{psl::move(value)};
 }
 
 // Return the iterator to the first element not satisfying `pred`

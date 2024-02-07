@@ -64,14 +64,21 @@ psl::optional<char> SourceLines::next(size_t row, size_t column) const {
 [[noreturn]] void SourceLines::error_impl(size_t row, size_t column,
                                           psl::string_view message) const {
   CHECK(paddings != invalid);
-  CHECK_LT(row, lines.size());
+  CHECK_LE(row, lines.size());
+
+  auto line_at = [this](int64_t i) {
+    if (i < 0 || i >= int64_t(lines.size()))
+      return psl::string();
+    else
+      return lines[i];
+  };
 
   auto vicinity = psl::string();
   for (int64_t i = row - paddings; i <= int64_t(row); i++)
-    vicinity += " | " + (i < 0 ? psl::string() : lines[i]) + "\n";
+    vicinity += " | " + line_at(i) + "\n";
   vicinity += "  -" + psl::string_n_of(column, '-') + "^\n";
   for (size_t i = row + 1; i <= row + paddings; i++)
-    vicinity += " | " + (i >= lines.size() ? psl::string() : lines[i]) + "\n";
+    vicinity += " | " + line_at(i) + "\n";
   if (vicinity.size())
     vicinity.pop_back();
 
