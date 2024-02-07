@@ -7,6 +7,9 @@
 #include <thread>
 #include <atomic>
 
+#include <xmmintrin.h>
+#include <pmmintrin.h>
+
 namespace pine {
 
 inline int n_threads() {
@@ -25,6 +28,8 @@ void ParallelForImpl(int64_t nItems, F&& f) {
 
   for (auto& thread : threads)
     thread = std::thread([&, tid = tid++]() {
+      _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+      _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
       threadIdx = tid;
       while (true) {
         auto offset = i += block_size;

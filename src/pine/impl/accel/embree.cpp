@@ -52,8 +52,8 @@ void hit_func(const RTCOccludedFunctionNArguments* args) {
 
   auto ray = Ray(vec3(ray_.org_x, ray_.org_y, ray_.org_z), vec3(ray_.dir_x, ray_.dir_y, ray_.dir_z),
                  ray_.tnear, ray_.tfar);
-  if (shape.hit(ray)) {
-  }
+  if (shape.hit(ray))
+    ray_.tfar = -Infinity;
 }
 
 void EmbreeAccel::build(const Scene* scene) {
@@ -109,7 +109,7 @@ bool EmbreeAccel::hit(Ray ray) const {
   args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcOccluded1((RTCScene)rtc_scene, &ray_, &args);
-  return ray.tmax > 0;
+  return ray_.tfar < 0;
 }
 bool EmbreeAccel::intersect(Ray& ray, Interaction& it) const {
   RTCRayHit rayhit;
