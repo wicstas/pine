@@ -1,4 +1,5 @@
 #include <pine/core/profiler.h>
+#include <pine/core/parallel.h>
 #include <pine/core/parser.h>
 #include <pine/core/fileio.h>
 #include <pine/core/scene.h>
@@ -72,7 +73,6 @@ void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *d
   }
 }
 psl::shared_ptr<Image> load_image(psl::string_view filename) {
-  Profiler _("[FileIO]Load image");
   auto data = read_binary_file(filename);
   if (auto image = load_image(data.data(), data.size()))
     return psl::make_shared<Image>(psl::move(*image));
@@ -90,7 +90,6 @@ psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const
   return result;
 }
 psl::optional<Image> load_image(void *buffer, size_t size) {
-  Profiler _("[FileIO]Load image");
   int width, height, channels;
   if (stbi_is_hdr_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size)) {
     auto data = stbi_loadf_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size, &width,
@@ -115,8 +114,8 @@ psl::optional<TriangleMesh> load_mesh(void *data, size_t size) {
   Assimp::Importer importer;
   const aiScene *scene =
       importer.ReadFileFromMemory(data, size,
-                                  aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_FlipUVs |
-                                      aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes);
+                                  aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
+                                      aiProcess_OptimizeMeshes | aiProcess_OptimizeGraph);
 
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     return psl::nullopt;
@@ -184,6 +183,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
   else
     p0 = psl::next(p0);
   auto working_directory = psl::string_view(filename.begin(), p0);
+  Debug("Working directory ", working_directory);
 
   Assimp::Importer importer;
   const aiScene *scene =
@@ -195,7 +195,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     Fatal("Unable to load `", filename, "`");
   }
 
-  for (size_t i_mesh = 0; i_mesh < scene->mNumMeshes; i_mesh++) {
+  ParallelFor(scene->mNumMeshes, [&](size_t i_mesh) {
     auto indices = psl::vector<vec3u32>{};
     auto vertices = psl::vector<vec3>{};
     auto normals = psl::vector<vec3>{};
@@ -214,7 +214,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     }
 
     if (mesh->HasTextureCoords(0)) {
-      Debug(mesh->mName.C_Str(), " has texture coords");
+      // Debug(mesh->mName.C_Str(), " has texture coords");
       for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         aiVector3D aiTexCoords = mesh->mTextureCoords[0][i];
         texcoords.push_back(vec2(aiTexCoords.x, aiTexCoords.y));
@@ -222,7 +222,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     }
 
     if (mesh->HasNormals()) {
-      Debug(mesh->mName.C_Str(), " has normals");
+      // Debug(mesh->mName.C_Str(), " has normals");
       for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         aiVector3D aiNormal = mesh->mNormals[i];
         normals.push_back(vec3(aiNormal.x, aiNormal.y, aiNormal.z));
@@ -233,21 +233,21 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     auto material = scene->mMaterials[mesh->mMaterialIndex];
     auto bc = aiColor3D(0.5, 0.5, 0.5);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, bc) == aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has basecolor ", bc.r, ' ', bc.g, ' ', bc.b);
+      ;  // Debug(mesh->mName.C_Str(), " has basecolor ", bc.r, ' ', bc.g, ' ', bc.b);
     auto dc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
+      ;  // Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
     auto sc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_SPECULAR, sc) == aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has specular ", sc.r, ' ', sc.g, ' ', sc.b);
+      ;  // Debug(mesh->mName.C_Str(), " has specular ", sc.r, ' ', sc.g, ' ', sc.b);
     auto diffuse_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_DIFFUSE, 0), diffuse_texture) ==
         aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
+      ;  // Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
     auto base_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_BASE_COLOR, 0), base_texture) ==
         aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
+      ;  // Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
 
     auto material_ = Material();
     if (diffuse_texture.length != 0)
@@ -260,11 +260,11 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     scene_.add_geometry(TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords),
                                      psl::move(normals)),
                         psl::move(material_));
-  }
+  });
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
-  Debug("[FileIO]Loading ", filename);
+  Debug("[FileIO]Loading `", filename, "`");
   auto source = read_string_file(filename);
   interpret(context, source);
 }

@@ -4,20 +4,28 @@
 namespace pine {
 
 void Scene::add_material(psl::string name, Material material) {
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> lock{mutex};
   materials[psl::move(name)] = psl::make_shared<Material>(psl::move(material));
 }
 void Scene::add_geometry(Shape shape, psl::string material_name) {
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> lock{mutex};
   geometries.push_back(psl::make_shared<Geometry>(psl::move(shape), find_material(material_name)));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
 }
 void Scene::add_geometry(Shape shape, Material material) {
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> lock{mutex};
   geometries.push_back(psl::make_shared<Geometry>(psl::move(shape),
                                                   psl::make_shared<Material>(psl::move(material))));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
 }
 void Scene::add_light(Light light) {
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> lock{mutex};
   lights.push_back(psl::move(light));
 }
 void Scene::set_camera(Camera camera) {

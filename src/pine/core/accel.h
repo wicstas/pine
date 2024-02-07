@@ -1,10 +1,11 @@
 #pragma once
 
+#include <pine/impl/accel/embree.h>
 #include <pine/impl/accel/bvh.h>
 
 namespace pine {
 
-struct Accel : psl::variant<BVH> {
+struct Accel : psl::variant<BVH, EmbreeAccel> {
   using variant::variant;
 
   void build(const Scene* scene) {

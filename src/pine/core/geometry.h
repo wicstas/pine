@@ -255,7 +255,22 @@ struct TriangleMesh {
     return *this;
   }
 
-private:
+  vec3 position_of(vec3u32 face, vec2 uv) const {
+    return lerp(uv[0], uv[1], vertices[face[0]], vertices[face[1]], vertices[face[2]]);
+  }
+  psl::optional<vec3> normal_of(vec3u32 face, vec2 uv) const {
+    if (normals.size())
+      return normalize(lerp(uv[0], uv[1], normals[face[0]], normals[face[1]], normals[face[2]]));
+    else
+      return psl::nullopt;
+  }
+  psl::optional<vec2> texcoord_of(vec3u32 face, vec2 uv) const {
+    if (texcoords.size())
+      return lerp(uv[0], uv[1], texcoords[face[0]], texcoords[face[1]], texcoords[face[2]]);
+    else
+      return psl::nullopt;
+  }
+
   psl::vector<vec3> vertices;
   psl::vector<vec3> normals;
   psl::vector<vec2> texcoords;

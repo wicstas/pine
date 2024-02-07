@@ -26,12 +26,12 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       break;
     }
 
-    if (it.material->is<EmissiveMaterial>()) {
+    if (it.geometry->material.get()->is<EmissiveMaterial>()) {
       if (depth == 0 || prev_delta) {
-        L += beta * it.material->le(LeEvalCtx{it, -ray.d});
+        L += beta * it.geometry->material.get()->le(LeEvalCtx{it, -ray.d});
       } else {
         auto lec = LeEvalCtx(it, -ray.d);
-        auto le = it.material->le(lec);
+        auto le = it.geometry->material.get()->le(lec);
         auto mis = 1.0f;
         auto pdf = light_sampler.pdf(it.geometry, it, ray, prev_n);
         mis = power_heuristic(1, mis_bxdf_pdf, 1, pdf);
@@ -43,13 +43,13 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
     if (depth + 1 == max_depth)
       break;
 
-    if (!it.material->is_delta())
+    if (!it.geometry->material.get()->is_delta())
       if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
           auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-          auto f = it.material->F(mec);
-          auto pdf = it.material->pdf(mec);
+          auto f = it.geometry->material.get()->F(mec);
+          auto pdf = it.geometry->material.get()->pdf(mec);
           auto mis = 1.0f;
           if (!ls->light->is_delta())
             mis = power_heuristic(1, ls->pdf, 1, pdf);
@@ -57,14 +57,14 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
         }
       }
 
-    if (nee_env_light && scene.env_light && !it.material->is_delta()) {
+    if (nee_env_light && scene.env_light && !it.geometry->material.get()->is_delta()) {
       auto ls = scene.env_light->sample(it.n, sampler.get2d());
 
       if (ls && !hit(it.spawn_ray(ls->wo, ls->distance))) {
         auto cosine = absdot(ls->wo, it.n);
         auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-        auto f = it.material->F(mec);
-        auto pdf = it.material->pdf(mec);
+        auto f = it.geometry->material.get()->F(mec);
+        auto pdf = it.geometry->material.get()->pdf(mec);
         auto mis = power_heuristic(1, ls->pdf, 1, pdf);
         L += beta * cosine * ls->le / ls->pdf * f * mis;
       }
@@ -72,21 +72,11 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
 
     auto msc = MaterialSampleCtx(it, -ray.d, sampler.get1d(), sampler.get2d());
 
-    if (auto bs = it.material->sample(msc)) {
+    if (auto bs = it.geometry->material.get()->sample(msc)) {
       beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
       mis_bxdf_pdf = bs->pdf;
       prev_n = it.n;
-      prev_delta = it.material->is_delta();
-
-      // if (depth >= 1) {
-      //   auto p = psl::min((beta[0] + beta[1] + beta[2]) / 3, 1.0f);
-      //   if (p < 0.2f) {
-      //     if (sampler.get1d() < p)
-      //       beta /= p;
-      //     else
-      //       break;
-      //   }
-      // }
+      prev_delta = it.geometry->material.get()->is_delta();
 
       if (beta.is_black())
         break;

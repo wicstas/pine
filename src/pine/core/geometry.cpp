@@ -612,7 +612,6 @@ TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> hei
 bool Geometry::intersect(Ray& ray, Interaction& it) const {
   auto hit = shape.intersect(ray, it);
   if (hit) {
-    it.material = material.get();
     it.geometry = this;
   }
   return hit;

@@ -9,6 +9,7 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
+#include <pine/impl/accel/embree.h>
 #include <pine/impl/accel/bvh.h>
 
 namespace pine {
@@ -36,7 +37,8 @@ Context get_default_context() {
       .method(
           "reset", +[](psl::shared_ptr<Timer>& x) { return float(x->Reset()); });
   ctx.type<BVH>("BVH").ctor();
-  ctx.type<Accel>("Accel").ctor_variant<BVH>();
+  ctx.type<EmbreeAccel>("Embree").ctor();
+  ctx.type<Accel>("Accel").ctor_variant<BVH, EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<Integrator>("Integrator");
@@ -73,7 +75,7 @@ Context get_default_context() {
 
 void interpret(Context& context, psl::string source) {
   auto bytecodes = compile(context, std::move(source));
-//   Log(bytecodes.to_string(context));
+  //   Log(bytecodes.to_string(context));
   execute(context, bytecodes);
 }
 

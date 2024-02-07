@@ -58,6 +58,7 @@ src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
+src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 )
 
@@ -73,7 +74,9 @@ set(ASSIMP_INSTALL OFF)
 set(ASSIMP_INSTALL_PDB OFF)
 add_subdirectory(src/contrib/assimp)
 
-target_link_libraries(pinelib psl Threads::Threads assimp)
+FIND_PACKAGE(embree 4 REQUIRED)
+
+target_link_libraries(pinelib psl Threads::Threads assimp embree)
 
 #Pine CommandLine
 add_executable(pine src/cli/main.cpp)

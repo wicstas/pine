@@ -540,8 +540,8 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
     return L;
   }
 
-  if (it.material->is<EmissiveMaterial>()) {
-    L += it.material->le({it, -ray.d});
+  if (it.geometry->material.get()->is<EmissiveMaterial>()) {
+    L += it.geometry->material.get()->le({it, -ray.d});
     return L;
   }
 
@@ -551,9 +551,9 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   if (dot(it.n, -ray.d) < 0)
     it.n = -it.n;
 
-  if (it.material->is_delta()) {
+  if (it.geometry->material.get()->is_delta()) {
     auto msc = MaterialSampleCtx{it, -ray.d, sampler.get1d(), sampler.get2d()};
-    if (auto bs = it.material->sample(msc)) {
+    if (auto bs = it.geometry->material.get()->sample(msc)) {
       auto li = radiance_estimate(scene, it.spawn_ray(bs->wo), sampler, depth + 1);
       auto cosine = absdot(it.n, bs->wo);
       return li * cosine * bs->f / bs->pdf;
@@ -565,7 +565,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   auto direct_light = [&](LightSample ls) {
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-      auto f = it.material->F(mec);
+      auto f = it.geometry->material.get()->F(mec);
       return ls.le / ls.pdf * psl::max(dot(it.n, ls.wo), 0.0f) * f;
     } else {
       return vec3{0.0f};
@@ -589,11 +589,13 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
       auto wo = uniform_sphere(qs->sc);
       auto mec = MaterialEvalCtx{it, -ray.d, wo};
       auto le = quad.flux_estimate(qs->sc) / (4);
-      auto mis_factor = balance_heuristic(1, qs->pdf, 1, it.material->pdf(mec)) / guide_select_prob;
-      L += le * it.material->F(mec) / qs->pdf * mis_factor;
+      auto mis_factor = balance_heuristic(1, qs->pdf, 1, it.geometry->material.get()->pdf(mec)) /
+                        guide_select_prob;
+      L += le * it.geometry->material.get()->F(mec) / qs->pdf * mis_factor;
     }
   } else {
-    if (auto bs = it.material->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
+    if (auto bs =
+            it.geometry->material.get()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
       auto sc = inverse_uniform_sphere(bs->wo);
       auto le = quad.flux_estimate(sc) / (4);
       auto mis_factor = balance_heuristic(1, bs->pdf, 1, quad.pdf(sc)) / (1 - guide_select_prob);
@@ -626,11 +628,11 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     return vec3{0.0f};
   }
 
-  if (it.material->is<EmissiveMaterial>()) {
+  if (it.geometry->material.get()->is<EmissiveMaterial>()) {
     if (prev_delta) {
-      return it.material->le({it, -wi});
+      return it.geometry->material.get()->le({it, -wi});
     } else if (mis_env_light) {
-      auto le = it.material->le({it, -wi});
+      auto le = it.geometry->material.get()->le({it, -wi});
       auto light_pdf = light_sampler.pdf(it.geometry, it, ray, prev_n);
       auto mis_factor = power_heuristic(1, prev_sample_pdf, 1, light_pdf);
       return le * mis_factor;
@@ -648,7 +650,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto cosine = absdot(ls.wo, it.n);
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-      auto f = it.material->F(mec);
+      auto f = it.geometry->material.get()->F(mec);
       auto mis_factor = power_heuristic(1, ls.pdf, 1, pdf_g);
       if (collect && collect_)
         sd_tree.add_sample(leaf, {it.p, ls.wo, ls.le * cosine / ls.pdf}, sampler.Get3D());
@@ -659,18 +661,20 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
   };
 
   auto guide_select_prob = use_guide ? 0.75f : 0.0f;
-  if (it.material->is_delta())
+  if (it.geometry->material.get()->is_delta())
     guide_select_prob = 0.0f;
   if (sampler.get1d() < guide_select_prob) {
     if (auto ps = leaf.sample(sampler.get2d())) {
       auto cosine = absdot(it.n, ps->w);
       auto mec = MaterialEvalCtx{it, wi, ps->w};
-      auto f = it.material->F(mec);
+      auto f = it.geometry->material.get()->F(mec);
       if (psl::abs(ps->pdf) > 1e-7f && cosine > 1e-7f && length_squared(f) > 1e-10f) {
-        auto li = radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
+        auto li =
+            radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, ps->w, li * cosine / ps->pdf}, sampler.Get3D());
-        auto mis_factor = power_heuristic(1, ps->pdf, 1, it.material->pdf(mec)) / guide_select_prob;
+        auto mis_factor = power_heuristic(1, ps->pdf, 1, it.geometry->material.get()->pdf(mec)) /
+                          guide_select_prob;
         lo += li * cosine * f / ps->pdf * mis_factor;
         CHECK(!(li * cosine * f / ps->pdf * mis_factor).has_nan());
         if ((li * cosine * f / ps->pdf * mis_factor).has_nan())
@@ -686,11 +690,11 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
         lo += direct_light(*ls, 0.0f, false);
     }
   } else {
-    if (auto bs = it.material->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+    if (auto bs = it.geometry->material.get()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto cosine = absdot(it.n, bs->wo);
       if (psl::abs(bs->pdf) > 1e-7f && cosine > 1e-7f && length_squared(bs->f) > 1e-10f) {
         auto li = radiance(scene, it.spawn_ray(bs->wo), sampler, depth + 1, bs->pdf, it.n,
-                           it.material->is_delta(), true);
+                           it.geometry->material.get()->is_delta(), true);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, bs->wo, li * cosine / bs->pdf}, sampler.Get3D());
         auto mis_factor =
@@ -704,14 +708,15 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
       }
     }
 
-    if (!it.material->is_delta())
+    if (!it.geometry->material.get()->is_delta())
       if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
-        lo += direct_light(*ls, ls->light->is_delta() ? 0.0f : it.material->pdf({it, wi, ls->wo}),
-                           false);
+        lo += direct_light(
+            *ls, ls->light->is_delta() ? 0.0f : it.geometry->material.get()->pdf({it, wi, ls->wo}),
+            false);
       }
-    if (!it.material->is_delta() && scene.env_light) {
+    if (!it.geometry->material.get()->is_delta() && scene.env_light) {
       if (auto ls = scene.env_light->sample(it.n, sampler.get2d()))
-        lo += direct_light(*ls, it.material->pdf({it, wi, ls->wo}), false);
+        lo += direct_light(*ls, it.geometry->material.get()->pdf({it, wi, ls->wo}), false);
     }
   }
 

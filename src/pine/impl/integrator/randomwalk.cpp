@@ -15,15 +15,15 @@ vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
       }
       break;
     }
-    if (it.material->is<EmissiveMaterial>()) {
-      L += beta * it.material->le({it, -ray.d});
+    if (it.geometry->material.get()->is<EmissiveMaterial>()) {
+      L += beta * it.geometry->material.get()->le({it, -ray.d});
       break;
     }
 
     if (depth + 1 == max_depth)
       break;
 
-    if (auto bs = it.material->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
+    if (auto bs = it.geometry->material.get()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
       beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
       if (beta.is_black())
         break;

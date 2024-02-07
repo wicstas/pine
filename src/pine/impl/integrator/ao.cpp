@@ -11,7 +11,7 @@ vec3 AOIntegrator::radiance(Scene&, Ray ray, Sampler& sampler) {
   if (intersect(ray, it)) {
     ray.o = it.p;
     it.n = face_same_hemisphere(it.n, -ray.d);
-    ray = it.spawn_ray(face_same_hemisphere(uniform_hemisphere(sampler.get2d()), it.n));
+    ray = it.spawn_ray(face_same_hemisphere(uniform_hemisphere(sampler.get2d()), it.n), radius);
     return hit(ray) ? vec3(0.0f) : vec3(1.0f);
   }
   return vec3(0.0f);

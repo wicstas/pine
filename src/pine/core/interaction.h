@@ -1,6 +1,7 @@
 #pragma once
 
 #include <pine/core/ray.h>
+#include <pine/core/log.h>
 
 namespace pine {
 
@@ -34,7 +35,6 @@ struct Interaction {
   vec3 n;
   vec2 uv;
 
-  const Material* material = nullptr;
   const Geometry* geometry = nullptr;
   float bvh = 0.0f;
 };

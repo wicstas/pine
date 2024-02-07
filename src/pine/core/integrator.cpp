@@ -29,6 +29,8 @@ bool RTIntegrator::intersect(Ray& ray, Interaction& it) const {
 }
 
 void PixelIntegrator::render(Scene& scene) {
+  pre_render(scene);
+
   accel.build(&scene);
   auto& film = scene.camera.film();
   film.clear();

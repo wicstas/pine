@@ -261,6 +261,9 @@ public:
   size_t size() const {
     return len;
   }
+  size_t byte_size() const {
+    return size() * sizeof(T);
+  }
   size_t capacity() const {
     return reserved;
   }

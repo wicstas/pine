@@ -44,7 +44,7 @@ void BVHImpl::build(psl::vector<Primitive> primitives) {
   nodes.reserve(primitives.size());
   build_sah_binned(primitives.data(), primitives.data() + primitives.size(), aabb);
   rootIndex = int(nodes.size() - 1);
-  // Optimize();
+  // optimize();
 }
 
 int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
@@ -555,10 +555,8 @@ bool BVH::intersect(Ray& ray, Interaction& it) const {
       auto hit = lbvh[i_lbvh].Intersect(ray, it, [&](Ray& ray, Interaction& it, int index) {
         return mesh.intersect(ray, it, index);
       });
-      if (hit) {
+      if (hit)
         it.geometry = geometry.get();
-        it.material = geometry->material.get();
-      }
       return hit;
     } else {
       return geometry->intersect(ray, it);

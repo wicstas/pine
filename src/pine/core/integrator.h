@@ -37,6 +37,8 @@ public:
 
   void render(Scene& scene) override;
   virtual void pixel_color(Scene& scene, vec2i p, Sampler& sampler) = 0;
+  virtual void pre_render(Scene&) {
+  }
 };
 
 class RayIntegrator : public PixelIntegrator {
