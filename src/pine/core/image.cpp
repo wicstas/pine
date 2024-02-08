@@ -12,7 +12,11 @@ void image_context(Context& ctx) {
         auto pixels = Array2d<vec3>({1, 1});
         pixels[{0, 0}] = color;
         return psl::make_shared<Image>(pixels);
-      });
+      })
+      .method(
+          "size", +[](const psl::shared_ptr<Image>& image) { return image->size(); })
+      .method(
+          "[]", +[](const psl::shared_ptr<Image>& image, vec2i p) { return (*image)[p]; });
 }
 
 }  // namespace pine

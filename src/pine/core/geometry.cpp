@@ -579,11 +579,13 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;
   auto p2i = [width](int x, int y) { return y * width + x; };
   auto vertices = psl::vector<vec3>(width * (height_map.size().y + 1));
+  auto texcoords = psl::vector<vec2>(width * (height_map.size().y + 1));
   parallel_for(height_map.size(), [&](vec2i p) {
     auto x = p.x;
     auto y = p.y;
     vertices[p2i(x, y)].x = float(x - height_map.size().x / 2) / height_map.size().x;
     vertices[p2i(x, y)].z = float(y - height_map.size().y / 2) / height_map.size().y;
+    texcoords[p2i(x, y)] = vec2(x, y) / height_map.size();
     auto n = 0;
     for (int xi = -1; xi <= 1; xi++)
       for (int yi = -1; yi <= 1; yi++) {
@@ -601,9 +603,14 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
       indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1)));
       indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1)));
     }
-  return TriangleMesh(vertices, indices);
+  return TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
 }
 
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2i> height_function) {
+  auto height_map = Array2df(resolution);
+  parallel_for(resolution, [&](vec2i p) { height_map[p] = height_function(p); });
+  return height_map_to_mesh(height_map);
+}
 TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution,
@@ -640,6 +647,7 @@ void geometry_context(Context& ctx) {
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2>>(height_map_to_mesh);
+  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2i>>(height_map_to_mesh);
 }
 
 }  // namespace pine

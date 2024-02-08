@@ -16,6 +16,7 @@ void vecmath_context(Context& ctx) {
   ctx.type<vec2i>()
       .ctor<int>()
       .ctor<int, int>()
+      .ctor_variant_explicit<vec2>()
       .member("x", &vec2i::x)
       .member("y", &vec2i::y)
       .method("[]", overloaded<int>(&vec2i::operator[]));
@@ -28,6 +29,7 @@ void vecmath_context(Context& ctx) {
   ctx.type<vec3i>()
       .ctor<int>()
       .ctor<int, int, int>()
+      .ctor_variant_explicit<vec3>()
       .member("x", &vec3i::x)
       .member("y", &vec3i::y)
       .member("z", &vec3i::z)

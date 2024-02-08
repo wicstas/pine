@@ -667,44 +667,58 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
     auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = TypeTag(body->return_type.value, false);
     auto ptypes = psl::vector<TypeTag>();
-    auto lambda_builder_ptypes = psl::vector<TypeTag>();
+    auto cptypes = psl::vector<TypeTag>();
     auto args = psl::vector<Expr>();
 
-    for (const auto& capture : captures) {
+    for (auto capture : captures) {
+      auto is_ref = capture.value.front() == '&';
+      if (is_ref)
+        capture.value.pop_front();
       auto vi = bytecodes.var_index_by_name(capture.value);
       if (vi == uint16_t(-1))
         bytecodes.error(capture, "Variable `", capture.value, "` is not found");
       auto ptype = bytecodes.var_type(vi);
+      ptype.is_ref = is_ref;
       fbcodes.placehold_typed(ptype, capture.value);
-      lambda_builder_ptypes.push_back(ptype);
+      cptypes.push_back(ptype);
       args.push_back(capture);
     }
     for (const auto& param : body->params) {
-      auto ptype = TypeTag(param.type.value, false);
+      auto ptype = [&]() {
+        if (param.type.value.size() && param.type.value.back() == '&')
+          return TypeTag(param.type.value.substr(0, param.type.value.size() - 1), true);
+        else
+          return TypeTag(param.type.value, false);
+      }();
       fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
+    // TODO: rtype could be ref
     context.function_rtype = rtype;
     body->block.emit(context, fbcodes);
     context.function_rtype = psl::nullopt;
+    // TODO: copy variable should keep reference
 
     context(name) = Function(
-        lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
+        lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype, cptypes,
                                             ptypes](psl::span<const Variable*> args) mutable {
-          auto capture_args = psl::static_vector<const Variable*, 8>(args);
-          return Function(lambda<psl::span<const Variable*>>(
-                              [&context, fbcodes = psl::move(fbcodes),
-                               capture_args](psl::span<const Variable*> args) mutable {
-                                auto vm = VirtualMachine();
-                                for (size_t i = 0; i < capture_args.size(); i++)
-                                  vm.stack.push(*capture_args[i]);
-                                for (size_t i = 0; i < args.size(); i++)
-                                  vm.stack.push(*args[i]);
-                                return execute(context, fbcodes, vm);
-                              }),
-                          rtype, ptypes);
+          auto cargs = psl::vector<Variable>();
+          for (size_t i = 0; i < args.size(); i++)
+            cargs.push_back(cptypes[i].is_ref ? args[i]->create_ref() : *args[i]);
+          return Function(
+              lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
+                                                  cargs = psl::move(cargs), cptypes,
+                                                  ptypes](psl::span<const Variable*> args) mutable {
+                auto vm = VirtualMachine();
+                for (size_t i = 0; i < cargs.size(); i++)
+                  vm.stack.push(cptypes[i].is_ref ? cargs[i].create_ref() : cargs[i]);
+                for (size_t i = 0; i < args.size(); i++)
+                  vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : *args[i]);
+                return execute(context, fbcodes, vm);
+              }),
+              rtype, ptypes);
         }),
-        TypeTag(signature_from(rtype, ptypes)), lambda_builder_ptypes);
+        TypeTag(signature_from(rtype, ptypes)), cptypes);
 
     return FunctionCall(row, column, name, args).emit(context, bytecodes);
   } catch (const Exception& e) {
@@ -891,7 +905,7 @@ void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
 void ReturnStmt::emit(Context& context, Bytecodes& bytecodes) const {
   if (expr) {
     auto vi = expr->emit(context, bytecodes);
-    if (bytecodes.var_type(vi) != context.function_rtype)
+    if (! context.function_rtype || bytecodes.var_type(vi).name != context.function_rtype->name)
       bytecodes.error(*this, "Expression type `", bytecodes.var_type(vi),
                       "` is inconsistent with function return type `", context.function_rtype, "`");
     bytecodes.add(Bytecode::Return, vi);
@@ -1532,6 +1546,13 @@ struct Parser {
       return PExpr{string_literal()};
     else if (expect("[")) {
       backup();
+      accept("[");
+      auto expect_lambda = expect("&");
+      undo();
+      if (expect_lambda)
+        return PExpr(lambda());
+
+      backup();
       auto vector_ = vector();
       if (expect("(")) {
         undo();
@@ -1556,7 +1577,11 @@ struct Parser {
     consume("[", "to specify capture list");
     auto captures = psl::vector<Id>();
     while (!accept("]")) {
-      captures.push_back(id());
+      auto is_ref = accept("&");
+      auto id_ = id();
+      if (is_ref)
+        id_.value = "&" + id_.value;
+      captures.push_back(psl::move(id_));
       accept(",");
     }
     consume("(", "to start parameter defintion");
@@ -1865,7 +1890,11 @@ Bytecodes compile(Context& context, psl::string source) {
     block.emit(context, bytecodes);
     return bytecodes;
   } catch (const Exception& e) {
-    Fatal("Uncaught exception: ", e.what());
+    Fatal(e.what());
+  } catch (const FatalException& e) {
+    throw e;
+  } catch (...) {
+    Fatal("Uncaught unknown exception");
   }
 }
 
@@ -2063,6 +2092,9 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
     }
   } catch (const Exception& e) {
     Log(e.what());
+  } catch (const FatalException&) {
+  } catch (...) {
+    Fatal("Uncaught unknown exception");
   }
 
   return Variable();

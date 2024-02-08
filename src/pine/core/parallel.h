@@ -68,4 +68,6 @@ private:
   std::atomic<uint32_t> bits;
 };
 
+void parallel_context(Context& ctx);
+
 }  // namespace pine

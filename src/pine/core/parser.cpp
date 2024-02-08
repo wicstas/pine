@@ -1,4 +1,5 @@
 #include <pine/core/compiler.h>
+#include <pine/core/parallel.h>
 #include <pine/core/parser.h>
 #include <pine/core/fileio.h>
 #include <pine/core/scene.h>
@@ -30,6 +31,7 @@ Context get_default_context() {
   scene_context(ctx);
   sampler_context(ctx);
   fileio_context(ctx);
+  parallel_context(ctx);
   ctx.type<psl::shared_ptr<Timer>>("Timer")
       .ctor(+[]() { return psl::make_shared<Timer>(); })
       .method(
@@ -74,9 +76,15 @@ Context get_default_context() {
 }
 
 void interpret(Context& context, psl::string source) {
-  auto bytecodes = compile(context, std::move(source));
-  //   Log(bytecodes.to_string(context));
-  execute(context, bytecodes);
+  try {
+    auto bytecodes = compile(context, std::move(source));
+    execute(context, bytecodes);
+  } catch (const Exception& e) {
+    Fatal("Uncaught pine exception: ", e.what());
+  } catch (const FatalException&) {
+  } catch (...) {
+    Fatal("Uncaught unknown exception");
+  }
 }
 
 }  // namespace pine

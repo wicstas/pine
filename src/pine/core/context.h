@@ -207,7 +207,10 @@ struct Function {
         const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
           if constexpr (psl::is_psl_function<typename P::Type>)
             return (typename P::Type)([f = var.template as<Function>()](auto&&... args) {
-              return f(FWD(args)...).template as<psl::PslFunctionReturnType<typename P::Type>>();
+              if constexpr (psl::is_void<psl::PslFunctionReturnType<typename P::Type>>)
+                f(FWD(args)...);
+              else
+                return f(FWD(args)...).template as<psl::PslFunctionReturnType<typename P::Type>>();
             });
           else
             return var.template as<typename P::Type>();
@@ -494,9 +497,14 @@ struct Context {
   void add_f(psl::string name, F f) {
     auto func = wrap(f);
     auto [first, last] = functions_map.equal_range(name);
-    for (const auto& [fname, fi] : psl::range(first, last)) {
-      if (functions[fi].signature() == func.signature())
-        return;
+    while (first != last) {
+      const auto& [fname, fi] = *first;
+      if (functions[fi].signature() == func.signature()) {
+        functions_map.erase(first);
+        std::tie(first, last) = functions_map.equal_range(name);
+      } else {
+        ++first;
+      }
     }
     functions_map.insert({psl::move(name), functions.size()});
     add_f(psl::move(func));

@@ -276,6 +276,9 @@ static bool match_prefix(psl::string_view base, psl::string_view candidate) {
 psl::string Context::complete(psl::string part) const {
   auto result = psl::string();
 
+  if (part == "")
+    return result;
+
   for (const auto& f : functions_map) {
     if (match_prefix(part, f.first)) {
       if (result == "")

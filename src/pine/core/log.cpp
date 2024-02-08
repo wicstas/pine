@@ -5,10 +5,10 @@
 namespace pine {
 
 void stop_program() {
-  // #ifndef NDEBUG
+#ifndef NDEBUG
   psl::abort();
-  // #endif
-  // throw FatalException{};
+#endif
+  throw FatalException{};
 }
 
 void null_stream(psl::string_view) {
