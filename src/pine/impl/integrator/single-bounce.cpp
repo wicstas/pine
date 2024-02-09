@@ -1,11 +1,11 @@
-#include <pine/impl/integrator/single-bound.h>
+#include <pine/impl/integrator/single-bounce.h>
 #include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
 #include <pine/core/scene.h>
 
 namespace pine {
 
-void SingleBoundIntegrator::render(Scene& scene) {
+void SingleBounceIntegrator::render(Scene& scene) {
   light_sampler.build(&scene);
 
   accel.build(&scene);
@@ -13,22 +13,27 @@ void SingleBoundIntegrator::render(Scene& scene) {
   film.clear();
   set_progress(0);
 
-  auto primary_spp = psl::max(samplesPerPixel / primary_ratio, 1);
+  auto primary_spp = psl::max(samples_per_pixel / primary_ratio, 1);
   Profiler _("Rendering");
   for (int i = 0; i < primary_spp; i++) {
+    Atomic<int64_t> max_index = 0;
     parallel_for(film.size(), [&](vec2i p) {
       Sampler& sampler = samplers[threadIdx];
       sampler.start_pixel(p, i * primary_ratio);
       pixel_color(scene, p, sampler);
+      if (p.x == 0) {
+        max_index = psl::max<int64_t>(max_index, p.x + p.y * film.size().x);
+        set_progress(float(i) / primary_spp + float(max_index) / area(film.size()) / primary_spp);
+      }
     });
-    set_progress(static_cast<float>(i) / primary_spp);
+    set_progress(static_cast<float>(i + 1) / primary_spp);
   }
 
   set_progress(1);
 }
 
-void SingleBoundIntegrator::pixel_color(Scene& scene, vec2i p, Sampler& sampler) {
-  auto p_film = vec2{p + sampler.get2d()} / scene.camera.film().size();
+void SingleBounceIntegrator::pixel_color(Scene& scene, vec2i p, Sampler& sampler) {
+  auto p_film = vec2(p + sampler.get2d()) / scene.camera.film().size();
   auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
   auto L = radiance(scene, ray, sampler, false);
   CHECK(!L.has_nan());
@@ -36,18 +41,19 @@ void SingleBoundIntegrator::pixel_color(Scene& scene, vec2i p, Sampler& sampler)
   scene.camera.film().add_sample(p, L);
 }
 
-vec3 SingleBoundIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, bool indirect_bound) {
+vec3 SingleBounceIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
+                                      bool indirect_bounce) {
   auto L = vec3(0.0f);
   auto it = Interaction();
   if (!intersect(ray, it)) {
-    if (scene.env_light && !indirect_bound)
+    if (scene.env_light && !indirect_bounce)
       L = scene.env_light->color(ray.d);
-    else if (scene.env_light && indirect_bound)
+    else if (scene.env_light && indirect_bounce)
       L = clamp(scene.env_light->color(ray.d), vec3(0), vec3(1));
     return L;
   }
 
-  if (!indirect_bound && it.geometry->material->is<EmissiveMaterial>()) {
+  if (!indirect_bounce && it.geometry->material->is<EmissiveMaterial>()) {
     L = it.geometry->material->le(LeEvalCtx(it, -ray.d));
     return L;
   }
@@ -77,7 +83,7 @@ vec3 SingleBoundIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, bo
       }
   }
 
-  if (!indirect_bound)
+  if (!indirect_bounce)
     for (int sp = 0; sp < primary_ratio; sp++) {
       auto msc = MaterialSampleCtx(it, -ray.d, sampler.get1d(), sampler.get2d());
       if (auto bs = it.geometry->material->sample(msc)) {
@@ -89,7 +95,7 @@ vec3 SingleBoundIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, bo
     }
 
   L += L_direct;
-  if (!indirect_bound)
+  if (!indirect_bounce)
     L += L_indirect / primary_ratio;
 
   return L;

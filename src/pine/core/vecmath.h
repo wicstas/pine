@@ -1352,6 +1352,13 @@ inline int min_axis(vec3 v) {
     return v[1] < v[2] ? 1 : 2;
 }
 
+inline int max_value(vec3 v) {
+  return psl::max(v[0], v[1], v[2]);
+}
+inline int min_value(vec3 v) {
+  return psl::min(v[0], v[1], v[2]);
+}
+
 void vecmath_context(Context &ctx);
 
 }  // namespace pine

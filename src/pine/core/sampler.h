@@ -11,11 +11,11 @@
 namespace pine {
 
 struct UniformSampler {
-  UniformSampler(int samplesPerPixel, int seed = 0) : samplesPerPixel(samplesPerPixel), rng(seed) {
+  UniformSampler(int samples_per_pixel, int seed = 0) : samples_per_pixel(samples_per_pixel), rng(seed) {
   }
 
   int spp() const {
-    return samplesPerPixel;
+    return samples_per_pixel;
   }
   void start_pixel(vec2i, int) {
   }
@@ -29,18 +29,18 @@ struct UniformSampler {
   }
 
 private:
-  int samplesPerPixel;
+  int samples_per_pixel;
   RNG rng;
 };
 
 struct StratifiedSampler {
   StratifiedSampler(int xPixelSamples, int yPixelSamples, bool jitter)
       : xPixelSamples(xPixelSamples), yPixelSamples(yPixelSamples), jitter(jitter) {
-    samplesPerPixel = xPixelSamples * yPixelSamples;
+    samples_per_pixel = xPixelSamples * yPixelSamples;
   }
 
   int spp() const {
-    return samplesPerPixel;
+    return samples_per_pixel;
   }
   void start_pixel(vec2i p, int index) {
     pixel = p;
@@ -52,7 +52,7 @@ struct StratifiedSampler {
     dimension = 0;
   }
   float get1d() {
-    int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
+    int stratum = (sampleIndex + hash(pixel, dimension)) % samples_per_pixel;
     dimension += 1;
 
     float delta = jitter ? rng.uniformf() : 0.5f;
@@ -60,7 +60,7 @@ struct StratifiedSampler {
     return (stratum + delta) / spp();
   }
   vec2 get2d() {
-    int stratum = (sampleIndex + hash(pixel, dimension)) % samplesPerPixel;
+    int stratum = (sampleIndex + hash(pixel, dimension)) % samples_per_pixel;
     dimension += 2;
 
     int x = stratum % xPixelSamples, y = stratum / xPixelSamples;
@@ -71,7 +71,7 @@ struct StratifiedSampler {
 
 private:
   int xPixelSamples, yPixelSamples;
-  int samplesPerPixel;
+  int samples_per_pixel;
   RNG rng;
   vec2i pixel;
   int sampleIndex;
@@ -80,10 +80,10 @@ private:
 };
 
 struct HaltonSampler {
-  HaltonSampler(int samplesPerPixel);
+  HaltonSampler(int samples_per_pixel);
 
   int spp() const {
-    return samplesPerPixel;
+    return samples_per_pixel;
   }
   void start_pixel(vec2i p, int sampleIndex);
   void start_next_sample() {
@@ -107,7 +107,7 @@ struct HaltonSampler {
   }
 
 private:
-  int samplesPerPixel = 0;
+  int samples_per_pixel = 0;
   static constexpr int MaxHaltonResolution = 128;
   vec2i baseScales, baseExponents;
   int multInverse[2] = {};
@@ -120,10 +120,10 @@ private:
 };
 
 struct ZeroTwoSequenceSampler {
-  ZeroTwoSequenceSampler(int samplesPerPixel, int nSampledDimensions);
+  ZeroTwoSequenceSampler(int samples_per_pixel, int nSampledDimensions);
 
   int spp() const {
-    return samplesPerPixel;
+    return samples_per_pixel;
   }
   void start_pixel(vec2i p, int sampleIndex);
   void start_next_sample() {
@@ -135,7 +135,7 @@ struct ZeroTwoSequenceSampler {
   vec2 get2d();
 
 private:
-  int samplesPerPixel;
+  int samples_per_pixel;
   int currentSampleIndex = 0;
   int current1DDimension = 0, current2DDimension = 0;
   psl::vector<psl::vector<float>> samples1D;

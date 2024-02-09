@@ -5,10 +5,11 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
-#include <pine/impl/integrator/single-bound.h>
+#include <pine/impl/integrator/single-bounce.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
+#include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/drjit.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
@@ -62,6 +63,10 @@ Context get_default_context() {
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor<Accel, Sampler, LightSampler, int, int>()
       .method("render", &GuidedPathIntegrator::render);
+  ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int, int>()
+      .ctor<Accel, Sampler, LightSampler, int, int, int>()
+      .method("render", &CachedPathIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor<Accel, Sampler, psl::string>()
       .method("render", &VisualizerIntegrator::render);
@@ -71,9 +76,9 @@ Context get_default_context() {
   ctx.type<DrJitIntegrator>("DrJitIntegrator")
       .ctor<Accel, Sampler>()
       .method("render", &DrJitIntegrator::render);
-  ctx.type<SingleBoundIntegrator>("SingleBoundIntegrator")
+  ctx.type<SingleBounceIntegrator>("SingleBounceIntegrator")
       .ctor<Accel, Sampler, LightSampler>()
-      .method("render", &SingleBoundIntegrator::render);
+      .method("render", &SingleBounceIntegrator::render);
   ctx.type<psl::string>()
       .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
                  psl::string>([](const auto& x) {

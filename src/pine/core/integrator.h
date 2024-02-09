@@ -30,7 +30,7 @@ public:
 protected:
   Accel accel;
   psl::vector<Sampler> samplers;
-  int samplesPerPixel;
+  int samples_per_pixel;
 };
 
 class PixelIntegrator : public RTIntegrator {

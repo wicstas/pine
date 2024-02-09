@@ -28,7 +28,7 @@ static uint64_t multiplicativeInverse(int64_t a, int64_t n) {
 
 psl::vector<uint16_t> HaltonSampler::radicalInversePermutations;
 
-HaltonSampler::HaltonSampler(int samplesPerPixel) : samplesPerPixel(samplesPerPixel) {
+HaltonSampler::HaltonSampler(int samples_per_pixel) : samples_per_pixel(samples_per_pixel) {
   if (radicalInversePermutations.size() == 0) {
     RNG rng;
     radicalInversePermutations = compute_radical_inverse_permutations(rng);
@@ -67,10 +67,10 @@ void HaltonSampler::start_pixel(vec2i p, int sampleIndex) {
 }
 
 ZeroTwoSequenceSampler::ZeroTwoSequenceSampler(int spp, int nSampledDimensions) {
-  samplesPerPixel = psl::roundup2(spp);
+  samples_per_pixel = psl::roundup2(spp);
   for (int i = 0; i < nSampledDimensions; i++) {
-    samples1D.push_back(psl::vector<float>(samplesPerPixel));
-    samples2D.push_back(psl::vector<vec2>(samplesPerPixel));
+    samples1D.push_back(psl::vector<float>(samples_per_pixel));
+    samples2D.push_back(psl::vector<vec2>(samples_per_pixel));
   }
 }
 void ZeroTwoSequenceSampler::start_pixel(vec2i, int sampleIndex) {
@@ -78,9 +78,9 @@ void ZeroTwoSequenceSampler::start_pixel(vec2i, int sampleIndex) {
   current1DDimension = current2DDimension = 0;
   if (sampleIndex == 0) {
     for (auto& s : samples1D)
-      VanDerCorput(samplesPerPixel, &s[0], rng);
+      VanDerCorput(samples_per_pixel, &s[0], rng);
     for (auto& s : samples2D)
-      Sobol2D(samplesPerPixel, &s[0], rng);
+      Sobol2D(samples_per_pixel, &s[0], rng);
   }
 }
 float ZeroTwoSequenceSampler::get1d() {

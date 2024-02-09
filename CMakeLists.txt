@@ -27,6 +27,7 @@ add_library(pinelib
 src/pine/core/lowdiscrepancy.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
+src/pine/core/interaction.cpp
 src/pine/core/integrator.cpp
 src/pine/core/geometry.cpp
 src/pine/core/material.cpp
@@ -55,8 +56,9 @@ src/pine/core/rng.cpp
 src/pine/core/log.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/visualizer.cpp
-src/pine/impl/integrator/single-bound.cpp
+src/pine/impl/integrator/single-bounce.cpp
 src/pine/impl/integrator/guidedpath.cpp
+src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/drjit.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
