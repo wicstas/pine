@@ -102,7 +102,7 @@ void vecmath_context(Context& ctx) {
   ctx("pow") = overloaded<vec3, float>(pow<float>);
   ctx("pow") = overloaded<vec2, vec2>(pow<float>);
   ctx("pow") = overloaded<vec3, vec3>(pow<float>);
-  ctx("coordinate_system") = overloaded<vec3>(coordinate_system);
+  ctx("coordinate_system") = overloaded_r<mat3, vec3>(coordinate_system);
   ctx("rotate_x") = rotate_x;
   ctx("rotate_y") = rotate_y;
   ctx("rotate_z") = rotate_z;

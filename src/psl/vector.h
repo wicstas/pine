@@ -58,6 +58,8 @@ struct static_allocator {
   psl::Storage<sizeof(T) * capacity, alignof(T)> storage;
 };
 
+// TODO: use relocate
+
 template <typename T, typename Allocator = default_allocator<T>>
 class vector {
 public:

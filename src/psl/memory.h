@@ -44,6 +44,11 @@ As bitcast(T&& x) {
   psl::memcpy(storage, &x, sizeof(T));
   return *reinterpret_cast<As*>(storage);
 }
+template <typename As, typename T>
+requires(sizeof(As) == sizeof(T))
+As bitcast_unsafe(T&& x) {
+  return *(As*)&x;
+}
 
 template <typename T, typename Deleter = default_deleter<T>>
 class unique_ptr {

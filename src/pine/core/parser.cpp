@@ -5,9 +5,11 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
+#include <pine/impl/integrator/single-bound.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
+#include <pine/impl/integrator/drjit.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
@@ -63,6 +65,15 @@ Context get_default_context() {
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor<Accel, Sampler, psl::string>()
       .method("render", &VisualizerIntegrator::render);
+  ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
+      .ctor<Accel, Sampler, psl::function<vec3, CustomRayIntegrator&, Scene&, Ray, Sampler&>>()
+      .method("render", &CustomRayIntegrator::render);
+  ctx.type<DrJitIntegrator>("DrJitIntegrator")
+      .ctor<Accel, Sampler>()
+      .method("render", &DrJitIntegrator::render);
+  ctx.type<SingleBoundIntegrator>("SingleBoundIntegrator")
+      .ctor<Accel, Sampler, LightSampler>()
+      .method("render", &SingleBoundIntegrator::render);
   ctx.type<psl::string>()
       .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
                  psl::string>([](const auto& x) {
@@ -76,15 +87,8 @@ Context get_default_context() {
 }
 
 void interpret(Context& context, psl::string source) {
-  try {
-    auto bytecodes = compile(context, std::move(source));
-    execute(context, bytecodes);
-  } catch (const Exception& e) {
-    Fatal("Uncaught pine exception: ", e.what());
-  } catch (const FatalException&) {
-  } catch (...) {
-    Fatal("Uncaught unknown exception");
-  }
+  auto bytecodes = compile(context, std::move(source));
+  execute(context, bytecodes);
 }
 
 }  // namespace pine

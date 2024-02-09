@@ -60,16 +60,14 @@ void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *d
   if (ext == "bmp")
     stbi_write_bmp(filename.c_str(), size.x, size.y, nchannel, data);
   else if (ext == "png")
-    stbi_write_png(filename.c_str(), size.x, size.y, nchannel, data,
-                   size.x * nchannel * sizeof(uint8_t));
+    stbi_write_png(filename.c_str(), size.x, size.y, nchannel, data, 0);
   else if (ext == "jpg")
     stbi_write_jpg(filename.c_str(), size.x, size.y, nchannel, data, 90);
   else if (ext == "tga")
     stbi_write_tga(filename.c_str(), size.x, size.y, nchannel, data);
   else {
     Warning("Unknown format `", ext, "` during saving `", filename, "`; assuming png");
-    stbi_write_png((filename + ".png").c_str(), size.x, size.y, nchannel, data,
-                   size.x * nchannel * sizeof(uint8_t));
+    stbi_write_png((filename + ".png").c_str(), size.x, size.y, nchannel, data, 0);
   }
 }
 psl::shared_ptr<Image> load_image(psl::string_view filename) {

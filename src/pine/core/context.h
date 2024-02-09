@@ -69,6 +69,10 @@ template <typename... Args, typename R>
 auto overloaded(R (*f)(Args...)) {
   return f;
 }
+template <typename R, typename... Args>
+auto overloaded_r(R (*f)(Args...)) {
+  return f;
+}
 
 struct VariableConcept {
   virtual ~VariableConcept() = default;
@@ -265,7 +269,6 @@ struct Function {
   Variable operator()(auto&&... args) const {
     Variable args_[]{Variable(FWD(args))...};
     const Variable* args_ptr[sizeof...(args)];
-#pragma unroll
     for (size_t i = 0; i < sizeof...(args); i++)
       args_ptr[i] = &args_[i];
     return call(args_ptr);

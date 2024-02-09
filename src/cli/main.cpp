@@ -8,6 +8,7 @@
 
 int main(int argc, char* argv[]) {
   using namespace pine;
+
   if (argc != 2) {
     Log("Usage: pine [filename]");
     return 0;
@@ -33,11 +34,10 @@ int main(int argc, char* argv[]) {
     Log("");
 
   } catch (const FatalException&) {
-    Log("Uncaught Fatal exception");
   } catch (const Exception& e) {
     Log("Uncaught Pine exception: ", e.what());
-  } catch (...) {
-    Log("Uncaught unknown exception");
+  } catch (const std::exception& e) {
+    Log("Uncaught unknown exception: ", e.what());
   }
 
   Profiler::Finalize();

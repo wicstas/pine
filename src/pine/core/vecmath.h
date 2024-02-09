@@ -14,19 +14,37 @@ template <typename T>
 struct Vector4;
 
 template <typename T>
+struct Matrix2;
+template <typename T>
 struct Matrix3;
-
 template <typename T>
 struct Matrix4;
 
 template <typename T>
+constexpr bool is_pine_vector = false;
+template <typename T>
+constexpr bool is_pine_vector<Vector2<T>> = true;
+template <typename T>
+constexpr bool is_pine_vector<Vector3<T>> = true;
+template <typename T>
+constexpr bool is_pine_vector<Vector4<T>> = true;
+template <typename T>
+constexpr bool is_pine_matrix = false;
+template <typename T>
+constexpr bool is_pine_matrix<Matrix2<T>> = true;
+template <typename T>
+constexpr bool is_pine_matrix<Matrix3<T>> = true;
+template <typename T>
+constexpr bool is_pine_matrix<Matrix4<T>> = true;
+template <typename T>
+constexpr bool is_pine_vector_or_matrix = is_pine_vector<T> || is_pine_matrix<T>;
+
+template <typename T>
 struct Vector2 {
   Vector2() = default;
-  template <typename U>
-  explicit Vector2(U v) : x(T(v)), y(T(v)) {
+  explicit Vector2(auto v) : x(T(v)), y(T(v)) {
   }
-  template <typename U>
-  Vector2(U x, U y) : x(T(x)), y(T(y)) {
+  Vector2(auto x, auto y) : x(T(x)), y(T(y)) {
   }
   template <typename U>
   Vector2(const Vector2<U> &v) : x(T(v.x)), y(T(v.y)) {
@@ -69,13 +87,15 @@ struct Vector2 {
     y %= rhs.y;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector2 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector2 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -103,19 +123,23 @@ struct Vector2 {
   friend Vector2<psl::OpResult<T, U, '%'>> operator%(Vector2<T> lhs, Vector2<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector2<psl::OpResult<T, U, '*'>> operator*(Vector2<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector2<psl::OpResult<T, U, '/'>> operator/(Vector2<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector2<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector2<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector2<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector2<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y};
   }
@@ -154,11 +178,9 @@ struct Vector2 {
 template <typename T>
 struct Vector3 {
   Vector3() = default;
-  template <typename U>
-  explicit Vector3(U v) : x(T(v)), y(T(v)), z(T(v)) {
+  explicit Vector3(auto v) : x(T(v)), y(T(v)), z(T(v)) {
   }
-  template <typename U>
-  Vector3(U x, U y, U z) : x(T(x)), y(T(y)), z(T(z)) {
+  Vector3(auto x, auto y, auto z) : x(T(x)), y(T(y)), z(T(z)) {
   }
   template <typename U>
   explicit Vector3(Vector2<U> xy) : x(T(xy.x)), y(T(xy.y)), z(T(0)) {
@@ -212,14 +234,16 @@ struct Vector3 {
     z %= rhs.z;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector3 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
     z *= rhs;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector3 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -248,19 +272,23 @@ struct Vector3 {
   friend Vector3<psl::OpResult<T, U, '%'>> operator%(Vector3<T> lhs, Vector3<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y, lhs.z % rhs.z};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector3<psl::OpResult<T, U, '*'>> operator*(Vector3<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs, lhs.z * rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector3<psl::OpResult<T, U, '/'>> operator/(Vector3<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs, lhs.z / rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector3<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector3<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y, lhs * rhs.z};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector3<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector3<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y, lhs / rhs.z};
   }
@@ -300,11 +328,9 @@ struct Vector3 {
 template <typename T>
 struct Vector4 {
   Vector4() = default;
-  template <typename U>
-  explicit Vector4(U v) : x(T(v)), y(T(v)), z(T(v)), w(T(v)) {
+  explicit Vector4(auto v) : x(T(v)), y(T(v)), z(T(v)), w(T(v)) {
   }
-  template <typename U>
-  Vector4(U x, U y, U z, U w) : x(T(x)), y(T(y)), z(T(z)), w(T(w)) {
+  Vector4(auto x, auto y, auto z, auto w) : x(T(x)), y(T(y)), z(T(z)), w(T(w)) {
   }
   template <typename U>
   explicit Vector4(Vector2<U> v) : x(T(v.x)), y(T(v.y)), z(T(0)), w(T(0)) {
@@ -369,7 +395,8 @@ struct Vector4 {
     w %= rhs.w;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector4 &operator*=(U rhs) {
     x *= rhs;
     y *= rhs;
@@ -377,7 +404,8 @@ struct Vector4 {
     w *= rhs;
     return *this;
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   Vector4 &operator/=(U rhs) {
     x /= rhs;
     y /= rhs;
@@ -407,19 +435,23 @@ struct Vector4 {
   friend Vector4<psl::OpResult<T, U, '%'>> operator%(Vector4<T> lhs, Vector4<U> rhs) {
     return {lhs.x % rhs.x, lhs.y % rhs.y, lhs.z % rhs.z, lhs.w % rhs.w};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector4<psl::OpResult<T, U, '*'>> operator*(Vector4<T> lhs, U rhs) {
     return {lhs.x * rhs, lhs.y * rhs, lhs.z * rhs, lhs.w * rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector4<psl::OpResult<T, U, '/'>> operator/(Vector4<T> lhs, U rhs) {
     return {lhs.x / rhs, lhs.y / rhs, lhs.z / rhs, lhs.w / rhs};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector4<psl::OpResult<U, T, '*'>> operator*(U lhs, Vector4<T> rhs) {
     return {lhs * rhs.x, lhs * rhs.y, lhs * rhs.z, lhs * rhs.w};
   }
-  template <psl::FundamentalNumerical U>
+  template <typename U>
+  requires(!is_pine_vector_or_matrix<U>)
   friend Vector4<psl::OpResult<U, T, '/'>> operator/(U lhs, Vector4<T> rhs) {
     return {lhs / rhs.x, lhs / rhs.y, lhs / rhs.z, lhs / rhs.w};
   }

@@ -905,7 +905,7 @@ void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
 void ReturnStmt::emit(Context& context, Bytecodes& bytecodes) const {
   if (expr) {
     auto vi = expr->emit(context, bytecodes);
-    if (! context.function_rtype || bytecodes.var_type(vi).name != context.function_rtype->name)
+    if (!context.function_rtype || bytecodes.var_type(vi).name != context.function_rtype->name)
       bytecodes.error(*this, "Expression type `", bytecodes.var_type(vi),
                       "` is inconsistent with function return type `", context.function_rtype, "`");
     bytecodes.add(Bytecode::Return, vi);
@@ -1889,12 +1889,12 @@ Bytecodes compile(Context& context, psl::string source) {
     auto bytecodes = Bytecodes(psl::move(sl));
     block.emit(context, bytecodes);
     return bytecodes;
-  } catch (const Exception& e) {
-    Fatal(e.what());
   } catch (const FatalException& e) {
     throw e;
-  } catch (...) {
-    Fatal("Uncaught unknown exception");
+  } catch (const Exception& e) {
+    Fatal(e.what());
+  } catch (const std::exception& e) {
+    Fatal("Uncaught unknown exception: ", e.what());
   }
 }
 
@@ -2090,11 +2090,11 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
       if (inc_p)
         p++;
     }
+  } catch (const FatalException&) {
   } catch (const Exception& e) {
     Log(e.what());
-  } catch (const FatalException&) {
-  } catch (...) {
-    Fatal("Uncaught unknown exception");
+  } catch (const std::exception& e) {
+    Fatal("Uncaught unknown exception: ", e.what());
   }
 
   return Variable();

@@ -6,6 +6,8 @@
 #include <pine/core/accel.h>
 #include <pine/core/film.h>
 
+#include <psl/function.h>
+
 namespace pine {
 
 void set_progress(float progress);
@@ -47,6 +49,21 @@ public:
 
   void pixel_color(Scene& scene, vec2i p, Sampler& sampler) override;
   virtual vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) = 0;
+};
+
+class CustomRayIntegrator : public RayIntegrator {
+public:
+  CustomRayIntegrator(Accel accel, Sampler sampler,
+                      psl::function<vec3, CustomRayIntegrator&, Scene&, Ray, Sampler&> radiance_)
+      : RayIntegrator(psl::move(accel), psl::move(sampler)), radiance_(psl::move(radiance_)) {
+  }
+
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override {
+    return radiance_(*this, scene, ray, sampler);
+  }
+
+private:
+  psl::function<vec3, CustomRayIntegrator&, Scene&, Ray, Sampler&> radiance_;
 };
 
 }  // namespace pine
