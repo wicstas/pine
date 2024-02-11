@@ -13,7 +13,8 @@ Array3d<Voxel> voxelize(const Scene& scene, vec3i resolution) {
   accel.build(&scene);
   auto lsampler = UniformLightSampler();
   lsampler.build(&scene);
-  auto samplers = psl::vector_n_of(n_threads(), HaltonSampler(32));
+  auto spp = 32;
+  auto samplers = psl::vector_n_of(n_threads(), HaltonSampler(spp));
 
   auto voxels = Array3d<Voxel>(resolution);
 
@@ -23,39 +24,37 @@ Array3d<Voxel> voxelize(const Scene& scene, vec3i resolution) {
   for (int axis = 0; axis < 3; axis++) {
     auto i0 = axis, i1 = (axis + 1) % 3, i2 = (axis + 2) % 3;
     auto proj_res = vec2i(resolution[i0], resolution[i1]);
-    parallel_for(proj_res, [&](vec2i ip) {
-      auto& sampler = samplers[threadIdx];
-      sampler.start_pixel(ip, 0);
-      auto p = vec2(ip + vec2(0.5f)) / proj_res;
-      auto ray = Ray();
-      ray.o[i0] = lerp(p[0], aabb.lower[i0], aabb.upper[i0]);
-      ray.o[i1] = lerp(p[1], aabb.lower[i1], aabb.upper[i1]);
-      ray.o[i2] = aabb.upper[i2] + epsilon;
-      ray.d[i2] = -1;
-      auto it = Interaction();
-      while (accel.intersect(ray, it)) {
-        auto& voxel = voxels[aabb.relative_position(it.p) * resolution];
-        voxel.opacity = 1.0f;
-        auto mec = MaterialEvalCtx(it, it.n, it.n);
-        if (!it.material()->is_delta()) {
+    for (int si = 0; si < spp; si++)
+      parallel_for(proj_res, [&](vec2i ip) {
+        auto& sampler = samplers[threadIdx];
+        sampler.start_pixel(ip, si);
+        auto p = vec2(ip + sampler.get2d()) / proj_res;
+        auto ray = Ray();
+        ray.o[i0] = lerp(p[0], aabb.lower[i0], aabb.upper[i0]);
+        ray.o[i1] = lerp(p[1], aabb.lower[i1], aabb.upper[i1]);
+        ray.o[i2] = aabb.upper[i2] + epsilon;
+        ray.d[i2] = -1;
+        auto it = Interaction();
+        while (accel.intersect(ray, it)) {
+          auto& voxel = voxels[aabb.relative_position(it.p) * resolution];
           auto L = vec3(0);
-          for (int sp = 0; sp < sampler.spp(); sp++)
+          if (!it.material()->is_delta()) {
             if (auto ls = lsampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
               if (!accel.hit(it.spawn_ray(ls->wo, ls->distance))) {
-                auto f = it.material()->F(mec);
+                auto f = it.material()->F({it, it.n, it.n});
                 auto cosine = absdot(ls->wo, it.n);
-                L += ls->le * cosine * f / ls->pdf;
+                L = ls->le * cosine * f / ls->pdf;
               }
             }
-          L /= sampler.spp();
-          auto c = vec3(voxel.color);
-          auto alpha = voxel.color.w + 1;
-          voxel.color = vec4(lerp(1 / alpha, c, L), alpha);
+          }
+          auto alpha = voxel.nsamples + 1.0f;
+          voxel.color = lerp(1 / alpha, voxel.color, L);
+          voxel.opacity = lerp(1 / alpha, voxel.opacity, 1.0f);
+          voxel.nsamples++;
+          ray.tmin = ray.tmax + epsilon;
+          ray.tmax = float_max;
         }
-        ray.tmin = ray.tmax + epsilon;
-        ray.tmax = float_max;
-      }
-    });
+      });
   }
 
   return voxels;

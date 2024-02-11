@@ -13,6 +13,10 @@ struct Ray {
     return o + t * d;
   }
 
+  psl::string to_string() const {
+    return psl::to_string("Ray(o=", o, ", d=", d, ", tmin=", tmin, ", tmax=", tmax, ")");
+  }
+
   vec3 o;
   vec3 d;
   float tmin = 0.0f;

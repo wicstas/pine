@@ -6,7 +6,8 @@ namespace pine {
 
 struct Voxel {
   float opacity = 0.0f;
-  vec4 color;
+  vec3 color;
+  int nsamples = 0;
 };
 
 Array3d<Voxel> voxelize(const Scene& scene, vec3i resolution);
