@@ -66,10 +66,8 @@ struct SpatialTree {
 
   SpatialNode& node_at(vec3 p) {
     auto rp = aabb.relative_position(p);
-    auto ip = vec3i(rp * resolution);
-    CHECK_RANGE(ip[0], 0, resolution[0] - 1);
-    CHECK_RANGE(ip[1], 0, resolution[1] - 1);
-    CHECK_RANGE(ip[2], 0, resolution[2] - 1);
+    auto ip = Vector3<int64_t>(rp * resolution);
+    ip = clamp(ip, Vector3<int64_t>(0), resolution - Vector3<int64_t>(1));
     return nodes[ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y];
   }
   const SpatialNode& node_at(vec3 p) const {
@@ -101,9 +99,7 @@ struct SpatialTreeHash {
   SpatialNode& node_at(vec3 p) {
     auto rp = aabb.relative_position(p);
     auto ip = Vector3<int64_t>(rp * resolution);
-    DCHECK_RANGE(ip[0], 0, resolution[0] - 1);
-    DCHECK_RANGE(ip[1], 0, resolution[1] - 1);
-    DCHECK_RANGE(ip[2], 0, resolution[2] - 1);
+    ip = clamp(ip, Vector3<int64_t>(0), resolution - Vector3<int64_t>(1));
     auto index = ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y;
     if (auto it = nodes.find(index); it != nodes.end())
       return it->second;
@@ -147,6 +143,7 @@ void CachedPathIntegrator::render(Scene& scene) {
 
   auto aabb = scene.get_aabb();
   auto resolution = vec3i(max_axis_resolution * aabb.diagonal() / max_value(aabb.diagonal()));
+  footprint = max_value(aabb.diagonal()) / max_axis_resolution;
   sd_tree = SpatialTree(aabb, resolution);
   accel.build(&scene);
   light_sampler.build(&scene);
@@ -220,8 +217,16 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
   if (depth + 1 == max_depth)
     return vec3(0.0f);
 
-  if (v.non_delta_path_length >= starting_depth && use_estimate)
-    return min(sd_tree.flux_estimate(it.p), vec3(10));
+  if (v.non_delta_path_length >= starting_depth && use_estimate) {
+    if (filter) {
+      auto tnb = coordinate_system(it.n);
+      auto p = it.p + (sampler.get1d() - 0.5f) * footprint * tnb.x +
+               (sampler.get1d() - 0.5f) * footprint * tnb.y;
+      return min(sd_tree.flux_estimate(p), vec3(10));
+    } else {
+      return min(sd_tree.flux_estimate(it.p), vec3(10));
+    }
+  }
 
   auto direct_light = [&](const LightSample& ls, float pdf_g) {
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {

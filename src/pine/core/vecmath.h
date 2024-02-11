@@ -172,7 +172,7 @@ struct Vector2 {
     return (&x)[i];
   }
 
-  T x{}, y{};
+  T x{0}, y{0};
 };
 
 template <typename T>
@@ -322,7 +322,7 @@ struct Vector3 {
     return (&x)[i];
   }
 
-  T x{}, y{}, z{};
+  T x{0}, y{0}, z{0};
 };
 
 template <typename T>
@@ -485,7 +485,7 @@ struct Vector4 {
     return (&x)[i];
   }
 
-  T x{}, y{}, z{}, w{};
+  T x{0}, y{0}, z{0}, w{0};
 };
 
 template <typename T>
@@ -764,6 +764,9 @@ typedef Vector4<uint32_t> vec4u32;
 typedef Vector2<int> vec2i;
 typedef Vector3<int> vec3i;
 typedef Vector4<int> vec4i;
+typedef Vector2<int64_t> vec2i64;
+typedef Vector3<int64_t> vec3i64;
+typedef Vector4<int64_t> vec4i64;
 typedef Vector2<float> vec2;
 typedef Vector2<double> vec2d;
 typedef Vector3<float> vec3;
@@ -831,7 +834,8 @@ T length_squared(Vector4<T> v) {
 
 template <typename T>
 auto length(T v) {
-  return psl::sqrt(length_squared(v));
+  using psl::sqrt;
+  return sqrt(length_squared(v));
 }
 
 template <typename T>

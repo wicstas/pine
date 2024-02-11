@@ -119,6 +119,7 @@ inline constexpr int sign(T v) {
 // TODO
 template <FloatingPoint T>
 inline constexpr T floor(T v) {
+  return std::floor(v);
   auto i = (CorrespondingInt<T>)v;
   if (v < 0 && i != v)
     i -= 1;
@@ -128,6 +129,7 @@ inline constexpr T floor(T v) {
 // TODO
 template <FloatingPoint T>
 inline constexpr T ceil(T v) {
+  return std::ceil(v);
   auto i = (CorrespondingInt<T>)v;
   if (v > 0 && i != v)
     i += 1;
@@ -136,12 +138,10 @@ inline constexpr T ceil(T v) {
 
 template <FloatingPoint T>
 inline constexpr T fract(T v) {
-  v = v - (CorrespondingInt<T>)v;
-  v = v + (T)1;
-  return v - (CorrespondingInt<T>)v;
+  return v - floor(v);
 }
 
-template <typename T>
+template <FloatingPoint T>
 inline constexpr T absfract(T v) {
   v = psl::abs(v);
   return v - (CorrespondingInt<T>)v;
@@ -235,8 +235,13 @@ inline T log10(T y) {
 }
 
 template <typename T>
-inline T log2int(T y) {
+inline T log2i(T y) {
   return psl::hsb(y);
+}
+
+template <typename T>
+bool is_power_of_2(T y) {
+  return (y & (y - 1)) == 0;
 }
 
 template <FloatingPoint T>

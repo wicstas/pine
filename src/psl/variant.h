@@ -133,7 +133,7 @@ struct variant {
 
   template <typename T>
   static constexpr bool one_of() {
-    return (psl::SameAs<T, Ts> && ...);
+    return (psl::same_as<T, Ts> || ...);
   }
 
   variant() = default;
@@ -162,11 +162,13 @@ struct variant {
     return *this;
   }
   template <typename T>
+  requires(one_of<T>())
   variant(T x) {
     value.construct_from(psl::move(x));
     tag_ = psl::index<Decay<T>, Ts...>();
   }
   template <typename T>
+  requires(one_of<T>())
   variant& operator=(T x) {
     reset();
     value.construct_from(psl::move(x));

@@ -35,7 +35,9 @@ struct AABB {
   vec3 diagonal() const {
     return max(upper - lower, vec3(0.0f));
   }
+  AABB extend_to_max_axis() const;
   vec3 relative_position(vec3 p) const;
+  vec3 absolute_position(vec3 p) const;
   float relative_position(float p, int dim) const;
   float surface_area() const;
   void extend(vec3 p);
@@ -81,6 +83,9 @@ struct AABB {
     tmin = psl::max(tmin0, tmin1, tmin2, tmin);
     *tmax = psl::min(tmax0, tmax1, tmax2, *tmax);
     return tmin <= *tmax;
+  }
+  psl::string to_string() const {
+    return psl::to_string("{", lower, ", ", upper, "}");
   }
 
   vec3 lower = vec3{float_max};
@@ -131,7 +136,6 @@ struct Sphere {
   ShapeSample sample(vec3, vec2 u) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
-private:
   vec3 c;
   float r;
 };

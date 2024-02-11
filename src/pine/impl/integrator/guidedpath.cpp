@@ -590,16 +590,15 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
       auto wo = uniform_sphere(qs->sc);
       auto mec = MaterialEvalCtx{it, -ray.d, wo};
       auto le = quad.flux_estimate(qs->sc) / (4);
-      auto mis_factor =
-          balance_heuristic(1, qs->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
-      L += le * it.material()->F(mec) / qs->pdf * mis_factor;
+      auto mis_term = balance_heuristic(1, qs->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
+      L += le * it.material()->F(mec) / qs->pdf * mis_term;
     }
   } else {
     if (auto bs = it.material()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
       auto sc = inverse_uniform_sphere(bs->wo);
       auto le = quad.flux_estimate(sc) / (4);
-      auto mis_factor = balance_heuristic(1, bs->pdf, 1, quad.pdf(sc)) / (1 - guide_select_prob);
-      L += le * bs->f / bs->pdf * mis_factor;
+      auto mis_term = balance_heuristic(1, bs->pdf, 1, quad.pdf(sc)) / (1 - guide_select_prob);
+      L += le * bs->f / bs->pdf * mis_term;
     }
   }
   if (scene.env_light)
@@ -621,9 +620,9 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
       } else if (mis_env_light) {
         auto le = scene.env_light->color(ray.d);
         auto light_pdf = scene.env_light->pdf(prev_n, ray.d);
-        auto mis_factor = power_heuristic(1, prev_sample_pdf, 1, light_pdf);
-        // mis_factor shouldn't be added to sd_tree?
-        return le * mis_factor;
+        auto mis_term = power_heuristic(1, prev_sample_pdf, 1, light_pdf);
+        // mis_term shouldn't be added to sd_tree?
+        return le * mis_term;
       }
     }
     return vec3{0.0f};
@@ -635,8 +634,8 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     } else if (mis_env_light) {
       auto le = it.material()->le({it, -wi});
       auto light_pdf = light_sampler.pdf(it.geometry, it, ray, prev_n);
-      auto mis_factor = power_heuristic(1, prev_sample_pdf, 1, light_pdf);
-      return le * mis_factor;
+      auto mis_term = power_heuristic(1, prev_sample_pdf, 1, light_pdf);
+      return le * mis_term;
     }
     return vec3{0.0f};
   }
@@ -652,11 +651,11 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
       auto cosine = absdot(ls.wo, it.n);
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
       auto f = it.material()->F(mec);
-      auto mis_factor = power_heuristic(1, ls.pdf, 1, pdf_g);
+      auto mis_term = power_heuristic(ls.pdf, pdf_g);
       // TODO: divides by pdf?
       if (collect && collect_)
         sd_tree.add_sample(leaf, {it.p, ls.wo, ls.le * cosine / ls.pdf}, sampler.Get3D());
-      return ls.le / ls.pdf * cosine * f * mis_factor;
+      return ls.le / ls.pdf * cosine * f * mis_term;
     } else {
       return vec3{0.0f};
     }
@@ -675,12 +674,11 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
             radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, ps->w, li * cosine / ps->pdf}, sampler.Get3D());
-        auto mis_factor =
-            power_heuristic(1, ps->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
-        lo += li * cosine * f / ps->pdf * mis_factor;
-        CHECK(!(li * cosine * f / ps->pdf * mis_factor).has_nan());
-        if ((li * cosine * f / ps->pdf * mis_factor).has_nan())
-          Logs(li, cosine, f, ps->pdf, mis_factor);
+        auto mis_term = power_heuristic(1, ps->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
+        lo += li * cosine * f / ps->pdf * mis_term;
+        CHECK(!(li * cosine * f / ps->pdf * mis_term).has_nan());
+        if ((li * cosine * f / ps->pdf * mis_term).has_nan())
+          Logs(li, cosine, f, ps->pdf, mis_term);
       }
     }
 
@@ -699,14 +697,14 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
                            it.material()->is_delta(), true);
         if (collect)
           sd_tree.add_sample(leaf, {it.p, bs->wo, li * cosine / bs->pdf}, sampler.Get3D());
-        auto mis_factor =
+        auto mis_term =
             guide_select_prob == 0.0f
                 ? 1.0f
                 : power_heuristic(1, bs->pdf, 1, leaf.pdf(bs->wo)) / (1 - guide_select_prob);
-        lo += li * cosine * bs->f / bs->pdf * mis_factor;
-        CHECK(!(li * cosine * bs->f / bs->pdf * mis_factor).has_nan());
-        if ((li * cosine * bs->f / bs->pdf * mis_factor).has_nan())
-          Logs(li, cosine, bs->f, bs->pdf, mis_factor);
+        lo += li * cosine * bs->f / bs->pdf * mis_term;
+        CHECK(!(li * cosine * bs->f / bs->pdf * mis_term).has_nan());
+        if ((li * cosine * bs->f / bs->pdf * mis_term).has_nan())
+          Logs(li, cosine, bs->f, bs->pdf, mis_term);
       }
     }
 

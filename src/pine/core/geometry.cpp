@@ -5,6 +5,11 @@
 
 namespace pine {
 
+AABB AABB::extend_to_max_axis() const {
+  auto c = centroid();
+  auto d = vec3(max_value(diagonal()) / 2);
+  return {c - d, c + d};
+}
 vec3 AABB::relative_position(vec3 p) const {
   vec3 o = p - lower;
   if (upper.x > lower.x)
@@ -14,6 +19,9 @@ vec3 AABB::relative_position(vec3 p) const {
   if (upper.z > lower.z)
     o.z /= upper.z - lower.z;
   return o;
+}
+vec3 AABB::absolute_position(vec3 p) const {
+  return {lerp(p.x, lower.x, upper.x), lerp(p.y, lower.y, upper.y), lerp(p.z, lower.z, upper.z)};
 }
 float AABB::relative_position(float p, int dim) const {
   float o = p - lower[dim];
@@ -308,7 +316,11 @@ Rect::Rect(vec3 position, vec3 ex, vec3 ey)
       ey(normalize(ey)),
       n(normalize(cross(ex, ey))),
       lx(length(ex)),
-      ly(length(ey)){};
+      ly(length(ey)) {
+  CHECK(lx != 0);
+  CHECK(ly != 0);
+  CHECK(n != vec3(0.0f));
+};
 Rect Rect::from_vertex(vec3 v0, vec3 v1, vec3 v2) {
   auto ex = v1 - v0;
   auto ey = v2 - v0;

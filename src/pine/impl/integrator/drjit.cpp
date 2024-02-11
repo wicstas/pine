@@ -1,15 +1,14 @@
 #include <pine/impl/integrator/drjit.h>
+#include <pine/core/parallel.h>
+#include <pine/core/profiler.h>
 #include <pine/core/fileio.h>
 #include <psl/memory.h>
 
-#include <drjit/dynamic.h>
 #include <drjit/struct.h>
-#include <drjit/vcall.h>
 #include <drjit/util.h>
+#include <drjit/loop.h>
 #include <drjit/jit.h>
-
-#define PINE_NAMESPACE_BEGIN namespace pine {
-#define PINE_NAMESPACE_END }  // namespace pine
+#include <drjit/random.h>
 
 namespace dr = drjit;
 
@@ -109,6 +108,7 @@ struct dr::struct_support<pine::Vector4<TV>> {
 namespace pine {
 
 using floatp = dr::LLVMArray<float>;
+// using floatp = dr::DynamicArray<float>;
 using uint32p = dr::uint32_array_t<floatp>;
 using vec2p = pine::Vector2<floatp>;
 using vec3p = pine::Vector3<floatp>;
@@ -117,96 +117,149 @@ using Mask = dr::mask_t<floatp>;
 struct Ray_ {
   vec3p o;
   vec3p d;
+  floatp tmin = 1e-4f;
+  floatp tmax = float_max;
 
   vec3p operator()(const floatp &t) const {
     return o + t * d;
   }
 };
 
-Ray_ make_rays(const vec2p &p) {
-  Ray_ ray;
-  ray.o = vec3p(p.x, p.y, 1.f);
-  ray.d = vec3p(0.f, 0.f, -1.f);
-  return ray;
+static vec2p to_camera_space(vec2p p_film, vec2 fov2d) {
+  p_film = (p_film - vec2p(0.5f)) * 2;
+  return p_film * fov2d;
 }
 
+struct ThinLenCamera_ {
+  Ray_ gen_ray(vec2p p_film) const {
+    auto pc = to_camera_space(p_film, fov2d);
+    auto p_focus = pine::normalize(vec3p(pc, floatp(1.0f)));
+    auto rd = vec3(c2w.x) * p_focus.x + vec3(c2w.y) * p_focus.y + vec3(c2w.z) * p_focus.z;
+    return Ray_(vec3(c2w * vec4(0, 0, 0, 1)), rd);
+  }
+
+  mat4 c2w;
+  mat4 w2c;
+  vec2 fov2d;
+};
+
+struct Interaction_ {
+  vec3p p;
+  vec3p n;
+};
+
 struct Shape_ {
-  Shape_() {
+  Mask intersect(Ray_ &r, Interaction_ &it) const {
+    auto a = dot(r.d, r.d);
+    auto b = 2 * dot(r.o - p, r.d);
+    auto c = dot(r.o, r.o) + dot(p, p) - 2 * dot(r.o, vec3p(p)) - radius * radius;
+    auto d = b * b - 4 * a * c;
+    auto active = d > 0;
+    d[d > 0] = sqrt(d);
+    auto t = (-b - d) / (2 * a);
+    t[t < r.tmin] = (-b + d) / (2 * a);
+    active &= t > r.tmin & t < r.tmax;
+    r.tmax[active] = t;
+    it.n = select(active, pine::normalize(r(t) - p), it.n);
+    it.p = select(active, p + it.n * radius, it.p);
+    return active;
   }
-  ~Shape_() = default;
 
-  virtual floatp intersect(const Ray_ &r, Mask = true) const = 0;
-
-  DRJIT_VCALL_REGISTER(floatp, Base)
-
-protected:
-  floatp p;
+  vec3 p;
+  float radius;
 };
-using Shape_Ptr = dr::LLVMArray<Shape_ *>;
-
-struct Sphere_ : Shape_ {
-  Sphere_(vec3 o, float radius) {
-  }
-  floatp intersect(const Ray_ &r, Mask = true) const override {
-    return r.o.x;
-    // auto a = dot(r.d, r.d);
-    // auto b = 2 * dot(r.o - vec3p(0, 0, 0), r.d);
-    // auto c = dot(r.o, r.o) + dot(vec3p(0, 0, 0shapes[0]->intersect(rays)), vec3p(0, 0, 0)) - 2 *
-    // dot(r.o, vec3p(0, 0, 0)) -
-    //          floatp(rad * rad);
-    // auto d = b * b - 4 * a * c;
-    // d[d > 0] = sqrt(d);
-    // auto t = (-b - d) / (2 * a);
-    // t = dr::select(t < 0, (-b + d) / (2 * a), t);
-    // return r(t);
-    // return d >= 0 && t > 0;
-  }
-
-  // vec3 o;
-  // float rad;
-};
-
-PINE_NAMESPACE_END
-DRJIT_VCALL_BEGIN(pine::Shape_)
-DRJIT_VCALL_METHOD(intersect)
-DRJIT_VCALL_END(pine::Shape_)
-PINE_NAMESPACE_BEGIN
 
 struct Scene_ {
-  vec3p intersect_rays(const Ray_ &rays) const {
-    return vec3p(shapes[0]->intersect(rays));
-    // return *(vec3p *)(&c);
-    // return select(mask, rays.o, vec3p(0));
-  }
-
-  psl::vector<Shape_Ptr> shapes;
+  psl::vector<Shape_> shapes;
 };
 
-void pine::DrJitIntegrator::render(Scene &) {
-  jit_init(JitBackend::LLVM);
-
-  jit_set_log_level_stderr(LogLevel::Debug);
-  jit_set_flag(JitFlag::VCallRecord, true);
-  jit_set_flag(JitFlag::VCallOptimize, true);
-
-  auto scene = Scene_();
-  scene.shapes.push_back(new Sphere_(vec3(0, 0, 0), 0.5f));
-
-  auto width = 1024;
-  auto idx = dr::linspace<floatp>(-1.f, 1.f, width);
-  auto [coords_x, coords_y] = dr::meshgrid(idx, idx);
-  auto rays = make_rays({coords_x, coords_y});
-  auto ps = scene.intersect_rays(rays);
-
-  auto image = Array2d3f({width, width});
-  auto index = 0u;
-  for (auto &pixel : image) {
-    pixel.x = ps.x[index];
-    pixel.y = ps.y[index];
-    pixel.z = ps.z[index];
-    ++index;
+struct RNG_ {
+  RNG_(size_t size) : pcg(size) {
   }
-  save_image("images/image.png", image);
+
+  floatp get1d() {
+    return pcg.next_float32();
+  }
+  vec2p get2d() {
+    return {get1d(), get1d()};
+  }
+  vec3p get3d() {
+    return {get1d(), get1d(), get1d()};
+  }
+
+private:
+  dr::PCG32<floatp> pcg;
+};
+
+// static vec2p sample_disk_concentric(vec2p u) {
+//   u = vec2p(u.x * 2 - 1.0f, u.y * 2 - 1.0f);
+//   auto active = abs(u.x) > abs(u.y);
+//   floatp theta, r;
+//   r[active] = u.x;
+//   theta[active] = Pi / 4.0f * u.y / u.x;
+//   r[~active] = u.y;
+//   theta[~active] = Pi / 2.0f - Pi / 4.0f * (u.x / u.y);
+//   return r * vec2p(cos(theta), sin(theta));
+// }
+
+// static floatp max(floatp a, floatp b) {
+//   a[a < b] = b;
+//   return a;
+// }
+
+// static vec3p cosine_weighted_hemisphere(vec2p u) {
+//   auto d = sample_disk_concentric(u);
+//   auto z = sqrt(1.0f - d.x * d.x - d.y * d.y);
+//   // auto z = sqrt(max(1.0f - d.x * d.x - d.y * d.y, floatp(0.0f)));
+//   return vec3p(d.x, d.y, z);
+// }
+
+void pine::DrJitIntegrator::render(Scene &scene) {
+  jit_init(JitBackend::LLVM);
+  jit_set_log_level_stderr(LogLevel::Warn);
+  Profiler _("Rendering");
+
+  auto isize = scene.camera.film().size();
+  auto xs = dr::linspace<floatp>(0.0f, 1.0f, isize.x);
+  auto ys = dr::linspace<floatp>(0.0f, 1.0f, isize.y);
+  auto [coords_x, coords_y] = dr::meshgrid(xs, ys);
+
+  auto scene_ = Scene_();
+  for (const auto &geo : scene.geometries) {
+    if (geo->shape.is<Sphere>()) {
+      auto &s = geo->shape.as<Sphere>();
+      scene_.shapes.emplace_back(s.c, s.r);
+    }
+  }
+
+  auto &cam = scene.camera.as<ThinLenCamera>();
+  auto camera = ThinLenCamera_{cam.c2w, cam.w2c, cam.fov2d};
+  auto sampler = RNG_(area(isize));
+  auto ray = camera.gen_ray({coords_x, coords_y});
+
+  auto L = vec3p(0);
+  auto it = Interaction_();
+  for (const auto &shape : scene_.shapes) {
+    shape.intersect(ray, it);
+  }
+
+  for (int sp = 0; sp < samples_per_pixel; sp++) {
+    auto shadowr = Ray_(it.p, pine::normalize(sampler.get3d() - vec3p(0.5f)));
+
+    auto shadowit = Interaction_();
+    auto hit = Mask(false);
+    for (const auto &shape : scene_.shapes) {
+      hit |= shape.intersect(shadowr, shadowit);
+    }
+    L += select(hit, vec3p(0), vec3p(1));
+  }
+
+  L /= samples_per_pixel;
+
+  parallel_for(isize, [&](vec2i p) {
+    auto i = p.x + p.y * isize.x;
+    scene.camera.film().add_sample(p, vec3(L.x[i], L.y[i], L.z[i]));
+  });
 }
 
 }  // namespace pine
