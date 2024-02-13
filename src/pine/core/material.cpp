@@ -16,8 +16,7 @@ psl::optional<BSDFSample> LayeredMaterial::sample(const MaterialSampleCtx& c) co
 
   return bs;
 }
-
-vec3 LayeredMaterial::F(const MaterialEvalCtx& c) const {
+vec3 LayeredMaterial::f(const MaterialEvalCtx& c) const {
   vec3 f;
   for (auto&& bsdf : layers)
     f += bsdf.f(c.wi, c.wo, c);

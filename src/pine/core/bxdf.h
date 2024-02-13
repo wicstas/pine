@@ -19,6 +19,7 @@ struct DiffuseBSDF {
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u, const NodeEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
+  float roughness_amount(const NodeEvalCtx& nc) const;
   bool is_delta() const {
     return false;
   }
@@ -33,6 +34,7 @@ struct ConductorBSDF {
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const NodeEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
+  float roughness_amount(const NodeEvalCtx& nc) const;
   bool is_delta() const {
     return false;
   }
@@ -48,6 +50,7 @@ struct DielectricBSDF {
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const NodeEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
+  float roughness_amount(const NodeEvalCtx& nc) const;
   bool is_delta() const {
     return false;
   }
@@ -63,6 +66,7 @@ struct SpecularReflectionBSDF {
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const NodeEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
+  float roughness_amount(const NodeEvalCtx& nc) const;
   bool is_delta() const {
     return true;
   }
@@ -76,6 +80,7 @@ struct SpecularRefrectionBSDF {
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const NodeEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
+  float roughness_amount(const NodeEvalCtx& nc) const;
   bool is_delta() const {
     return true;
   }
@@ -97,6 +102,9 @@ public:
   }
   float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
     return dispatch([&](auto&& x) { return x.pdf(wi, wo, nc); });
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return dispatch([&](auto&& x) { return x.roughness_amount(nc); });
   }
   bool is_delta() const {
     return dispatch([&](auto&& x) { return x.is_delta(); });

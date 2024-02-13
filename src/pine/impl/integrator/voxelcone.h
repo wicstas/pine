@@ -17,7 +17,7 @@ private:
   AABB aabb;
   vec3i resolution;
   float footprint;
-  psl::vector<Array3d<Voxel>> mipmaps;
+  psl::vector<Voxels> mipmaps;
   LightSampler light_sampler;
 };
 

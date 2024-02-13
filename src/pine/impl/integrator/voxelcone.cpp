@@ -7,33 +7,28 @@ namespace pine {
 
 void VoxelConeIntegrator::render(Scene& scene) {
   aabb = scene.get_aabb().extend_to_max_axis();
-  resolution = vec3i(512);
+  resolution = vec3i(256);
 
   auto voxels = voxelize(scene, aabb, resolution);
   footprint = aabb.diagonal()[0] / resolution[0];
-  mipmaps = build_mipmap(voxels);
+  mipmaps = build_mipmap(psl::move(voxels));
   light_sampler.build(&scene);
 
   // scene.geometries.clear();
-  // auto transform [[maybe_unused]] = scale(vec3(footprint)) * translate(-0.5f, -0.5f, -0.5f);
-  // for_3d(voxels.size(), [&](vec3i ip) {
+  // voxels = psl::move(mipmaps[4]);
+  // auto transform = scale(aabb.diagonal() / voxels.size()) * translate(-0.5f, -0.5f, -0.5f);
+  // parallel_for(voxels.size(), [&](vec3i ip) {
   //   auto p = (ip + vec3(0.5f)) / voxels.size();
-  //   auto voxel = voxels[ip];
-  //   if (sum(voxel.opacity) > 0.0f)
-  //     scene.add_geometry(Sphere(aabb.absolute_position(p), footprint / 2 / 1.5f),
-  //                        DiffuseMaterial(vec3(voxel.color)));
-  //   // if (sum(voxel.opacity) > 0)
-  //   // add_box(scene, translate(aabb.absolute_position(p)) * transform,
-  //   // DiffuseMaterial(vec3(voxel.color)));
+  //   if (auto voxel = voxels.find(ip))
+  //     add_box(scene, translate(aabb.absolute_position(p)) * transform,
+  //             DiffuseMaterial(voxel->color));
   // });
-
   // CustomRayIntegrator(
   //     accel, samplers[0],
   //     [](CustomRayIntegrator&, Scene&, Ray, Interaction it, bool is_hit, Sampler&) -> vec3 {
   //       if (!is_hit)
   //         return vec3(0.0f);
-  //       auto mec = MaterialEvalCtx(it, it.n, it.n);
-  //       return it.material()->F(mec) * Pi;
+  //       return it.material()->f({it, it.n, it.n}) * Pi;
   //     })
   //     .render(scene);
   // return;
@@ -64,34 +59,42 @@ void VoxelConeIntegrator::render(Scene& scene) {
   set_progress(1);
 }
 
-vec4 interpolate(const Array3d<Voxel>& voxels, vec3i p, vec3 fr, vec3 d) {
-  auto v = voxels[clamp(p, vec3i(0), vec3i(voxels.size() - vec3i(1)))];
-  return {v.color, dot(v.opacity, d * d)};
-  const auto n = 8;
-  vec3i ps[n];
-  float weights[n];
-  for (int i = 0; i < 3; i++) {
-    if (fr[i] < 0.5f)
-      p[i] -= 1;
-    else
-      fr[i] -= 1.0f;
-  }
-  for (int z = 0; z < 2; z++)
-    for (int y = 0; y < 2; y++)
-      for (int x = 0; x < 2; x++) {
-        auto ip = p + vec3i(x, y, z);
-        ps[x + y * 2 + z * 4] = clamp(ip, vec3i(0), vec3i(voxels.size() - vec3i(1)));
-        auto offset = vec3(x, y, z) - vec3(0.5f);
-        weights[x + y * 2 + z * 4] = volume(abs(fr + offset));
+static vec4 interpolate(const Voxels& voxels, vec3i p, vec3 fr, vec3 d) {
+  // if (auto v = voxels.find(clamp(p, vec3i(0), vec3i(voxels.size() - vec3i(1))))) {
+  //   return {v->color, dot(v->opacity, d * d)};
+  // } else {
+  //   return vec4(0.0f);
+  // }
+  const auto half = 0.25f;
+  const auto total_volume = psl::powi(half * 2, 3);
+  const auto max_n = 8;
+  auto n = 0;
+  vec3i ps[max_n];
+  float weights[max_n];
+  auto f0 = fr - vec3(half);
+  auto f1 = fr + vec3(half);
+  for (int z = -1; z <= 1; z++)
+    for (int y = -1; y <= 1; y++)
+      for (int x = -1; x <= 1; x++) {
+        auto dx = psl::max(psl::min(x + 1.0f, f1.x) - psl::max<float>(x, f0.x), 0.0f);
+        auto dy = psl::max(psl::min(y + 1.0f, f1.y) - psl::max<float>(y, f0.y), 0.0f);
+        auto dz = psl::max(psl::min(z + 1.0f, f1.z) - psl::max<float>(z, f0.z), 0.0f);
+        auto overlap_volume = dx * dy * dz;
+        if (overlap_volume > 0) {
+          ps[n] = clamp(p + vec3i(x, y, z), vec3i(0), vec3i(voxels.size()) - vec3i(1));
+          weights[n] = overlap_volume / total_volume;
+          n++;
+        }
       }
   auto color = vec3(0.0f);
   auto opacity = 0.0f;
   d = d * d;
   for (int i = 0; i < n; i++) {
-    const auto& voxel = voxels[ps[i]];
-    auto op = weights[i] * dot(voxel.opacity, d);
-    opacity += op;
-    color += voxel.color * op;
+    if (auto it = voxels.find(ps[i])) {
+      auto op = weights[i] * dot(it->opacity, d);
+      opacity += op;
+      color += it->color * op;
+    }
   }
   if (opacity != 0.0f)
     color /= opacity;
@@ -121,21 +124,19 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
 
     auto get_voxel = [this](float level, vec3 p, vec3 d) {
       auto l0 = size_t(psl::floor(level));
-      auto l1 = psl::clamp<size_t>(psl::ceil(level), 0, mipmaps.size() - 1);
-      auto fr = psl::fract(level);
+      auto l1 = psl::min<size_t>(psl::ceil(level), mipmaps.size() - 1);
       auto p0 = aabb.relative_position(p) * mipmaps[l0].size();
       auto ip0 = vec3i(floor(p0));
       auto m0 = interpolate(mipmaps[l0], ip0, p0 - ip0, d);
-      if (fr == 0.0f || l0 == l1)
+      if (l0 == l1)
         return m0;
       auto p1 = aabb.relative_position(p) * mipmaps[l1].size();
       auto ip1 = vec3i(floor(p1));
       auto m1 = interpolate(mipmaps[l1], ip1, p1 - ip1, d);
-      return lerp(fr, m0, m1);
+      return lerp(psl::fract(level), m0, m1);
     };
 
     auto cone_trace = [&](vec3 dir, float aperture) {
-      dir = normalize(dir);
       auto sinr = psl::sin(aperture / 2);
 
       auto t = footprint;
@@ -162,13 +163,13 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
         if (it.material()->is_delta())
           t += footprint / 3.0f;
         else
-          t = t + psl::max(r, footprint);
+          t = t + psl::max(r, footprint) / 1.5f;
         r = t * sinr * 2;
       }
 
       if (it.material()->is_delta())
         return c;
-      return c * absdot(it.n, dir) * it.material()->F({it, -ray.d, dir});
+      return c * absdot(it.n, dir) * it.material()->f({it, -ray.d, dir});
     };
 
     auto indirect = vec3(0);
@@ -176,7 +177,7 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
       for (int i = 0; i < cone_sample_count; i++)
         indirect +=
             cone_trace(face_same_hemisphere(cone_sample_directions[i], it.n), cone_aperture);
-      indirect = 2.5f * indirect * Pi / cone_sample_count;
+      indirect = 2.0f * indirect * Pi / cone_sample_count;
     } else {
       indirect += cone_trace(Reflect(-ray.d, it.n), Pi / 256);
       indirect = indirect * Pi;
@@ -189,7 +190,7 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
           if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
             auto cosine = absdot(ls->wo, it.n);
             auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-            auto f = it.material()->F(mec);
+            auto f = it.material()->f(mec);
             direct += cosine * ls->le / ls->pdf * f;
           }
         }
@@ -198,7 +199,7 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
             if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
               auto cosine = absdot(ls->wo, it.n);
               auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-              auto f = it.material()->F(mec);
+              auto f = it.material()->f(mec);
               auto bsdf_pdf = it.material()->pdf(mec);
               direct += cosine * ls->le / ls->pdf * f * power_heuristic(ls->pdf, bsdf_pdf);
             }

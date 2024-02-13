@@ -18,7 +18,6 @@ psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const Node
     return psl::nullopt;
   return bs;
 }
-
 vec3 DiffuseBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   if (!SameHemisphere(wi, wo))
     return vec3(0.0f);
@@ -28,6 +27,9 @@ float DiffuseBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx&) const {
   if (!SameHemisphere(wi, wo))
     return epsilon;
   return AbsCosTheta(wo) / Pi;
+}
+float DiffuseBSDF::roughness_amount(const NodeEvalCtx&) const {
+  return 1.0f;
 }
 
 psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
@@ -50,7 +52,6 @@ psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
 
   return bs;
 }
-
 vec3 ConductorBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   if (!SameHemisphere(wi, wo))
     return {};
@@ -74,6 +75,9 @@ float ConductorBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   vec3 wh = normalize(wi + wo);
 
   return distrib.pdf(wi, wh) / (4 * absdot(wi, wh));
+}
+float ConductorBSDF::roughness_amount(const NodeEvalCtx& nc) const {
+  return roughness(nc);
 }
 
 psl::optional<BSDFSample> DielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
@@ -110,7 +114,6 @@ psl::optional<BSDFSample> DielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
   }
   return bs;
 }
-
 vec3 DielectricBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
@@ -159,6 +162,9 @@ float DielectricBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
     return (1.0f - fr) * distrib.pdf(wi, wm) * dwm_dwo;
   }
 }
+float DielectricBSDF::roughness_amount(const NodeEvalCtx& nc) const {
+  return roughness(nc);
+}
 
 psl::optional<BSDFSample> SpecularReflectionBSDF::sample(vec3 wi, float, vec2,
                                                          const NodeEvalCtx& nc) const {
@@ -168,13 +174,15 @@ psl::optional<BSDFSample> SpecularReflectionBSDF::sample(vec3 wi, float, vec2,
   bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
   return bs;
 }
-
 vec3 SpecularReflectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {
   PINE_UNREACHABLE;
   return vec3{0.0f};
 }
 float SpecularReflectionBSDF::pdf(vec3, vec3, const NodeEvalCtx&) const {
   PINE_UNREACHABLE;
+  return 0.0f;
+}
+float SpecularReflectionBSDF::roughness_amount(const NodeEvalCtx&) const {
   return 0.0f;
 }
 
@@ -194,13 +202,13 @@ psl::optional<BSDFSample> SpecularRefrectionBSDF::sample(vec3 wi, float u1, vec2
   bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
   return bs;
 }
-
 vec3 SpecularRefrectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {
   PINE_UNREACHABLE;
-  return vec3{0.0f};
 }
 float SpecularRefrectionBSDF::pdf(vec3, vec3, const NodeEvalCtx&) const {
   PINE_UNREACHABLE;
+}
+float SpecularRefrectionBSDF::roughness_amount(const NodeEvalCtx&) const {
   return 0.0f;
 }
 

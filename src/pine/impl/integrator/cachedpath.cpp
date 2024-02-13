@@ -231,7 +231,7 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
   auto direct_light = [&](const LightSample& ls, float pdf_g) {
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-      auto f = it.material()->F(mec);
+      auto f = it.material()->f(mec);
       auto cosine = absdot(ls.wo, it.n);
       auto mis_term = balance_heuristic(ls.pdf, pdf_g);
       return ls.le * cosine * f / ls.pdf * mis_term;

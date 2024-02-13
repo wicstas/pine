@@ -566,7 +566,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   auto direct_light = [&](LightSample ls) {
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-      auto f = it.material()->F(mec);
+      auto f = it.material()->f(mec);
       return ls.le / ls.pdf * psl::max(dot(it.n, ls.wo), 0.0f) * f;
     } else {
       return vec3{0.0f};
@@ -591,7 +591,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
       auto mec = MaterialEvalCtx{it, -ray.d, wo};
       auto le = quad.flux_estimate(qs->sc) / (4);
       auto mis_term = balance_heuristic(1, qs->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
-      L += le * it.material()->F(mec) / qs->pdf * mis_term;
+      L += le * it.material()->f(mec) / qs->pdf * mis_term;
     }
   } else {
     if (auto bs = it.material()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
@@ -650,7 +650,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
       auto cosine = absdot(ls.wo, it.n);
       auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-      auto f = it.material()->F(mec);
+      auto f = it.material()->f(mec);
       auto mis_term = power_heuristic(ls.pdf, pdf_g);
       // TODO: divides by pdf?
       if (collect && collect_)
@@ -668,7 +668,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     if (auto ps = leaf.sample(sampler.get2d())) {
       auto cosine = absdot(it.n, ps->w);
       auto mec = MaterialEvalCtx{it, wi, ps->w};
-      auto f = it.material()->F(mec);
+      auto f = it.material()->f(mec);
       if (psl::abs(ps->pdf) > 1e-7f && cosine > 1e-7f && length_squared(f) > 1e-10f) {
         auto li =
             radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);

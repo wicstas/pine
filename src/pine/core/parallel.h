@@ -45,6 +45,17 @@ template <typename F, typename... Args>
 void parallel_for(vec2i size, F&& f) {
   parallel_for_impl(area(size), [&f, w = size.x](int idx) { f(vec2i{idx % w, idx / w}); });
 }
+template <typename F, typename... Args>
+void parallel_for(vec3i64 size, F&& f) {
+  auto width = size.x * size.y;
+  parallel_for_impl(volume(size), [&](int64_t idx) {
+    auto z = idx / width;
+    auto xy = idx % width;
+    auto y = xy / size.x;
+    auto x = xy % size.x;
+    f(vec3i64(x, y, z));
+  });
+}
 
 struct AtomicFloat {
   explicit AtomicFloat(float v = 0) {

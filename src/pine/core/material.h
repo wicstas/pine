@@ -11,9 +11,8 @@ namespace pine {
 struct MaterialSampleCtx : NodeEvalCtx {
   MaterialSampleCtx(vec3 p, vec3 n, vec2 uv, vec3 wi, float u1, vec2 u2)
       : NodeEvalCtx(p, n, uv), m2w(coordinate_system(n)), u1(u1), u2(u2) {
-    auto w2m = inverse(m2w);
-    this->wi = w2m * wi;
-  };
+    this->wi = inverse(m2w) * wi;
+  }
   MaterialSampleCtx(const Interaction& it, vec3 wi, float u1, vec2 u2)
       : MaterialSampleCtx(it.p, it.n, it.uv, wi, u1, u2){};
 
@@ -54,10 +53,15 @@ struct LayeredMaterial {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& c) const;
-  vec3 F(const MaterialEvalCtx& c) const;
+  vec3 f(const MaterialEvalCtx& c) const;
   float pdf(const MaterialEvalCtx& c) const;
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    for (auto& layer : layers)
+      return layer.roughness_amount(nc);
+    return 1.0f;
   }
   bool is_delta() const {
     for (auto& layer : layers)
@@ -76,7 +80,7 @@ struct DiffuseMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return bsdf.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -84,6 +88,9 @@ struct DiffuseMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return bsdf.roughness_amount(nc);
   }
   bool is_delta() const {
     return false;
@@ -100,7 +107,7 @@ struct MetalMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return bsdf.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -108,6 +115,9 @@ struct MetalMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return bsdf.roughness_amount(nc);
   }
   bool is_delta() const {
     return false;
@@ -125,7 +135,7 @@ struct GlassMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return bsdf.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -133,6 +143,9 @@ struct GlassMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return bsdf.roughness_amount(nc);
   }
   bool is_delta() const {
     return false;
@@ -153,7 +166,7 @@ struct GlossyMaterial {
       return bs;
     return bottom.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return top.f(mc.wi, mc.wo, mc) + bottom.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -161,6 +174,9 @@ struct GlossyMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return top.roughness_amount(nc);
   }
   bool is_delta() const {
     return false;
@@ -178,7 +194,7 @@ struct MirrorMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return bsdf.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -186,6 +202,9 @@ struct MirrorMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return bsdf.roughness_amount(nc);
   }
   bool is_delta() const {
     return true;
@@ -202,7 +221,7 @@ struct WaterMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
   }
-  vec3 F(const MaterialEvalCtx& mc) const {
+  vec3 f(const MaterialEvalCtx& mc) const {
     return bsdf.f(mc.wi, mc.wo, mc);
   }
   float pdf(const MaterialEvalCtx& mc) const {
@@ -210,6 +229,9 @@ struct WaterMaterial {
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return bsdf.roughness_amount(nc);
   }
   bool is_delta() const {
     return true;
@@ -226,13 +248,16 @@ struct EmissiveMaterial {
   psl::optional<BSDFSample> sample(const MaterialSampleCtx&) const {
     return psl::nullopt;
   }
-  vec3 F(const MaterialEvalCtx&) const {
+  vec3 f(const MaterialEvalCtx&) const {
     return {};
   }
   float pdf(const MaterialEvalCtx&) const {
     return {};
   }
   vec3 le(const LeEvalCtx&) const;
+  float roughness_amount(const NodeEvalCtx&) const {
+    return 1.0f;
+  }
   bool is_delta() const {
     return false;
   }
@@ -253,14 +278,17 @@ public:
       return bs;
     });
   }
-  vec3 F(const MaterialEvalCtx& c) const {
-    return dispatch([&](auto&& x) { return x.F(c); });
+  vec3 f(const MaterialEvalCtx& c) const {
+    return dispatch([&](auto&& x) { return x.f(c); });
   }
   float pdf(const MaterialEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.pdf(c); });
   }
   vec3 le(const LeEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.le(c); });
+  }
+  float roughness_amount(const NodeEvalCtx& nc) const {
+    return dispatch([&](auto&& x) { return x.roughness_amount(nc); });
   }
   bool is_delta() const {
     return dispatch([&](auto&& x) { return x.is_delta(); });

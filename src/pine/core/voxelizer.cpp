@@ -7,7 +7,7 @@
 
 namespace pine {
 
-Array3d<Voxel> voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
+Voxels voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
   Profiler _("Voxelization");
   auto accel = EmbreeAccel();
   accel.build(&scene);
@@ -16,8 +16,9 @@ Array3d<Voxel> voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
   auto spp = 8;
   auto samplers = psl::vector_n_of(n_threads(), HaltonSampler(spp));
 
-  auto voxels = Array3d<Voxel>(resolution);
+  auto voxels = Voxels(resolution);
   auto epsilon = max_value(aabb.diagonal()) * 1e-5f;
+  auto lock = SpinLock();
 
   for (int axis = 0; axis < 3; axis++) {
     auto i0 = axis, i1 = (axis + 1) % 3, i2 = (axis + 2) % 3;
@@ -34,14 +35,14 @@ Array3d<Voxel> voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
         ray.d[i2] = -1;
         auto it = Interaction();
         while (accel.intersect(ray, it)) {
+          it.n = face_same_hemisphere(it.n, -ray.d);
           auto ip = vec3i(floor(aabb.relative_position(it.p) * resolution));
           ip = clamp(ip, vec3i(0), vec3i(voxels.size()) - vec3i(1));
-          auto& voxel = voxels[ip];
           auto L = vec3(0);
           if (!it.material()->is_delta()) {
             if (auto ls = lsampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
               if (!accel.hit(it.spawn_ray(ls->wo, ls->distance))) {
-                auto f = it.material()->F({it, -ray.d, ls->wo});
+                auto f = it.material()->f({it, it.n, it.n});
                 auto cosine = absdot(ls->wo, it.n);
                 L += ls->le * cosine * f / ls->pdf;
               }
@@ -49,67 +50,82 @@ Array3d<Voxel> voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
             if (scene.env_light)
               if (auto ls = scene.env_light->sample(it.n, sampler.get2d())) {
                 if (!accel.hit(it.spawn_ray(ls->wo, ls->distance))) {
-                  auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-                  auto f = it.material()->F(mec);
+                  auto mec = MaterialEvalCtx(it, it.n, it.n);
+                  auto f = it.material()->f(mec);
                   auto bsdf_pdf = it.material()->pdf(mec);
                   auto cosine = absdot(ls->wo, it.n);
                   L += ls->le * cosine * f / ls->pdf * power_heuristic(ls->pdf, bsdf_pdf);
                 }
               }
           }
+          lock.lock();
+          auto& voxel = voxels[ip];
           auto alpha = voxel.nsamples + 1.0f;
           voxel.color = lerp(1 / alpha, voxel.color, L);
           voxel.opacity = vec3(1, 1, 1);
           voxel.nsamples++;
+          lock.unlock();
           ray.tmin = ray.tmax + epsilon;
           ray.tmax = float_max;
         }
       });
   }
 
+  Log("done");
+
   return voxels;
 }
 
-psl::vector<Array3d<Voxel>> build_mipmap(Array3d<Voxel> original) {
+psl::vector<Voxels> build_mipmap(Voxels original) {
+  Profiler _("Build mipmap");
   auto size = original.size();
   CHECK_EQ(size.x, size.y);
   CHECK_EQ(size.x, size.z);
   CHECK(psl::is_power_of_2(size.x));
-  auto mipmaps = psl::vector<Array3d<Voxel>>(psl::log2i(size.x) + 1);
+  auto mipmaps = psl::vector<Voxels>(psl::log2i(size.x) + 1);
+  auto lock = SpinLock();
 
   mipmaps[0] = psl::move(original);
   for (size_t i = 1; i < mipmaps.size(); i++) {
     const auto& prev = mipmaps[i - 1];
     auto& mipmap = mipmaps[i];
-    mipmap = Array3d<Voxel>(size / (1 << i));
-    for_3d(mipmap.size(), [&](vec3i p) {
-      auto& v = mipmap[p];
-      const Voxel* vs[2][2][2];
-      for_3d({2, 2, 2}, [&](vec3i i) { vs[i[2]][i[1]][i[0]] = &prev[p * 2 + i]; });
-      v.opacity[0] = (psl::max(vs[0][0][0]->opacity[0], vs[0][0][1]->opacity[0]) +
-                      psl::max(vs[0][1][0]->opacity[0], vs[0][1][1]->opacity[0]) +
-                      psl::max(vs[1][0][0]->opacity[0], vs[1][0][1]->opacity[0]) +
-                      psl::max(vs[1][1][0]->opacity[0], vs[1][1][1]->opacity[0])) /
+    mipmap = Voxels(size / (1 << i));
+    parallel_for(mipmap.size(), [&](vec3i p) {
+      auto v = Voxel();
+      Voxel vs[2][2][2];
+      for_3d({2, 2, 2}, [&](vec3i i) {
+        if (auto it = prev.find(p * 2 + i))
+          vs[i[2]][i[1]][i[0]] = *it;
+      });
+      v.opacity[0] = (psl::max(vs[0][0][0].opacity[0], vs[0][0][1].opacity[0]) +
+                      psl::max(vs[0][1][0].opacity[0], vs[0][1][1].opacity[0]) +
+                      psl::max(vs[1][0][0].opacity[0], vs[1][0][1].opacity[0]) +
+                      psl::max(vs[1][1][0].opacity[0], vs[1][1][1].opacity[0])) /
                      4;
-      v.opacity[1] = (psl::max(vs[0][0][0]->opacity[1], vs[0][1][0]->opacity[1]) +
-                      psl::max(vs[0][0][1]->opacity[1], vs[0][1][1]->opacity[1]) +
-                      psl::max(vs[1][0][0]->opacity[1], vs[1][1][0]->opacity[1]) +
-                      psl::max(vs[1][0][1]->opacity[1], vs[1][1][1]->opacity[1])) /
+      v.opacity[1] = (psl::max(vs[0][0][0].opacity[1], vs[0][1][0].opacity[1]) +
+                      psl::max(vs[0][0][1].opacity[1], vs[0][1][1].opacity[1]) +
+                      psl::max(vs[1][0][0].opacity[1], vs[1][1][0].opacity[1]) +
+                      psl::max(vs[1][0][1].opacity[1], vs[1][1][1].opacity[1])) /
                      4;
-      v.opacity[2] = (psl::max(vs[0][0][0]->opacity[2], vs[1][0][0]->opacity[2]) +
-                      psl::max(vs[0][0][1]->opacity[2], vs[1][0][1]->opacity[2]) +
-                      psl::max(vs[0][1][0]->opacity[2], vs[1][1][0]->opacity[2]) +
-                      psl::max(vs[0][1][1]->opacity[2], vs[1][1][1]->opacity[2])) /
+      v.opacity[2] = (psl::max(vs[0][0][0].opacity[2], vs[1][0][0].opacity[2]) +
+                      psl::max(vs[0][0][1].opacity[2], vs[1][0][1].opacity[2]) +
+                      psl::max(vs[0][1][0].opacity[2], vs[1][1][0].opacity[2]) +
+                      psl::max(vs[0][1][1].opacity[2], vs[1][1][1].opacity[2])) /
                      4;
       auto opacity_sum = 0.0f;
-      for_3d({2, 2, 2}, [&](vec3i i) { opacity_sum += sum(vs[i[2]][i[1]][i[0]]->opacity); });
-      if (opacity_sum != 0)
-        for_3d({2, 2, 2}, [&](vec3i i) {
-          v.color += vs[i[2]][i[1]][i[0]]->color * sum(vs[i[2]][i[1]][i[0]]->opacity) / opacity_sum;
-        });
+      for_3d({2, 2, 2}, [&](vec3i i) { opacity_sum += sum(vs[i[2]][i[1]][i[0]].opacity); });
+      if (opacity_sum == 0)
+        return;
+      for_3d({2, 2, 2}, [&](vec3i i) {
+        v.color += vs[i[2]][i[1]][i[0]].color * sum(vs[i[2]][i[1]][i[0]].opacity) / opacity_sum;
+      });
+      lock.lock();
+      mipmap[p] = v;
+      lock.unlock();
     });
   }
 
+  Log("done");
   return mipmaps;
 }
 

@@ -60,15 +60,15 @@ struct Array3d {
   }
 
   T &operator[](vec3i64 p) {
-    CHECK_RANGE(p[0], 0, size_[0] - 1);
-    CHECK_RANGE(p[1], 0, size_[1] - 1);
-    CHECK_RANGE(p[2], 0, size_[2] - 1);
+    DCHECK_RANGE(p[0], 0, size_[0] - 1);
+    DCHECK_RANGE(p[1], 0, size_[1] - 1);
+    DCHECK_RANGE(p[2], 0, size_[2] - 1);
     return data()[p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1]];
   }
   const T &operator[](vec3i64 p) const {
-    CHECK_RANGE(p[0], 0, size_[0] - 1);
-    CHECK_RANGE(p[1], 0, size_[1] - 1);
-    CHECK_RANGE(p[2], 0, size_[2] - 1);
+    DCHECK_RANGE(p[0], 0, size_[0] - 1);
+    DCHECK_RANGE(p[1], 0, size_[1] - 1);
+    DCHECK_RANGE(p[2], 0, size_[2] - 1);
     return data()[p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1]];
   }
 
