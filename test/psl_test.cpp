@@ -447,9 +447,9 @@ int add_one(int x) {
   return x + 1;
 }
 void test_functional() {
-  auto f = psl::function<int, int>(add_one);
+  auto f = psl::function<int(int)>(add_one);
   CHECK_EQ(f(10), 11);
-  f = psl::function<int, int>([](int x) { return x + 2; });
+  f = psl::function<int(int)>([](int x) { return x + 2; });
   CHECK_EQ(f(10), 12);
 }
 

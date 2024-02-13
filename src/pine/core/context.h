@@ -578,7 +578,7 @@ struct Context {
       exception("Type `", psl::type_name<T>(), "` is not registered");
   }
   template <typename R, typename... Args>
-  psl::string name_of_function_type(psl::function<R, Args...>*) const {
+  psl::string name_of_function_type(psl::function<R(Args...)>*) const {
     return signature_from(tag<R>(), tags<Args...>());
   }
   bool is_registered_type(psl::string_view name) const {

@@ -6,12 +6,11 @@
 
 namespace pine {
 
-vec3 AOIntegrator::radiance(Scene&, Ray ray, Sampler& sampler) {
-  auto it = Interaction{};
-  if (intersect(ray, it)) {
+vec3 AOIntegrator::radiance(Scene&, Ray ray, Interaction it, bool is_hit, Sampler& sampler) {
+  if (is_hit) {
     ray.o = it.p;
     it.n = face_same_hemisphere(it.n, -ray.d);
-    ray = it.spawn_ray(face_same_hemisphere(uniform_hemisphere(sampler.get2d()), it.n), radius);
+    ray = it.spawn_ray(face_same_hemisphere(uniform_hemisphere(sampler.get2d()), it.n));
     return hit(ray) ? vec3(0.0f) : vec3(1.0f);
   }
   return vec3(0.0f);

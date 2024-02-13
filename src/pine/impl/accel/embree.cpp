@@ -21,7 +21,6 @@ void bounds_func(const RTCBoundsFunctionArguments* args) {
 void intersect_func(const RTCIntersectFunctionNArguments* args) {
   if (!args->valid[0])
     return;
-  args->valid[0] = 0;
 
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   auto& ray_ = reinterpret_cast<RTCRayHit*>(args->rayhit)->ray;
@@ -39,21 +38,23 @@ void intersect_func(const RTCIntersectFunctionNArguments* args) {
     hit_.v = it.uv.y;
     hit_.geomID = args->geomID;
     hit_.primID = args->primID;
+    args->valid[0] = -1;
   }
 }
 
 void hit_func(const RTCOccludedFunctionNArguments* args) {
   if (!args->valid[0])
     return;
-  args->valid[0] = 0;
 
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   auto& ray_ = *reinterpret_cast<RTCRay*>(args->ray);
 
   auto ray = Ray(vec3(ray_.org_x, ray_.org_y, ray_.org_z), vec3(ray_.dir_x, ray_.dir_y, ray_.dir_z),
                  ray_.tnear, ray_.tfar);
-  if (shape.hit(ray))
+  if (shape.hit(ray)) {
     ray_.tfar = -Infinity;
+    args->valid[0] = -1;
+  }
 }
 
 void EmbreeAccel::build(const Scene* scene) {
@@ -82,8 +83,8 @@ void EmbreeAccel::build(const Scene* scene) {
       rtcSetGeometryUserPrimitiveCount(geom, 1);
       rtcSetGeometryUserData(geom, &scene->geometries[i]->shape);
       rtcSetGeometryBoundsFunction(geom, bounds_func, nullptr);
-      rtcSetGeometryIntersectFunction(geom, intersect_func);
-      rtcSetGeometryOccludedFunction(geom, hit_func);
+      // rtcSetGeometryIntersectFunction(geom, intersect_func);
+      // rtcSetGeometryOccludedFunction(geom, hit_func);
       rtcCommitGeometry(geom);
       CHECK_EQ(i, rtcAttachGeometry(rtc_scene, geom));
       rtcReleaseGeometry(geom);

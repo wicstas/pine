@@ -20,9 +20,8 @@ VisualizerIntegrator::VisualizerIntegrator(Accel accel, Sampler sampler, psl::st
     exception("VisualizerIntegrator doesn't recognize the enum `", type, '`');
 }
 
-vec3 VisualizerIntegrator::radiance(Scene&, Ray ray, Sampler&) {
-  Interaction it;
-  if (intersect(ray, it)) {
+vec3 VisualizerIntegrator::radiance(Scene&, Ray, Interaction it, bool is_hit, Sampler&) {
+  if (is_hit) {
     switch (viz_type) {
       case Normal: return abs(it.n); break;
       case Position: return it.p; break;

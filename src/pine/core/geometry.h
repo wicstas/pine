@@ -63,6 +63,10 @@ struct AABB {
   bool is_valid(int dim) const {
     return upper[dim] > lower[dim];
   }
+  bool contains(vec3 p) const {
+    return (p[0] >= lower[0] && p[0] <= upper[0]) && (p[1] >= lower[1] && p[1] <= upper[1]) &&
+           (p[2] >= lower[2] && p[2] <= upper[2]);
+  }
 
   bool hit(const Ray& ray) const;
   bool hit(Ray ray, float& tmin, float& tmax) const;
@@ -183,7 +187,7 @@ struct Line {
 struct Rect {
   Rect(vec3 position, vec3 ex, vec3 ey);
   static Rect from_vertex(vec3 v0, vec3 v1, vec3 v2);
-  Rect apply(mat4 m) const;
+  Rect& apply(mat4 m);
 
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
@@ -282,7 +286,7 @@ struct TriangleMesh {
 };
 
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function);
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> height_function);
 
 struct Shape : psl::variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using variant::variant;

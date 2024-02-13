@@ -574,7 +574,7 @@ vec3 GuidedPathIntegrator::radiance_estimate(Scene& scene, Ray ray, Sampler& sam
   };
 
   auto footprint = sd_tree.traverse(it.p).get_footprint();
-  auto p = it.p + footprint * (sampler.Get3D() - vec3{0.5f}) * 2;
+  auto p = it.p + footprint * (sampler.get3d() - vec3{0.5f}) * 2;
   auto aabb = sd_tree.root().aabb;
   for (int i = 0; i < 3; i++) {
     if (p[i] < aabb.lower[i])
@@ -654,7 +654,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
       auto mis_term = power_heuristic(ls.pdf, pdf_g);
       // TODO: divides by pdf?
       if (collect && collect_)
-        sd_tree.add_sample(leaf, {it.p, ls.wo, ls.le * cosine / ls.pdf}, sampler.Get3D());
+        sd_tree.add_sample(leaf, {it.p, ls.wo, ls.le * cosine / ls.pdf}, sampler.get3d());
       return ls.le / ls.pdf * cosine * f * mis_term;
     } else {
       return vec3{0.0f};
@@ -673,7 +673,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
         auto li =
             radiance(scene, it.spawn_ray(ps->w), sampler, depth + 1, 0.0f, it.n, false, false);
         if (collect)
-          sd_tree.add_sample(leaf, {it.p, ps->w, li * cosine / ps->pdf}, sampler.Get3D());
+          sd_tree.add_sample(leaf, {it.p, ps->w, li * cosine / ps->pdf}, sampler.get3d());
         auto mis_term = power_heuristic(1, ps->pdf, 1, it.material()->pdf(mec)) / guide_select_prob;
         lo += li * cosine * f / ps->pdf * mis_term;
         CHECK(!(li * cosine * f / ps->pdf * mis_term).has_nan());
@@ -696,7 +696,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
         auto li = radiance(scene, it.spawn_ray(bs->wo), sampler, depth + 1, bs->pdf, it.n,
                            it.material()->is_delta(), true);
         if (collect)
-          sd_tree.add_sample(leaf, {it.p, bs->wo, li * cosine / bs->pdf}, sampler.Get3D());
+          sd_tree.add_sample(leaf, {it.p, bs->wo, li * cosine / bs->pdf}, sampler.get3d());
         auto mis_term =
             guide_select_prob == 0.0f
                 ? 1.0f

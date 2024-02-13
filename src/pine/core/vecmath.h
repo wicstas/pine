@@ -896,6 +896,19 @@ T volume(Vector3<T> v) {
 }
 
 template <typename T>
+T sum(Vector2<T> v) {
+  return v[0] + v[1];
+}
+template <typename T>
+T sum(Vector3<T> v) {
+  return v[0] + v[1] + v[2];
+}
+template <typename T>
+T sum(Vector4<T> v) {
+  return v[0] + v[1] + v[2] + v[3];
+}
+
+template <typename T>
 Vector2<T> min(Vector2<T> lhs, Vector2<T> rhs) {
   return {psl::min(lhs.x, rhs.x), psl::min(lhs.y, rhs.y)};
 }

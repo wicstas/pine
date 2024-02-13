@@ -79,11 +79,6 @@ void add_box(Scene& scene, mat4 m, psl::string material_name) {
 }
 
 void scene_context(Context& ctx) {
-  ctx.type<Ray>("Ray")
-      .member("o", &Ray::o)
-      .member("d", &Ray::d)
-      .member("tmin", &Ray::tmin)
-      .member("tmax", &Ray::tmax);
   ctx.type<Scene>("Scene")
       .ctor<>()
       .member("camera", &Scene::camera)

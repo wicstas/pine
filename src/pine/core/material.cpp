@@ -31,6 +31,8 @@ float LayeredMaterial::pdf(const MaterialEvalCtx& c) const {
 }
 
 vec3 EmissiveMaterial::le(const LeEvalCtx& ec) const {
+  if (CosTheta(ec.wo) < 0)
+    return vec3(0);
   return color.eval(ec);
 }
 

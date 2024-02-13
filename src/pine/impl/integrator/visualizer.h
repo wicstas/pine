@@ -8,7 +8,7 @@ class VisualizerIntegrator : public RayIntegrator {
 public:
   VisualizerIntegrator(Accel accel, Sampler sampler, psl::string viz_type);
 
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override;
+  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override;
 
   enum { Normal, Position, UV, BVH } viz_type;
 };

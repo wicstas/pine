@@ -5,7 +5,6 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
-#include <pine/impl/integrator/single-bounce.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
@@ -47,10 +46,6 @@ Context get_default_context() {
   ctx.type<Accel>("Accel").ctor_variant<BVH, EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
-  ctx.type<Integrator>("Integrator");
-  ctx.type<RTIntegrator>("RTIntegrator");
-  ctx.type<PixelIntegrator>("PixelIntegrator");
-  ctx.type<RayIntegrator>("RayIntegrator");
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
       .method("render", &AOIntegrator::render);
@@ -72,17 +67,15 @@ Context get_default_context() {
       .ctor<Accel, Sampler, psl::string>()
       .method("render", &VisualizerIntegrator::render);
   ctx.type<VoxelConeIntegrator>("VoxelConeIntegrator")
-      .ctor<Accel, Sampler>()
+      .ctor<Accel, Sampler, LightSampler>()
       .method("render", &VoxelConeIntegrator::render);
-  ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
-      .ctor<Accel, Sampler, psl::function<vec3, CustomRayIntegrator&, Scene&, Ray, Sampler&>>()
-      .method("render", &CustomRayIntegrator::render);
   ctx.type<DrJitIntegrator>("DrJitIntegrator")
       .ctor<Accel, Sampler>()
       .method("render", &DrJitIntegrator::render);
-  ctx.type<SingleBounceIntegrator>("SingleBounceIntegrator")
-      .ctor<Accel, Sampler, LightSampler>()
-      .method("render", &SingleBounceIntegrator::render);
+  ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
+      .ctor<Accel, Sampler,
+            psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>>()
+      .method("render", &CustomRayIntegrator::render);
   ctx.type<psl::string>()
       .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
                  psl::string>([](const auto& x) {

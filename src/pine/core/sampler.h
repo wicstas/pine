@@ -11,7 +11,8 @@
 namespace pine {
 
 struct UniformSampler {
-  UniformSampler(int samples_per_pixel, int seed = 0) : samples_per_pixel(samples_per_pixel), rng(seed) {
+  UniformSampler(int samples_per_pixel, int seed = 0)
+      : samples_per_pixel(samples_per_pixel), rng(seed) {
   }
 
   int spp() const {
@@ -242,11 +243,8 @@ struct Sampler : private psl::variant<UniformSampler, StratifiedSampler, HaltonS
   vec2 get2d() {
     return dispatch([&](auto&& x) { return x.get2d(); });
   }
-  vec3 Get3D() {
+  vec3 get3d() {
     return {get1d(), get1d(), get1d()};
-  }
-  Sampler Clone() const {
-    return dispatch([&](auto&& x) { return Sampler(x); });
   }
 };
 

@@ -3,7 +3,8 @@
 
 namespace pine {
 
-vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
+vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
+                              Sampler& sampler) {
   auto L = vec3{0.0f};
   auto beta = vec3{1.0f};
   auto prev_n = vec3{};
@@ -11,8 +12,9 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
   auto mis_bxdf_pdf = 0.0f;
 
   for (int depth = 0; depth < max_depth; depth++) {
-    auto it = Interaction{};
-    if (!intersect(ray, it)) {
+    if (depth != 0)
+      is_hit = intersect(ray, it);
+    if (!is_hit) {
       if (scene.env_light) {
         auto le = scene.env_light->color(ray.d);
         if (depth == 0 || !nee_env_light || prev_delta) {

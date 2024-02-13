@@ -14,10 +14,11 @@ struct PathIntegrator : public RayIntegrator {
         nee_env_light{nee_env_light} {
   }
 
-  void pre_render(Scene& scene) override {
+  void render(Scene& scene) override {
     light_sampler.build(&scene);
+    RayIntegrator::render(scene);
   }
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override;
+  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override;
 
 private:
   LightSampler light_sampler;

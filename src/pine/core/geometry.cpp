@@ -326,14 +326,14 @@ Rect Rect::from_vertex(vec3 v0, vec3 v1, vec3 v2) {
   auto ey = v2 - v0;
   return Rect{v0 + ex / 2 + ey / 2, ex, ey};
 }
-Rect Rect::apply(mat4 m) const {
+Rect& Rect::apply(mat4 m) {
   auto v0 = position - ex * lx / 2 - ey * ly / 2;
   auto v1 = v0 + ex * lx;
   auto v2 = v0 + ey * ly;
   v0 = vec3{m * vec4{v0, 1.0f}};
   v1 = vec3{m * vec4{v1, 1.0f}};
   v2 = vec3{m * vec4{v2, 1.0f}};
-  return from_vertex(v0, v1, v2);
+  return *this = from_vertex(v0, v1, v2);
 }
 bool Rect::hit(const Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
@@ -461,10 +461,11 @@ float Rect::pdf(const Interaction& it, const Ray& ray, vec3) const {
 }
 AABB Rect::get_aabb() const {
   AABB aabb;
-  aabb.extend(position + ex * lx / 2);
-  aabb.extend(position - ex * lx / 2);
-  aabb.extend(position + ey * ly / 2);
-  aabb.extend(position - ey * ly / 2);
+  // TODO why BVH worked before?
+  aabb.extend(position - ex * lx / 2 - ey * ly / 2);
+  aabb.extend(position - ex * lx / 2 + ey * ly / 2);
+  aabb.extend(position + ex * lx / 2 - ey * ly / 2);
+  aabb.extend(position + ex * lx / 2 + ey * ly / 2);
   return aabb;
 }
 
@@ -618,12 +619,12 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   return TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
 }
 
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2i> height_function) {
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2i)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution, [&](vec2i p) { height_map[p] = height_function(p); });
   return height_map_to_mesh(height_map);
 }
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float, vec2> height_function) {
+TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution,
                [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
@@ -645,6 +646,15 @@ float Geometry::pdf(const Interaction& it, const Ray& ray, vec3 n) const {
 }
 
 void geometry_context(Context& ctx) {
+  ctx.type<Ray>("Ray")
+      .member("o", &Ray::o)
+      .member("d", &Ray::d)
+      .member("tmin", &Ray::tmin)
+      .member("tmax", &Ray::tmax);
+  ctx.type<Interaction>("Interaction")
+      .member("n", &Interaction::n)
+      .member("p", &Interaction::p)
+      .member("uv", &Interaction::uv);
   ctx.type<Sphere>("Sphere").ctor<vec3, float>();
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();
@@ -658,8 +668,8 @@ void geometry_context(Context& ctx) {
       .method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
-  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2>>(height_map_to_mesh);
-  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float, vec2i>>(height_map_to_mesh);
+  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2)>>(height_map_to_mesh);
+  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2i)>>(height_map_to_mesh);
 }
 
 }  // namespace pine
