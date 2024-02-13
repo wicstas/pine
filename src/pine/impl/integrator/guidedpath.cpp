@@ -28,22 +28,21 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto quad_tree = QuadTree();
   quad_tree.root().flux = 1;
   quad_tree.refine();
-  sd_tree = SpatialTree{scene.get_aabb(), quad_tree};
+  sd_tree = SpatialTree(scene.get_aabb(), quad_tree);
   use_guide = false;
   collect = true;
 
-  auto total_pixels = static_cast<size_t>(area(film.size()));
-  auto total_samples = total_pixels * samples_per_pixel;
-  auto total_samples_all = total_samples + total_pixels * estimate_samples;
-  auto initial_samples = size_t{1024 * 16};
-  auto n_iterations =
-      static_cast<int>(psl::ceil(psl::log2(total_samples / initial_samples + 1.0f)));
+  auto total_pixels = size_t(area(film.size()));
+  auto learning_samples = total_pixels * samples_per_pixel;
+  auto total_samples = learning_samples + total_pixels * estimate_samples;
+  auto initial_samples = size_t(1024 * 16);
+  auto n_iterations = int(psl::ceil(psl::log2(learning_samples / initial_samples + 1.0f)));
   Debug("[GuidedPath]", n_iterations, " learning iterations");
   sd_tree.root().n_samples = initial_samples * 4;
   sd_tree.refine(0);
 
   auto current_sample_index = 0;
-  auto current_samples = size_t{0};
+  auto current_samples = size_t(0);
   auto current_film = film;
 
   set_progress(0);
@@ -57,8 +56,8 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
     {
       Profiler _("Collecting");
-      auto downsize = psl::min(psl::sqrt(static_cast<double>(iter_samples) / total_pixels), 1.0);
-      auto iter_size = vec2i{film.size() * downsize};
+      auto downscale = psl::min(psl::sqrt(float(iter_samples) / total_pixels), 1.0f);
+      auto iter_size = vec2i(film.size() * downscale);
       auto iter_n_pass = iter_samples / area(iter_size);
       for (size_t si = 0; si < iter_n_pass; si++) {
         parallel_for(iter_size, [&](vec2i p) {
@@ -67,21 +66,20 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
           auto p_film = vec2(p + sampler.get2d()) / iter_size;
           auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-          auto L = radiance(scene, ray, sampler, 0, 1.0f, vec3{0.0f}, true, false);
+          auto L = radiance(scene, ray, sampler, 0, 1.0f, vec3(0.0f), true, false);
           if (!use_estimate)
             current_film.add_sample(p_film * current_film.size(), L);
         });
         current_sample_index += 1;
         current_samples += area(iter_size);
-        set_progress(static_cast<double>(current_samples) / total_samples_all);
+        set_progress(float(current_samples) / total_samples);
       }
 
       if (!use_estimate) {
-        if (iteration == 0) {
+        if (iteration == 0)
           film = current_film;
-        } else {
+        else
           film = combine(film, current_film, 1, 2);
-        }
         current_film.clear();
       }
     }
@@ -102,12 +100,11 @@ void GuidedPathIntegrator::render(Scene& scene) {
         auto p_film = vec2(p + sampler.get2d()) / film.size();
         auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
         auto L = radiance_estimate(scene, ray, sampler, 0);
-        L = clamp(L, vec3{0.0f}, vec3{20.0f});
         film.add_sample(p, L);
       });
       current_sample_index += 1;
       current_samples += area(film.size());
-      set_progress(static_cast<double>(current_samples) / total_samples_all);
+      set_progress(float(current_samples) / total_samples);
     }
   }
 
