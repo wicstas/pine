@@ -1356,23 +1356,27 @@ inline uint64_t encode_morton_64x3(vec3 v) {
   return (left_shift_64(v.z) << 2) | (left_shift_64(v.y) << 1) | left_shift_64(v.x);
 }
 
-inline int max_axis(vec3 v) {
+template <typename T>
+inline int max_axis(Vector3<T> v) {
   if (v[0] > v[1])
     return v[0] > v[2] ? 0 : 2;
   else
     return v[1] > v[2] ? 1 : 2;
 }
-inline int min_axis(vec3 v) {
+template <typename T>
+inline int min_axis(Vector3<T> v) {
   if (v[0] < v[1])
     return v[0] < v[2] ? 0 : 2;
   else
     return v[1] < v[2] ? 1 : 2;
 }
 
-inline int max_value(vec3 v) {
+template <typename T>
+inline T max_value(Vector3<T> v) {
   return psl::max(v[0], v[1], v[2]);
 }
-inline int min_value(vec3 v) {
+template <typename T>
+inline T min_value(Vector3<T> v) {
   return psl::min(v[0], v[1], v[2]);
 }
 

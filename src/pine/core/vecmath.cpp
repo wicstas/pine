@@ -121,8 +121,10 @@ void vecmath_context(Context& ctx) {
   ctx("inverse") = overloaded<const mat2&>(inverse);
   ctx("inverse") = overloaded<const mat3&>(inverse);
   ctx("inverse") = overloaded<const mat4&>(inverse);
-  ctx("max_axis") = overloaded<vec3>(max_axis);
-  ctx("min_axis") = overloaded<vec3>(min_axis);
+  ctx("max_axis") = overloaded<vec3i>(max_axis<int>);
+  ctx("max_axis") = overloaded<vec3>(max_axis<float>);
+  ctx("min_axis") = overloaded<vec3i>(min_axis<int>);
+  ctx("min_axis") = overloaded<vec3>(min_axis<float>);
   ctx("spherical_to_cartesian") = spherical_to_cartesian;
   ctx("unit_square_to_cartesian") = unit_square_to_cartesian;
   ctx("cartesian_to_spherical") = cartesian_to_spherical;

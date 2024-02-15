@@ -231,8 +231,9 @@ struct Sampler : private psl::variant<UniformSampler, StratifiedSampler, HaltonS
   int spp() const {
     return dispatch([&](auto&& x) { return x.spp(); });
   }
-  void start_pixel(vec2i p, int sampleIndex) {
-    return dispatch([&](auto&& x) { return x.start_pixel(p, sampleIndex); });
+  Sampler& start_pixel(vec2i p, int sampleIndex) {
+    dispatch([&](auto&& x) { x.start_pixel(p, sampleIndex); });
+    return *this;
   }
   void start_next_sample() {
     return dispatch([&](auto&& x) { return x.start_next_sample(); });

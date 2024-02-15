@@ -18,8 +18,11 @@ public:
 
   void render(Scene& scene) override;
   vec3 radiance_estimate(Scene& scene, Ray ray, Sampler& sampler, int depth);
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, int depth, float prev_sample_pdf,
-                vec3 prev_n, bool prev_delta, bool mis_env_light);
+
+  struct Vertex {
+    int length = 0;
+  };
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex vertex);
 
 private:
   LightSampler light_sampler;
