@@ -91,7 +91,7 @@ struct RNG {
 
   float uniformf() {
     auto u64 = uniform64u();
-    return psl::min(uint32_t(uint32_t(u64) + uint32_t(u64 >> 32)) * 0x1p-32f, one_minus_epsilon);
+    return psl::min(uint32_t(u64 ^ (u64 >> 32)) * 0x1p-32f, one_minus_epsilon);
   }
   vec2 uniform2f() {
     return {uniformf(), uniformf()};

@@ -17,8 +17,8 @@ struct ThinLenCamera {
     return film_;
   }
 
-  mat4 c2w;
-  mat4 w2c;
+  vec3 position;
+  mat3 c2w;
   Film film_;
   vec2 fov2d;
   float len_radius;

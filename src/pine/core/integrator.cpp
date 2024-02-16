@@ -21,12 +21,6 @@ RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel
     samplers.push_back(sampler);
   samples_per_pixel = sampler.spp();
 }
-bool RTIntegrator::hit(Ray ray) const {
-  return accel.hit(ray);
-}
-bool RTIntegrator::intersect(Ray& ray, Interaction& it) const {
-  return accel.intersect(ray, it);
-}
 
 void RayIntegrator::render(Scene& scene) {
   accel.build(&scene);
@@ -35,6 +29,7 @@ void RayIntegrator::render(Scene& scene) {
   set_progress(0);
 
   auto primary_spp = psl::max(samples_per_pixel / primary_ratio, 1);
+  auto secondary_spp = psl::max(samples_per_pixel / primary_spp, 1);
   Profiler _("Rendering");
   for (int i = 0; i < primary_spp; i++) {
     Atomic<int64_t> max_index = 0;
@@ -45,10 +40,10 @@ void RayIntegrator::render(Scene& scene) {
       auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
       auto it = Interaction();
       auto is_hit = intersect(ray, it);
-      for (int si = 0; si < primary_ratio; si++) {
+      for (int si = 0; si < secondary_spp; si++) {
         auto L = radiance(scene, ray, it, is_hit, sampler);
         scene.camera.film().add_sample(p, L);
-        if (si != primary_spp - 1)
+        if (si != secondary_spp - 1)
           sampler.start_next_sample();
       }
 

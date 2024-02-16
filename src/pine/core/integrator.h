@@ -24,8 +24,15 @@ class RTIntegrator : public Integrator {
 public:
   RTIntegrator(Accel accel, Sampler sampler);
 
-  bool hit(Ray ray) const;
-  bool intersect(Ray& ray, Interaction& it) const;
+  bool hit(Ray ray) const {
+    return accel.hit(ray);
+  }
+  uint8_t hit8(psl::span<const Ray> rays) const {
+    return accel.hit8(rays);
+  }
+  bool intersect(Ray& ray, Interaction& it) const {
+    return accel.intersect(ray, it);
+  }
 
 protected:
   Accel accel;

@@ -15,7 +15,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
   light_sampler.build(&scene);
 
   // scene.geometries.clear();
-  // voxels = psl::move(mipmaps[4]);
+  // voxels = psl::move(mipmaps[0]);
   // auto transform = scale(aabb.diagonal() / voxels.size()) * translate(-0.5f, -0.5f, -0.5f);
   // parallel_for(voxels.size(), [&](vec3i ip) {
   //   auto p = (ip + vec3(0.5f)) / voxels.size();
@@ -173,13 +173,15 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
     };
 
     auto indirect = vec3(0);
-    if (!it.material()->is_delta()) {
+    if (it.material()->is<DiffuseMaterial>()) {
       for (int i = 0; i < cone_sample_count; i++)
         indirect +=
             cone_trace(face_same_hemisphere(cone_sample_directions[i], it.n), cone_aperture);
       indirect = 2.0f * indirect * Pi / cone_sample_count;
     } else {
-      indirect += cone_trace(Reflect(-ray.d, it.n), Pi / 256);
+      indirect += cone_trace(
+          Reflect(-ray.d, it.n),
+          psl::max(psl::sqr(it.material()->roughness_amount({it.p, it.n, it.uv})), Pi / 256));
       indirect = indirect * Pi;
     }
 

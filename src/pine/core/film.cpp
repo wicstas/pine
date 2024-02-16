@@ -33,13 +33,20 @@ void Film::offset(vec3 factor) {
     pixel += vec4{factor, 0.0f};
   }
 }
-void Film::add_sample(vec2i p_film, const vec3& color) {
+void Film::add_sample(vec2i p_film, vec3 color) {
   p_film = clamp(p_film, vec2i{0}, size() - vec2i{1});
   p_film.y = size().y - 1 - p_film.y;
   auto& pixel = pixels[p_film];
   const auto alpha = pixel.w + 1;
+  pixel = vec4((vec3(pixel) * pixel.w + color) / alpha, alpha);
+}
+void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
+  p_film = clamp(p_film, vec2i{0}, size() - vec2i{1});
+  p_film.y = size().y - 1 - p_film.y;
+  auto& pixel = pixels[p_film];
   spin_lock.lock();
-  pixel = vec4{vec3{pixel} * pixel.w / alpha + color / alpha, alpha};
+  const auto alpha = pixel.w + 1;
+  pixel = vec4((vec3(pixel) * pixel.w + color) / alpha, alpha);
   spin_lock.unlock();
 }
 void Film::apply_tone_mapping() {

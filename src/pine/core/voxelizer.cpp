@@ -39,7 +39,7 @@ Voxels voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
           auto ip = vec3i(floor(aabb.relative_position(it.p) * resolution));
           ip = clamp(ip, vec3i(0), vec3i(voxels.size()) - vec3i(1));
           auto L = vec3(0);
-          if (!it.material()->is_delta()) {
+          if (it.material()->is<DiffuseMaterial>()) {
             if (auto ls = lsampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
               if (!accel.hit(it.spawn_ray(ls->wo, ls->distance))) {
                 auto f = it.material()->f({it, it.n, it.n});

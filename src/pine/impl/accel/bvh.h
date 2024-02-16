@@ -4,6 +4,7 @@
 
 #include <psl/memory.h>
 #include <psl/vector.h>
+#include <psl/span.h>
 
 namespace pine {
 
@@ -60,6 +61,13 @@ public:
   BVH() = default;
   void build(const Scene* scene);
   bool hit(Ray ray) const;
+  uint8_t hit8(psl::span<const Ray> rays) const {
+    auto result = uint8_t(0);
+    for (int i = 0; i < 8; i++)
+      if (hit(rays[i]))
+        result |= 1 << i;
+    return result;
+  }
   bool intersect(Ray& ray, Interaction& it) const;
 
 private:

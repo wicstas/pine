@@ -200,6 +200,7 @@ struct Rect {
 
   vec3 position, ex, ey, n;
   float lx, ly;
+  vec3 rx, ry;
 };
 
 struct Triangle {

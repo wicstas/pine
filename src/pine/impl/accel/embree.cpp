@@ -56,6 +56,21 @@ void hit_func(const RTCOccludedFunctionNArguments* args) {
     args->valid[0] = -1;
   }
 }
+void hit8_func(const RTCOccludedFunctionNArguments* args) {
+  const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
+  auto& ray_ = *reinterpret_cast<RTCRay8*>(args->ray);
+
+#pragma unroll
+  for (int i = 0; i < 8; i++) {
+    if (args->valid[i]) {
+      auto ray =
+          Ray(vec3(ray_.org_x[i], ray_.org_y[i], ray_.org_z[i]),
+              vec3(ray_.dir_x[i], ray_.dir_y[i], ray_.dir_z[i]), ray_.tnear[i], ray_.tfar[i]);
+      if (shape.hit(ray))
+        ray_.tfar[i] = -Infinity;
+    }
+  }
+}
 
 void EmbreeAccel::build(const Scene* scene) {
   this->scene = scene;
@@ -111,6 +126,34 @@ bool EmbreeAccel::hit(Ray ray) const {
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcOccluded1((RTCScene)rtc_scene, &ray_, &args);
   return ray_.tfar < 0;
+}
+uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
+  RTCRay8 ray_;
+  for (int i = 0; i < 8; i++) {
+    ray_.org_x[i] = rays[i].o.x;
+    ray_.org_y[i] = rays[i].o.y;
+    ray_.org_z[i] = rays[i].o.z;
+    ray_.dir_x[i] = rays[i].d.x;
+    ray_.dir_y[i] = rays[i].d.y;
+    ray_.dir_z[i] = rays[i].d.z;
+    ray_.tnear[i] = rays[i].tmin;
+    ray_.tfar[i] = rays[i].tmax;
+    ray_.mask[i] = -1;
+  }
+
+  RTCOccludedArguments args;
+  rtcInitOccludedArguments(&args);
+  args.occluded = hit8_func;
+  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE |
+                                      RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
+  int valid[8]{-1, -1, -1, -1, -1, -1, -1, -1};
+  rtcOccluded8(valid, (RTCScene)rtc_scene, &ray_, &args);
+  auto result = uint8_t(0);
+  for (int i = 0; i < 8; i++)
+    if (ray_.tfar[i] < 0)
+      result |= 1 << i;
+
+  return result;
 }
 bool EmbreeAccel::intersect(Ray& ray, Interaction& it) const {
   RTCRayHit rayhit;

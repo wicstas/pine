@@ -38,19 +38,23 @@ inline vec3 cosine_weighted_hemisphere(vec2 u) {
 }
 
 inline vec3 uniform_sphere(vec2 u) {
-  return spherical_to_cartesian(u.x * Pi * 2, psl::acos(1.0f - 2 * u.y));
+  const auto phi = u.x * Pi * 2;
+  const auto cos_theta = 1 - 2 * u.y;
+  const auto sin_theta = psl::sqrt(1.0f - psl::sqr(cos_theta));
+  return vec3(sin_theta * psl::cos(phi), sin_theta * psl::sin(phi), cos_theta);
 }
 inline vec2 inverse_uniform_sphere(vec3 d) {
-  auto [phi, theta] = cartesian_to_spherical(d);
-  return {phi / Pi2, (1.0f - psl::cos(theta)) / 2.0f};
+  return vec2(phi2pi(d.x, d.y) / Pi2, (1 - d.z) / 2);
 }
 
 inline vec3 uniform_hemisphere(vec2 u) {
-  return spherical_to_cartesian(u.x * Pi * 2, psl::acos(u.y));
+  const auto phi = u.x * Pi * 2;
+  const auto cos_theta = u.y;
+  const auto sin_theta = psl::sqrt(1.0f - psl::sqr(cos_theta));
+  return vec3(sin_theta * psl::cos(phi), sin_theta * psl::sin(phi), cos_theta);
 }
 inline vec2 inverse_uniform_hemisphere(vec3 d) {
-  auto [phi, theta] = cartesian_to_spherical(d);
-  return {phi / Pi2, psl::cos(theta)};
+  return vec2(phi2pi(d.x, d.y) / Pi2, psl::acos(d.z));
 }
 
 inline float balance_heuristic(int nF, float pF, int nG, float pG) {

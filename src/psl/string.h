@@ -285,6 +285,16 @@ template <typename T, typename U>
 string to_string(pair<T, U> x) {
   return "{" + to_string_forward(x.first) + ", " + to_string_forward(x.second) + "}";
 }
+template <typename T, size_t N>
+string to_string(T (&range)[N]) {
+  auto r = string{"["};
+  for (auto&& x : range)
+    r += to_string_forward(x) + " ";
+  if (r.back() == ' ')
+    r.pop_back();
+  r.push_back(']');
+  return r;
+}
 template <Range ARange>
 string to_string(ARange&& range) {
   auto r = string{"["};

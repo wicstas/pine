@@ -11,7 +11,8 @@ struct Film {
   Film() = default;
   Film(vec2i size) : pixels(size){};
 
-  void add_sample(vec2i p_film, const vec3& color);
+  void add_sample(vec2i p_film, vec3 color);
+  void add_sample_thread_safe(vec2i p_film, vec3 color);
   float aspect() const {
     return float(size().x) / size().y;
   }

@@ -313,9 +313,11 @@ Rect::Rect(vec3 position, vec3 ex, vec3 ey)
     : position(position),
       ex(normalize(ex)),
       ey(normalize(ey)),
-      n(normalize(cross(ex, ey))),
+      n(normalize(cross(this->ex, this->ey))),
       lx(length(ex)),
-      ly(length(ey)) {
+      ly(length(ey)),
+      rx(this->ex / lx),
+      ry(this->ey / ly) {
   CHECK(lx != 0);
   CHECK(ly != 0);
   CHECK(n != vec3(0.0f));
@@ -335,33 +337,33 @@ Rect& Rect::apply(mat4 m) {
   return *this = from_vertex(v0, v1, v2);
 }
 bool Rect::hit(const Ray& ray) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (t < ray.tmin)
+  float denom = dot(ray.d, n);
+  if (denom == 0.0f)
     return false;
-  if (t >= ray.tmax)
+  float t = (dot(position - ray.o, n)) / denom;
+  if (t <= ray.tmin || t >= ray.tmax)
     return false;
-  vec3 p = ray.o + t * ray.d;
-  float u = dot(p - position, ex) / lx;
+  vec3 p = ray.o + t * ray.d - position;
+  float u = dot(p, rx);
   if (u < -0.5f || u > 0.5f)
     return false;
-  float v = dot(p - position, ey) / ly;
+  float v = dot(p, ry);
   if (v < -0.5f || v > 0.5f)
     return false;
   return true;
 }
 bool Rect::intersect(Ray& ray, Interaction& it) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (psl::isnan(t))
+  float denom = dot(ray.d, n);
+  if (denom == 0.0f)
     return false;
-  if (t < ray.tmin)
+  float t = (dot(position - ray.o, n)) / denom;
+  if (t <= ray.tmin || t >= ray.tmax)
     return false;
-  if (t >= ray.tmax)
-    return false;
-  vec3 p = ray.o + t * ray.d;
-  float u = dot(p - position, ex) / lx;
+  vec3 p = ray.o + t * ray.d - position;
+  float u = dot(p, rx);
   if (u < -0.5f || u > 0.5f)
     return false;
-  float v = dot(p - position, ey) / ly;
+  float v = dot(p, ry);
   if (v < -0.5f || v > 0.5f)
     return false;
   ray.tmax = t;
