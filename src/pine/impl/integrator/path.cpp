@@ -11,7 +11,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
   auto prev_delta = false;
   auto mis_bxdf_pdf = 0.0f;
 
-  for (int depth = 0; depth < max_depth; depth++) {
+  for (int depth = 0; depth < max_path_length; depth++) {
     if (depth != 0)
       is_hit = intersect(ray, it);
     if (!is_hit) {
@@ -42,7 +42,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
       break;
     }
 
-    if (depth + 1 == max_depth)
+    if (depth + 1 == max_path_length)
       break;
 
     if (!it.material()->is_delta())

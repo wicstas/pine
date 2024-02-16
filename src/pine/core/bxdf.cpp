@@ -169,9 +169,9 @@ float DielectricBSDF::roughness_amount(const NodeEvalCtx& nc) const {
 psl::optional<BSDFSample> SpecularReflectionBSDF::sample(vec3 wi, float, vec2,
                                                          const NodeEvalCtx& nc) const {
   auto bs = BSDFSample{};
-  bs.f = albedo(nc);
   bs.wo = Reflect(wi, vec3{0, 0, 1});
-  bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.f = albedo(nc) / psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.pdf = 1.0f;
   return bs;
 }
 vec3 SpecularReflectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {
@@ -194,12 +194,12 @@ psl::optional<BSDFSample> SpecularRefrectionBSDF::sample(vec3 wi, float u1, vec2
   float fr = FrDielectric(AbsCosTheta(wi), etap);
 
   auto bs = BSDFSample{};
-  bs.f = albedo(nc);
   if (u1 < fr)
     bs.wo = Reflect(wi, vec3{0, 0, 1});
   else if (!Refract(wi, vec3{0, 0, 1}, etap, bs.wo))
     return psl::nullopt;
-  bs.pdf = psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.f = albedo(nc) / psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.pdf = 1.0f;
   return bs;
 }
 vec3 SpecularRefrectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {

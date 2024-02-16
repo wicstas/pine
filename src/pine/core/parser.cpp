@@ -10,7 +10,7 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/voxelcone.h>
-#include <pine/impl/integrator/drjit.h>
+// #include <pine/impl/integrator/drjit.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
@@ -69,9 +69,9 @@ Context get_default_context() {
   ctx.type<VoxelConeIntegrator>("VoxelConeIntegrator")
       .ctor<Accel, Sampler, LightSampler>()
       .method("render", &VoxelConeIntegrator::render);
-  ctx.type<DrJitIntegrator>("DrJitIntegrator")
-      .ctor<Accel, Sampler>()
-      .method("render", &DrJitIntegrator::render);
+//   ctx.type<DrJitIntegrator>("DrJitIntegrator")
+//       .ctor<Accel, Sampler>()
+//       .method("render", &DrJitIntegrator::render);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
       .ctor<Accel, Sampler,
             psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>>()

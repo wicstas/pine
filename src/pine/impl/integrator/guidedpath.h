@@ -7,28 +7,43 @@ namespace pine {
 
 class GuidedPathIntegrator : public RTIntegrator {
 public:
-  GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler, int max_depth,
-                       int estimate_samples = 0)
+  GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+                       int max_path_length, int estimate_samples = 0)
       : RTIntegrator{psl::move(accel), psl::move(sampler)},
         light_sampler{psl::move(light_sampler)},
-        max_depth{max_depth},
+        max_path_length{max_path_length},
         estimate_samples{psl::max(estimate_samples, 0)},
         use_estimate{estimate_samples > 0} {
   }
 
   void render(Scene& scene) override;
-  vec3 radiance_estimate(Scene& scene, Ray ray, Sampler& sampler, int depth);
 
   struct Vertex {
-    int length = 0;
+    Vertex(int length, vec3 n, vec3 p, float pdf, bool is_delta = false)
+        : length(length), n(n), p(p), pdf(pdf), is_delta(is_delta) {
+    }
+    static Vertex first_vertex() {
+      return Vertex(0, vec3(0), vec3(0), 0.0f, true);
+    }
+    int length;
+    vec3 n;
+    vec3 p;
+    float pdf;
+    bool is_delta;
   };
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex vertex);
+  struct RadianceResult {
+    vec3 Lo;
+    psl::optional<float> mis_term;
+  };
+  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
 
 private:
   LightSampler light_sampler;
-  int max_depth;
+  int max_path_length;
   int estimate_samples;
   bool use_estimate;
+  bool collect_radiance_sample;
+  float use_learned_ratio;
 };
 
 }  // namespace pine

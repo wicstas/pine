@@ -111,16 +111,15 @@ vec2 project(vec3 v, int axis) {
 }
 
 float Sphere::compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
-  float a = dot(rd, rd);
   float b = 2 * dot(ro - p, rd);
   float c = dot(ro, ro) + dot(p, p) - 2 * dot(ro, p) - r * r;
-  float d = b * b - 4 * a * c;
+  float d = b * b - 4 * c;
   if (d <= 0.0f)
     return -1.0f;
   d = psl::sqrt(d);
-  float t = (-b - d) / (2 * a);
+  float t = (-b - d) / 2;
   if (t < tmin)
-    t = (-b + d) / (2 * a);
+    t = (-b + d) / 2;
   return t;
 }
 bool Sphere::hit(const Ray& ray) const {
@@ -590,32 +589,32 @@ AABB TriangleMesh::get_aabb() const {
 
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;
-  auto p2i = [width](int x, int y) { return y * width + x; };
-  auto vertices = psl::vector<vec3>(width * (height_map.size().y + 1));
-  auto texcoords = psl::vector<vec2>(width * (height_map.size().y + 1));
-  parallel_for(height_map.size(), [&](vec2i p) {
-    auto x = p.x;
-    auto y = p.y;
+  auto height = height_map.size().y + 1;
+  auto p2i = [width](int x, int y) { return x + y * width; };
+  auto vertices = psl::vector<vec3>(width * height);
+  auto texcoords = psl::vector<vec2>(width * height);
+  parallel_for(vec2i(width, height), [&](vec2i p) {
+    auto x = p.x, y = p.y;
     vertices[p2i(x, y)].x = float(x - height_map.size().x / 2) / height_map.size().x;
     vertices[p2i(x, y)].z = float(y - height_map.size().y / 2) / height_map.size().y;
     texcoords[p2i(x, y)] = vec2(x, y) / height_map.size();
     auto n = 0;
     for (int xi = -1; xi <= 1; xi++)
-      for (int yi = -1; yi <= 1; yi++) {
+      for (int yi = -1; yi <= 1; yi++)
         if (inside(vec2i(x + xi, y + yi), vec2i(0, 0), height_map.size())) {
           vertices[p2i(x, y)].y += height_map[vec2i(x + xi, y + yi)];
           n++;
         }
-      }
     vertices[p2i(x, y)].y /= n;
   });
 
-  auto indices = psl::vector<vec3u32>();
-  for (int x = 0; x < height_map.size().x; x++)
-    for (int y = 0; y < height_map.size().y; y++) {
-      indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1)));
-      indices.push_back(vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1)));
-    }
+  auto indices = psl::vector<vec3u32>(area(height_map.size()) * 2);
+  parallel_for(height_map.size(), [&](vec2i p) {
+    auto x = p.x, y = p.y;
+    auto index = (x + y * height_map.size().x) * 2;
+    indices[index] = vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1));
+    indices[index + 1] = vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1));
+  });
   return TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
 }
 

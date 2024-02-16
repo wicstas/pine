@@ -284,6 +284,9 @@ public:
   float pdf(const MaterialEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.pdf(c); });
   }
+  psl::pair<vec3, float> f_pdf(const MaterialEvalCtx& c) const {
+    return {f(c), pdf(c)};
+  }
   vec3 le(const LeEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.le(c); });
   }

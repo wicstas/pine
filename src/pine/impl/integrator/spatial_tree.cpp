@@ -39,13 +39,13 @@ struct QuadNode {
   }
 
   void add_sample(vec2 sc, float footprint, float total_area, float flux, vec3 flux_color) {
-    lock.lock();
-    this->flux += flux;
-    this->flux_color += flux_color;
-    lock.unlock();
-    if (!is_leaf())
-      child(sc).add_sample(sc, footprint, total_area, flux, flux_color);
-    return;
+    // lock.lock();
+    // this->flux += flux;
+    // this->flux_color += flux_color;
+    // lock.unlock();
+    // if (!is_leaf())
+    //   child(sc).add_sample(sc, footprint, total_area, flux, flux_color);
+    // return;
 
     auto x0 = psl::max(lower[0], sc[0] - footprint);
     auto x1 = psl::min(upper[0], sc[0] + footprint);
@@ -214,7 +214,7 @@ struct QuadTree {
   vec3 flux_estimate() const {
     if (n_samples == 0)
       return vec3(0.0f);
-    return root.flux_color / (Pi * 4) / int64_t(n_samples);
+    return root.flux_color / int64_t(n_samples);
   }
   void clear() {
     root.clear();
@@ -300,12 +300,6 @@ struct SpatialNode {
   }
   vec3 flux_estimate(vec3 p, vec3 w) const {
     return traverse(p).guide->flux_estimate(w);
-  }
-  int max_tree_depth() const {
-    if (is_leaf())
-      return 0;
-    else
-      return 1 + psl::max(child(0).max_tree_depth(), child(1).max_tree_depth());
   }
 
 private:
@@ -414,7 +408,5 @@ private:
   AABB aabb;
   Array3d<Unit> grid;
 };
-
-using SpatialTree = SpatialNode;
 
 }  // namespace pine

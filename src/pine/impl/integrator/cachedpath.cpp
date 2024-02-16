@@ -214,7 +214,7 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
     return le * mis_term;
   }
 
-  if (depth + 1 == max_depth)
+  if (depth + 1 == max_path_length)
     return vec3(0.0f);
 
   if (v.non_delta_path_length >= starting_depth && use_estimate) {

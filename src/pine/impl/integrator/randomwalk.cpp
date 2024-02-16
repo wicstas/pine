@@ -8,7 +8,7 @@ vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool 
   auto L = vec3{0.0f};
   auto beta = vec3{1.0f};
 
-  for (int depth = 0; depth < max_depth; depth++) {
+  for (int depth = 0; depth < max_path_length; depth++) {
     if (depth != 0)
       is_hit = intersect(ray, it);
     if (!is_hit) {
@@ -22,7 +22,7 @@ vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool 
       break;
     }
 
-    if (depth + 1 == max_depth)
+    if (depth + 1 == max_path_length)
       break;
 
     if (auto bs = it.material()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {

@@ -55,12 +55,13 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
+#src/pine/impl/integrator/spatial_tree.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/voxelcone.cpp
-src/pine/impl/integrator/drjit.cpp
+#src/pine/impl/integrator/drjit.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
@@ -80,9 +81,9 @@ set(ASSIMP_INSTALL_PDB OFF)
 add_subdirectory(src/contrib/assimp)
 
 FIND_PACKAGE(embree 4 REQUIRED)
-add_subdirectory(src/contrib/drjit)
+# add_subdirectory(src/contrib/drjit)
 
-target_link_libraries(pinelib psl Threads::Threads assimp embree drjit drjit-core)
+target_link_libraries(pinelib psl Threads::Threads assimp embree)
 
 #Pine CommandLine
 add_executable(pine src/cli/main.cpp)
