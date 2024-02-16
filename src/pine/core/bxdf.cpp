@@ -62,7 +62,6 @@ vec3 ConductorBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   vec3 wh = normalize(wi + wo);
 
   vec3 fr = FrSchlick(albedo(nc), AbsCosTheta(wh));
-
   return fr * distrib.D(wh) * distrib.G(wo, wi) / (4 * AbsCosTheta(wo) * AbsCosTheta(wi));
 }
 float ConductorBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
@@ -119,6 +118,7 @@ vec3 DielectricBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
+  Logs(cosThetaI, cosThetaO);
   bool reflect = cosThetaI * cosThetaO > 0;
   float etap = eta(nc);
   if (!reflect)

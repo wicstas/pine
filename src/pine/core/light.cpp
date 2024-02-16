@@ -8,7 +8,7 @@
 
 namespace pine {
 
-LightSample PointLight::sample(vec3 p, vec2) const {
+LightSample PointLight::sample(vec3 p, vec3, vec2) const {
   LightSample ls;
   ls.distance = distance(position, p);
   ls.wo = normalize(position - p, ls.distance);
@@ -16,7 +16,7 @@ LightSample PointLight::sample(vec3 p, vec2) const {
   ls.le = color;
   return ls;
 }
-LightSample DirectionalLight::sample(vec3, vec2) const {
+LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
   LightSample ls;
   ls.distance = 1e+10f;
   ls.wo = direction;
@@ -24,7 +24,7 @@ LightSample DirectionalLight::sample(vec3, vec2) const {
   ls.le = color;
   return ls;
 }
-LightSample AreaLight::sample(vec3 p, vec2 u) const {
+LightSample AreaLight::sample(vec3 p, vec3, vec2 u) const {
   CHECK(geometry);
   LightSample ls;
   auto gs = geometry->sample(p, u);
@@ -38,7 +38,7 @@ LightSample AreaLight::sample(vec3 p, vec2 u) const {
 vec3 Sky::color(vec3 wo) const {
   return sun_color * sky_color(wo);
 }
-LightSample Sky::sample(vec3 n, vec2 u2) const {
+LightSample Sky::sample(vec3, vec3 n, vec2 u2) const {
   auto ls = LightSample{};
   ls.wo = coordinate_system(n) * uniform_hemisphere(u2);
   ls.distance = float_max;
@@ -57,7 +57,6 @@ static vec2i sc2ic(vec2 sc, vec2i image_size) {
   auto ic = vec2i{sc * image_size};
   return clamp(ic, vec2i{0}, image_size - vec2i{1});
 }
-
 static vec2 ic2sc(vec2 ic, vec2i image_size) {
   return ic / image_size;
 }
@@ -77,7 +76,7 @@ Atmosphere::Atmosphere(vec3 sun_direction_, vec3 sun_color, vec2i image_size)
 vec3 Atmosphere::color(vec3 wo) const {
   return sun_color * atmosphere_color(wo, sun_direction, 8);
 }
-LightSample Atmosphere::sample(vec3, vec2 u2) const {
+LightSample Atmosphere::sample(vec3, vec3, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
   auto sc = ic2sc(ds.p, image_size);
@@ -102,14 +101,13 @@ ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint)
   for_2d(image->size(), [&](auto p) { density[p] = length((*image)[p]); });
   distr = Distribution2D(density, 20);
 }
-
 vec3 ImageSky::color(vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
   return tint * (*image)[ic];
 }
-LightSample ImageSky::sample(vec3, vec2 u2) const {
+LightSample ImageSky::sample(vec3, vec3, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
   auto sc = ic2sc(ds.p, image->size());

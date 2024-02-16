@@ -7,7 +7,7 @@ namespace pine {
 
 void VoxelConeIntegrator::render(Scene& scene) {
   aabb = scene.get_aabb().extend_to_max_axis();
-  resolution = vec3i(256);
+  resolution = vec3i(128);
 
   auto voxels = voxelize(scene, aabb, resolution);
   footprint = aabb.diagonal()[0] / resolution[0];
@@ -47,7 +47,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
     auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
     auto it = Interaction();
     auto is_hit = intersect(ray, it);
-    auto L = radiance(scene, ray, it, is_hit, sampler);
+    auto L = radiance(ray, it, is_hit, sampler);
     scene.camera.film().add_sample(p, L);
 
     if (p.x == 0) {
@@ -117,8 +117,7 @@ auto smooth_step(float step, auto v0, auto v1) {
   return lerp(3 * step * step - 2 * step * step * step, v0, v1);
 }
 
-vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
-                                   Sampler& sampler) {
+vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler& sampler) {
   if (is_hit) {
     it.n = face_same_hemisphere(it.n, -ray.d);
 
@@ -196,22 +195,12 @@ vec3 VoxelConeIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool i
             direct += cosine * ls->le / ls->pdf * f;
           }
         }
-        if (scene.env_light)
-          if (auto ls = scene.env_light->sample(it.n, sampler.get2d())) {
-            if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
-              auto cosine = absdot(ls->wo, it.n);
-              auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-              auto f = it.material()->f(mec);
-              auto bsdf_pdf = it.material()->pdf(mec);
-              direct += cosine * ls->le / ls->pdf * f * power_heuristic(ls->pdf, bsdf_pdf);
-            }
-          }
       }
       sampler.start_next_sample();
     }
     direct /= samples_per_pixel;
 
-    return direct + indirect;
+    return indirect;
   } else {
     return vec3(0);
   }

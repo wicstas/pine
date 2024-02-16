@@ -5,14 +5,16 @@ namespace pine {
 
 void UniformLightSampler::build(const Scene* scene) {
   lights = scene->lights;
+  if (scene->env_light)
+    scene->env_light->dispatch([&](auto&& x) { lights.push_back(x); });
 }
 
-psl::optional<LightSample> UniformLightSampler::sample(vec3 p, vec3, float u1, vec2 u2) const {
+psl::optional<LightSample> UniformLightSampler::sample(vec3 p, vec3 n, float u1, vec2 u2) const {
   auto N = lights.size();
   if (N == 0)
     return psl::nullopt;
   auto index = psl::min(static_cast<size_t>(u1 * N), N - 1);
-  auto s = lights[index].sample(p, u2);
+  auto s = lights[index].sample(p, n, u2);
   if (s.pdf == 0.0f)
     return psl::nullopt;
   s.light = &lights[index];

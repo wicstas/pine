@@ -81,7 +81,6 @@ set(ASSIMP_INSTALL_PDB OFF)
 add_subdirectory(src/contrib/assimp)
 
 FIND_PACKAGE(embree 4 REQUIRED)
-# add_subdirectory(src/contrib/drjit)
 
 target_link_libraries(pinelib psl Threads::Threads assimp embree)
 

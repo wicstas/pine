@@ -18,7 +18,6 @@ Voxels voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
 
   auto voxels = Voxels(resolution);
   auto epsilon = max_value(aabb.diagonal()) * 1e-5f;
-  auto lock = SpinLock();
 
   for (int axis = 0; axis < 3; axis++) {
     auto i0 = axis, i1 = (axis + 1) % 3, i2 = (axis + 2) % 3;
@@ -47,24 +46,12 @@ Voxels voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
                 L += ls->le * cosine * f / ls->pdf;
               }
             }
-            if (scene.env_light)
-              if (auto ls = scene.env_light->sample(it.n, sampler.get2d())) {
-                if (!accel.hit(it.spawn_ray(ls->wo, ls->distance))) {
-                  auto mec = MaterialEvalCtx(it, it.n, it.n);
-                  auto f = it.material()->f(mec);
-                  auto bsdf_pdf = it.material()->pdf(mec);
-                  auto cosine = absdot(ls->wo, it.n);
-                  L += ls->le * cosine * f / ls->pdf * power_heuristic(ls->pdf, bsdf_pdf);
-                }
-              }
           }
-          lock.lock();
           auto& voxel = voxels[ip];
           auto alpha = voxel.nsamples + 1.0f;
           voxel.color = lerp(1 / alpha, voxel.color, L);
           voxel.opacity = vec3(1, 1, 1);
           voxel.nsamples++;
-          lock.unlock();
           ray.tmin = ray.tmax + epsilon;
           ray.tmax = float_max;
         }

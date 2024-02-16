@@ -6,10 +6,10 @@
 
 namespace pine {
 
-static const vec3 directions[8]{uniform_sphere({0.03f, 0.257f}), uniform_sphere({0.257f, 0.257f}),
-                                uniform_sphere({0.52f, 0.254f}), uniform_sphere({0.752f, 0.252f}),
-                                uniform_sphere({0.09f, 0.759f}), uniform_sphere({0.256f, 0.755f}),
-                                uniform_sphere({0.52f, 0.754f}), uniform_sphere({0.753f, 0.759f})};
+static const vec3 directions[8]{uniform_sphere({0.0f, 0.25f}), uniform_sphere({0.25f, 0.25f}),
+                                uniform_sphere({0.5f, 0.25f}), uniform_sphere({0.75f, 0.25f}),
+                                uniform_sphere({0.0f, 0.75f}), uniform_sphere({0.25f, 0.75f}),
+                                uniform_sphere({0.5f, 0.75f}), uniform_sphere({0.75f, 0.75f})};
 
 AOIntegrator::AOIntegrator(Accel accel, Sampler sampler)
     : RayIntegrator(psl::move(accel), psl::move(sampler)) {

@@ -266,14 +266,7 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
         if (!use_estimate)
           sd_tree.add_sample(RadianceSample(it.p, ls->wo, sl * 2));
       }
-
-    if (!it.material()->is_delta() && scene.env_light)
-      if (auto ls = scene.env_light->sample(it.n, sampler.get2d())) {
-        auto sl = direct_light(*ls, it.material()->pdf({it, wi, ls->wo}));
-        lo += sl;
-        if (!use_estimate)
-          sd_tree.add_sample(RadianceSample(it.p, ls->wo, sl * 2));
-      }
+      
     if (depth == 0)
       sampler.start_next_sample();
   }

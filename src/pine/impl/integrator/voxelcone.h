@@ -4,14 +4,14 @@
 
 namespace pine {
 
-class VoxelConeIntegrator : public RayIntegrator {
+class VoxelConeIntegrator : public RTIntegrator {
 public:
   VoxelConeIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler)
-      : RayIntegrator{psl::move(accel), psl::move(sampler)},
+      : RTIntegrator{psl::move(accel), psl::move(sampler)},
         light_sampler{psl::move(light_sampler)} {
   }
-  void render(Scene& scene) override;
-  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override;
+  void render(Scene& scene);
+  vec3 radiance(Ray ray, Interaction it, bool is_hit, Sampler& sampler);
 
 private:
   AABB aabb;
