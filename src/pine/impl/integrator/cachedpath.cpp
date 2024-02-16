@@ -50,7 +50,7 @@ struct SpatialNode {
 
 struct SpatialTree {
   SpatialTree() = default;
-  SpatialTree(AABB aabb, vec3i resolution) : aabb(aabb), resolution(resolution) {
+  SpatialTree(AABB aabb, vec3i64 resolution) : aabb(aabb), resolution(resolution) {
     nodes.resize(volume(resolution));
   }
   void add_sample(RadianceSample s) {
@@ -82,8 +82,8 @@ private:
 
 struct SpatialTreeHash {
   SpatialTreeHash() = default;
-  SpatialTreeHash(AABB aabb, vec3i resolution) : aabb(aabb), resolution(resolution) {
-    nodes.reserve(resolution[max_axis(resolution)]);
+  SpatialTreeHash(AABB aabb, vec3i64 resolution) : aabb(aabb), resolution(resolution) {
+    nodes.reserve(volume(resolution) / min_value(resolution));
   }
   void add_sample(RadianceSample s) {
     node_at(s.p).add_flux(s.flux);
@@ -98,8 +98,8 @@ struct SpatialTreeHash {
 
   SpatialNode& node_at(vec3 p) {
     auto rp = aabb.relative_position(p);
-    auto ip = Vector3<int64_t>(rp * resolution);
-    ip = clamp(ip, Vector3<int64_t>(0), resolution - Vector3<int64_t>(1));
+    auto ip = vec3i64(rp * resolution);
+    ip = clamp(ip, vec3i64(0), resolution - vec3i64(1));
     auto index = ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y;
     if (auto it = nodes.find(index); it != nodes.end())
       return it->second;
@@ -112,7 +112,7 @@ struct SpatialTreeHash {
   }
   const SpatialNode* find_node(vec3 p) const {
     auto rp = aabb.relative_position(p);
-    auto ip = Vector3<int64_t>(rp * resolution);
+    auto ip = vec3i64(rp * resolution);
     DCHECK_RANGE(ip[0], 0, resolution[0] - 1);
     DCHECK_RANGE(ip[1], 0, resolution[1] - 1);
     DCHECK_RANGE(ip[2], 0, resolution[2] - 1);
@@ -125,14 +125,14 @@ struct SpatialTreeHash {
 
 private:
   AABB aabb;
-  vec3i resolution;
+  vec3i64 resolution;
   psl::unordered_map<size_t, SpatialNode> nodes;
   SpinLock lock;
 };
 
 }  // namespace
 
-static SpatialTree sd_tree;
+static SpatialTreeHash sd_tree;
 
 static bool use_estimate = false;
 
@@ -144,7 +144,7 @@ void CachedPathIntegrator::render(Scene& scene) {
   auto aabb = scene.get_aabb();
   auto resolution = vec3i(max_axis_resolution * aabb.diagonal() / max_value(aabb.diagonal()));
   footprint = max_value(aabb.diagonal()) / max_axis_resolution;
-  sd_tree = SpatialTree(aabb, resolution);
+  sd_tree = SpatialTreeHash(aabb, resolution);
   accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
@@ -266,7 +266,7 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
         if (!use_estimate)
           sd_tree.add_sample(RadianceSample(it.p, ls->wo, sl * 2));
       }
-      
+
     if (depth == 0)
       sampler.start_next_sample();
   }

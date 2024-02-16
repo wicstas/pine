@@ -48,33 +48,64 @@ Context get_default_context() {
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
+      .ctor(+[](int spp) { return AOIntegrator(EmbreeAccel(), HaltonSampler(spp)); })
       .method("render", &AOIntegrator::render);
   ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
       .ctor<Accel, Sampler, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return RandomWalkIntegrator(EmbreeAccel(), HaltonSampler(spp), max_path_length);
+      })
       .method("render", &RandomWalkIntegrator::render);
   ctx.type<PathIntegrator>("PathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return PathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                              max_path_length);
+      })
       .method("render", &PathIntegrator::render);
   ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor<Accel, Sampler, LightSampler, int, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length);
+      })
+      .ctor(+[](int spp, int max_path_length, int estimate_spp) {
+        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length, estimate_spp);
+      })
       .method("render", &GuidedPathIntegrator::render);
   ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int, int>()
       .ctor<Accel, Sampler, LightSampler, int, int, int, bool>()
+      .ctor(+[](int spp, int max_path_length, int resolution) {
+        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length, resolution);
+      })
+      .ctor(+[](int spp, int max_path_length, int resolution, int starting_depth, bool use_filter) {
+        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length, resolution, starting_depth, use_filter);
+      })
       .method("render", &CachedPathIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
-      .ctor<Accel, Sampler, psl::string>()
+      .ctor(+[](psl::string type) {
+        return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);
+      })
       .method("render", &VisualizerIntegrator::render);
   ctx.type<VoxelConeIntegrator>("VoxelConeIntegrator")
       .ctor<Accel, Sampler, LightSampler>()
+      .ctor(+[](int spp) {
+        return VoxelConeIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler());
+      })
       .method("render", &VoxelConeIntegrator::render);
-//   ctx.type<DrJitIntegrator>("DrJitIntegrator")
-//       .ctor<Accel, Sampler>()
-//       .method("render", &DrJitIntegrator::render);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
       .ctor<Accel, Sampler,
             psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>>()
+      .ctor(+[](int spp,
+                psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>
+                    f) {
+        return CustomRayIntegrator(EmbreeAccel(), HaltonSampler(spp), psl::move(f));
+      })
       .method("render", &CustomRayIntegrator::render);
   ctx.type<psl::string>()
       .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,

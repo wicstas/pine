@@ -37,7 +37,6 @@ void VoxelConeIntegrator::render(Scene& scene) {
   auto& film = scene.camera.film();
   film.clear();
   set_progress(0);
-
   Profiler _("Rendering");
   Atomic<int64_t> max_index = 0;
   parallel_for(film.size(), [&](vec2i p) {
@@ -60,11 +59,6 @@ void VoxelConeIntegrator::render(Scene& scene) {
 }
 
 static vec4 interpolate(const Voxels& voxels, vec3i p, vec3 fr, vec3 d) {
-  // if (auto v = voxels.find(clamp(p, vec3i(0), vec3i(voxels.size() - vec3i(1))))) {
-  //   return {v->color, dot(v->opacity, d * d)};
-  // } else {
-  //   return vec4(0.0f);
-  // }
   const auto half = 0.25f;
   const auto total_volume = psl::powi(half * 2, 3);
   const auto max_n = 8;
@@ -112,10 +106,6 @@ static const vec3 cone_sample_directions[cone_sample_count]{
     vec3(0.388844, 0.903007, -0.182696),   vec3(-0.388844, 0.903007, 0.182696),
     vec3(-0.182696, -0.388844, -0.903007), vec3(0.182696, 0.388844, -0.903007),
     vec3(-0.182696, 0.388844, 0.903007),   vec3(0.182696, -0.388844, 0.903007)};
-
-auto smooth_step(float step, auto v0, auto v1) {
-  return lerp(3 * step * step - 2 * step * step * step, v0, v1);
-}
 
 vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler& sampler) {
   if (is_hit) {
@@ -200,7 +190,7 @@ vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler
     }
     direct /= samples_per_pixel;
 
-    return indirect;
+    return direct + indirect;
   } else {
     return vec3(0);
   }

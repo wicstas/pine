@@ -118,7 +118,6 @@ vec3 DielectricBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
-  Logs(cosThetaI, cosThetaO);
   bool reflect = cosThetaI * cosThetaO > 0;
   float etap = eta(nc);
   if (!reflect)

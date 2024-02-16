@@ -29,6 +29,11 @@ struct FatalException {};
 [[noreturn]] void stop_program();
 
 template <typename... Args>
+void Debugr(const Args&... args) {
+  using psl::to_string;
+  debug_stream(to_string(args...));
+}
+template <typename... Args>
 void Debug(const Args&... args) {
   using psl::to_string;
   debug_stream(to_string(args...) + "\n");
