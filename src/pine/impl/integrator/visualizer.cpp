@@ -17,7 +17,7 @@ VisualizerIntegrator::VisualizerIntegrator(Accel accel, Sampler sampler, psl::st
   else if (type == "bvh")
     viz_type = BVH;
   else
-    exception("VisualizerIntegrator doesn't recognize the enum `", type, '`');
+    Fatal("VisualizerIntegrator doesn't recognize the enum `", type, '`');
 }
 
 vec3 VisualizerIntegrator::radiance(Scene&, Ray, Interaction it, bool is_hit, Sampler&) {

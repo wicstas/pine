@@ -32,7 +32,6 @@ private:
   T base;
 };
 
-// TODO use this directly instead of Atomic ...[3]
 struct SpinLock {
   void lock() {
     while (flag->test_and_set(std::memory_order_acquire))

@@ -1157,58 +1157,9 @@ inline mat2 inverse(const mat2 &m) {
   // clang-format on
 }
 
-inline mat3 inverse(const mat3 &m) {
-  mat3 r;
-
-  float determinant = m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) +
-                      m[1][0] * (m[2][1] * m[0][2] - m[0][1] * m[2][2]) +
-                      m[2][0] * (m[0][1] * m[1][2] - m[1][1] * m[0][2]);
-  if (determinant == 0)
-    return r;
-
-  r[0][0] = m[1][1] * m[2][2] - m[2][1] * m[1][2];
-  r[0][1] = m[2][1] * m[0][2] - m[0][1] * m[2][2];
-  r[0][2] = m[0][1] * m[1][2] - m[1][1] * m[0][2];
-
-  r[1][0] = m[1][2] * m[2][0] - m[2][2] * m[1][0];
-  r[1][1] = m[2][2] * m[0][0] - m[0][2] * m[2][0];
-  r[1][2] = m[0][2] * m[1][0] - m[1][2] * m[0][0];
-
-  r[2][0] = m[1][0] * m[2][1] - m[2][0] * m[1][1];
-  r[2][1] = m[2][0] * m[0][1] - m[0][0] * m[2][1];
-  r[2][2] = m[0][0] * m[1][1] - m[1][0] * m[0][1];
-
-  return r / determinant;
-}
-
-inline mat4 inverse(const mat4 &m) {
-  mat4 r;
-  float determinant = 0;
-  // clang-format off
-    for (int i = 0; i < 4; i++)
-        determinant += (m[(1 + i) % 4][0] * (m[(2 + i) % 4][1] *  m[(3 + i) % 4][2] - 
-                                             m[(3 + i) % 4][1] *  m[(2 + i) % 4][2]) +
-                        m[(2 + i) % 4][0] * (m[(3 + i) % 4][1] *  m[(1 + i) % 4][2] -  
-                                             m[(1 + i) % 4][1] *  m[(3 + i) % 4][2]) +
-                        m[(3 + i) % 4][0] * (m[(1 + i) % 4][1] *  m[(2 + i) % 4][2] -  
-                                             m[(2 + i) % 4][1] *  m[(1 + i) % 4][2])) * 
-                        m[i % 4][3] * (i % 2 ? -1 : 1);
-    if (determinant == 0)
-        return r;
-
-    for (int v = 0; v < 4; v++)
-        for (int i = 0; i < 4; i++)
-            r[v][i] = (m[(1 + i) % 4][(1 + v) % 4] * (m[(2 + i) % 4][(2 + v) % 4] *  m[(3 + i) % 4][(3 + v) % 4] -  
-                                                      m[(3 + i) % 4][(2 + v) % 4] *  m[(2 + i) % 4][(3 + v) % 4]) +
-                       m[(2 + i) % 4][(1 + v) % 4] * (m[(3 + i) % 4][(2 + v) % 4] *  m[(1 + i) % 4][(3 + v) % 4] -  
-                                                      m[(1 + i) % 4][(2 + v) % 4] *  m[(3 + i) % 4][(3 + v) % 4]) +
-                       m[(3 + i) % 4][(1 + v) % 4] * (m[(1 + i) % 4][(2 + v) % 4] *  m[(2 + i) % 4][(3 + v) % 4] -  
-                                                      m[(2 + i) % 4][(2 + v) % 4] *  m[(1 + i) % 4][(3 + v) % 4]))
-                        * ((v + i) % 2 ? 1 : -1);
-
-  // clang-format on
-  return r / determinant;
-}
+vec3 solve(mat3 m, vec3 b);
+mat3 inverse(const mat3 &m);
+mat4 inverse(const mat4 &m);
 
 inline mat4 translate(float x, float y, float z) {
   // clang-format off
@@ -1311,8 +1262,13 @@ inline vec3 unit_square_to_cartesian(vec2 sc) {
   return spherical_to_cartesian(sc[0] * Pi * 2, sc[1] * Pi);
 }
 
+
+// The following function is by Francesco Mazzoli
+// detailed in article "Speeding up atan2f by 50x": https://mazzo.li/posts/vectorized-atan2.html
+float atan2_approx(float y, float x);
 inline float phi2pi(float x, float y) {
-  float phi = psl::atan2(y, x);
+  // float phi = psl::atan2(y, x);
+  float phi = atan2_approx(y, x);
   return phi < 0.0f ? Pi * 2 + phi : phi;
 }
 
@@ -1357,11 +1313,12 @@ inline uint64_t encode_morton_64x3(vec3 v) {
 }
 
 template <typename T>
-inline int max_axis(Vector3<T> v) {
-  if (v[0] > v[1])
-    return v[0] > v[2] ? 0 : 2;
-  else
-    return v[1] > v[2] ? 1 : 2;
+inline int min_axis(Vector2<T> v) {
+  return v[0] < v[1] ? 0 : 1;
+}
+template <typename T>
+inline int max_axis(Vector2<T> v) {
+  return v[0] > v[1] ? 0 : 1;
 }
 template <typename T>
 inline int min_axis(Vector3<T> v) {
@@ -1370,7 +1327,21 @@ inline int min_axis(Vector3<T> v) {
   else
     return v[1] < v[2] ? 1 : 2;
 }
-
+template <typename T>
+inline int max_axis(Vector3<T> v) {
+  if (v[0] > v[1])
+    return v[0] > v[2] ? 0 : 2;
+  else
+    return v[1] > v[2] ? 1 : 2;
+}
+template <typename T>
+inline T max_value(Vector2<T> v) {
+  return psl::max(v[0], v[1]);
+}
+template <typename T>
+inline T min_value(Vector2<T> v) {
+  return psl::min(v[0], v[1]);
+}
 template <typename T>
 inline T max_value(Vector3<T> v) {
   return psl::max(v[0], v[1], v[2]);

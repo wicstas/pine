@@ -5,24 +5,20 @@
 
 #include <psl/optional.h>
 #include <psl/vector.h>
+#include <psl/array.h>
 
 namespace pine {
 
 struct RadianceSample {
   RadianceSample() = default;
-  RadianceSample(vec3 p, vec3 w, vec3 flux_color) : p{p}, w{w}, flux_color{flux_color} {
+  RadianceSample(vec3 w, vec3 flux) : w{w}, flux{flux} {
   }
-  vec3 p;
   vec3 w;
-  vec3 flux_color;
+  vec3 flux;
 };
 
 struct PgSample {
   vec3 wo;
-  float pdf = 0;
-};
-struct QuadTreeSample {
-  vec3 w;
   float pdf = 0;
 };
 
@@ -38,79 +34,59 @@ struct QuadNode {
       return child(sc).footprint(sc);
   }
 
-  void add_sample(vec2 sc, float footprint, float total_area, float flux, vec3 flux_color) {
+  void add_sample(vec2 sc, float flux, vec3 flux_color) {
     lock.lock();
     this->flux += flux;
     this->flux_color += flux_color;
     lock.unlock();
-    if (!is_leaf())
-      child(sc).add_sample(sc, footprint, total_area, flux, flux_color);
+    if (PINE_LIKELY(!is_leaf()))
+      child(sc).add_sample(sc, flux, flux_color);
     return;
 
-    auto x0 = psl::max(lower[0], sc[0] - footprint);
-    auto x1 = psl::min(upper[0], sc[0] + footprint);
-    auto y0 = psl::max(lower[1], sc[1] - footprint);
-    auto y1 = psl::min(upper[1], sc[1] + footprint);
-    auto weight = psl::max(x1 - x0, 0.0f) * psl::max(y1 - y0, 0.0f) * total_area;
-    lock.lock();
-    this->flux += weight * flux;
-    this->flux_color += weight * flux_color;
-    lock.unlock();
-    if (psl::abs(weight) > 0.01f && !is_leaf())
-      for (int i = 0; i < 4; i++)
-        child(i).add_sample(sc, footprint, total_area, flux, flux_color);
+    // auto x0 = psl::max(lower[0], sc[0] - footprint);
+    // auto x1 = psl::min(upper[0], sc[0] + footprint);
+    // auto y0 = psl::max(lower[1], sc[1] - footprint);
+    // auto y1 = psl::min(upper[1], sc[1] + footprint);
+    // auto weight = psl::max(x1 - x0, 0.0f) * psl::max(y1 - y0, 0.0f) * total_area;
+    // lock.lock();
+    // this->flux += weight * flux;
+    // this->flux_color += weight * flux_color;
+    // lock.unlock();
+    // if (psl::abs(weight) > 0.01f && !is_leaf())
+    //   for (int i = 0; i < 4; i++)
+    //     child(i).add_sample(sc, footprint, total_area, flux, flux_color);
   }
-
-  void refine(float total_flux) {
-    if (flux > total_flux * 0.01f && depth() < 15) {
-      if (is_leaf()) {
-        auto mid = (lower + upper) / 2;
-        children[0] = QuadNode(vec2(lower[0], lower[1]), vec2(mid[0], mid[1]));
-        children[1] = QuadNode(vec2(mid[0], lower[1]), vec2(upper[0], mid[1]));
-        children[2] = QuadNode(vec2(lower[0], mid[1]), vec2(mid[0], upper[1]));
-        children[3] = QuadNode(vec2(mid[0], mid[1]), vec2(upper[0], upper[1]));
-        for (int i = 0; i < 4; i++) {
-          child(i).flux = flux / 4;
-          child(i).flux_color = flux_color / 4;
-          child(i).refine(total_flux);
-        }
-      } else {
-        for (int i = 0; i < 4; i++)
-          child(i).refine(total_flux);
-      }
-    } else {
-      if (!is_leaf())
-        for (int i = 0; i < 4; i++)
-          children[i].reset();
-    }
-  }
-
-  psl::optional<QuadTreeSample> sample(vec2d u, float pdf = 1) const {
+  psl::optional<PgSample> sample(vec2d u, float pdf = 1) const {
     if (flux == 0.0f)
       return psl::nullopt;
-    if (is_leaf()) {
-      return QuadTreeSample(uniform_sphere(lerp(vec2(u), lower, upper)), pdf / (4 * Pi));
+    if (PINE_UNLIKELY(is_leaf())) {
+      return PgSample(uniform_sphere(lerp(vec2(u), lower, upper)), pdf / (4 * Pi));
     } else {
-      auto rx = (child(0).flux + child(2).flux) / flux;
+      auto& c0 = child(0);
+      auto& c2 = child(2);
+      auto flux_left = c0.flux + c2.flux;
+      auto rx = flux_left / flux;
       if (u[0] < rx) {
         u[0] = u[0] / rx;
-        auto ry = child(0).flux / (child(0).flux + child(2).flux);
+        auto ry = c0.flux / flux_left;
         if (u[1] < ry) {
           u[1] = u[1] / ry;
-          return child(0).sample(u, pdf * 4 * rx * ry);
+          return c0.sample(u, pdf * 4 * rx * ry);
         } else {
-          u[1] = (u[1] - ry) / psl::max(1 - ry, epsilon);
-          return child(2).sample(u, pdf * 4 * rx * (1 - ry));
+          u[1] = (u[1] - ry) / (1 - ry);
+          return c2.sample(u, pdf * 4 * rx * (1 - ry));
         }
       } else {
-        u[0] = (u[0] - rx) / psl::max(1 - rx, epsilon);
-        auto ry = child(1).flux / (child(1).flux + child(3).flux);
+        auto& c1 = child(1);
+        auto& c3 = child(3);
+        u[0] = (u[0] - rx) / (1 - rx);
+        auto ry = c1.flux / (c1.flux + c3.flux);
         if (u[1] < ry) {
           u[1] = u[1] / ry;
-          return child(1).sample(u, pdf * 4 * (1 - rx) * ry);
+          return c1.sample(u, pdf * 4 * (1 - rx) * ry);
         } else {
-          u[1] = (u[1] - ry) / psl::max(1 - ry, epsilon);
-          return child(3).sample(u, pdf * 4 * (1 - rx) * (1 - ry));
+          u[1] = (u[1] - ry) / (1 - ry);
+          return c3.sample(u, pdf * 4 * (1 - rx) * (1 - ry));
         }
       }
     }
@@ -148,27 +124,50 @@ struct QuadNode {
       return 1 + child(sc).tree_depth(sc);
   }
 
+  void refine(float total_flux) {
+    if (flux > total_flux * 0.01f && depth() < 15) {
+      if (is_leaf()) {
+        auto mid = (lower + upper) / 2;
+        children = psl::array_of(QuadNode(vec2(lower[0], lower[1]), vec2(mid[0], mid[1])),
+                                 QuadNode(vec2(mid[0], lower[1]), vec2(upper[0], mid[1])),
+                                 QuadNode(vec2(lower[0], mid[1]), vec2(mid[0], upper[1])),
+                                 QuadNode(vec2(mid[0], mid[1]), vec2(upper[0], upper[1])));
+        for (int i = 0; i < 4; i++) {
+          child(i).flux = flux / 4;
+          child(i).flux_color = flux_color / 4;
+          child(i).refine(total_flux);
+        }
+      } else {
+        for (int i = 0; i < 4; i++)
+          child(i).refine(total_flux);
+      }
+    } else {
+      if (!is_leaf())
+        children.reset();
+    }
+  }
+
 private:
   bool is_leaf() const {
-    return !children[0];
+    return !children;
   }
   QuadNode& child(vec2 sc) {
     auto index = 0;
     index += int{sc[0] > (lower[0] + upper[0]) / 2};
     index += 2 * int{sc[1] > (lower[1] + upper[1]) / 2};
-    return *children[index];
+    return (*children)[index];
   }
   const QuadNode& child(vec2 sc) const {
     auto index = 0;
     index += int{sc[0] > (lower[0] + upper[0]) / 2};
     index += 2 * int{sc[1] > (lower[1] + upper[1]) / 2};
-    return *children[index];
+    return (*children)[index];
   }
   QuadNode& child(int index) {
-    return *children[index];
+    return (*children)[index];
   }
   const QuadNode& child(int index) const {
-    return *children[index];
+    return (*children)[index];
   }
 
   friend struct QuadTree;
@@ -177,30 +176,20 @@ private:
   vec3 flux_color;
   vec2 lower;
   vec2 upper;
-  psl::Box<QuadNode> children[4];
+  psl::Box<psl::Array<QuadNode, 4>> children;
 };
 
 struct QuadTree {
   QuadTree() : root(vec2(0, 0), vec2(1, 1)) {
   }
-  void initial_refinement() {
-    root.flux = 1;
-    refine();
-    clear();
-  }
 
   void add_sample(vec3 w, float flux, vec3 flux_color) {
     CHECK_GE(flux, 0);
     auto sc = inverse_uniform_sphere(w);
-    auto footprint = root.footprint(sc);
-    root.add_sample(sc, footprint, 1.0f / psl::sqr(footprint), flux, flux_color);
+    root.add_sample(sc, flux, flux_color);
     n_samples += 1;
   }
-  void refine() {
-    root.refine(root.flux);
-  }
-
-  psl::optional<QuadTreeSample> sample(vec2d u) const {
+  psl::optional<PgSample> sample(vec2d u) const {
     return root.sample(u);
   }
   float pdf(vec3 w) const {
@@ -223,6 +212,15 @@ struct QuadTree {
     return root.tree_depth(inverse_uniform_sphere(w));
   }
 
+  void initial_refinement() {
+    root.flux = 1;
+    refine();
+    clear();
+  }
+  void refine() {
+    root.refine(root.flux);
+  }
+
 private:
   QuadNode root;
   Atomic<int> n_samples{0};
@@ -237,21 +235,36 @@ struct SpatialNode {
         guide(psl::move(quad)),
         collector(guide) {
   }
+  psl::optional<PgSample> sample(vec2 u) const {
+    return guide->sample(u);
+  }
+  float pdf(vec3 w) const {
+    return guide->pdf(w);
+  }
+  vec3 flux_estimate() const {
+    return guide->flux_estimate();
+  }
+  vec3 flux_estimate(vec3 w) const {
+    return guide->flux_estimate(w);
+  }
+  int max_tree_depth() const {
+    if (is_leaf())
+      return 0;
+    else
+      return 1 + psl::max(child(0).max_tree_depth(), child(1).max_tree_depth());
+  }
 
-  void add_sample(RadianceSample s, vec3 u) {
-    CHECK_GE(s.flux_color[0], 0.0f);
-    CHECK_GE(s.flux_color[1], 0.0f);
-    CHECK_GE(s.flux_color[2], 0.0f);
-    s.p += traverse(s.p).footprint() * 2 * (u - vec3(0.5f));
-    for (int i = 0; i < 3; i++) {
-      if (s.p[i] < aabb.lower[i])
-        s.p[i] += 2 * (aabb.lower[i] - s.p[i]);
-      else if (s.p[i] > aabb.upper[i])
-        s.p[i] += 2 * (aabb.upper[i] - s.p[i]);
-    }
-    auto& leaf = traverse(s.p);
-    leaf.n_samples += 1;
-    leaf.collector->add_sample(s.w, length(s.flux_color), s.flux_color);
+  SpatialNode& traverse(vec3 p) {
+    if (is_leaf())
+      return *this;
+    else
+      return child(p).traverse(p);
+  }
+  const SpatialNode& traverse(vec3 p) const {
+    if (is_leaf())
+      return *this;
+    else
+      return child(p).traverse(p);
   }
 
   void refine(int k) {
@@ -261,8 +274,8 @@ struct SpatialNode {
       if (n_samples > threshold) {
         split_p = (aabb.lower[axis] + aabb.upper[axis]) / 2;
         auto [l_aabb, r_aabb] = aabb.split_half(axis);
-        children[0] = SpatialNode(l_aabb, *collector, depth + 1);
-        children[1] = SpatialNode(r_aabb, psl::move(*collector), depth + 1);
+        children = psl::array_of(SpatialNode(l_aabb, *collector, depth + 1),
+                                 SpatialNode(r_aabb, psl::move(*collector), depth + 1));
         guide = collector = psl::nullopt;
         child(0).n_samples = n_samples / 2;
         child(1).n_samples = n_samples / 2;
@@ -286,52 +299,19 @@ struct SpatialNode {
     refine(0);
   }
 
-  psl::optional<PgSample> sample(vec3 p, vec2 u) const {
-    if (auto qs = traverse(p).guide->sample(u)) {
-      return PgSample(qs->w, qs->pdf);
-    } else
-      return psl::nullopt;
-  }
-  float pdf(vec3 p, vec3 w) const {
-    return traverse(p).guide->pdf(w);
-  }
-  vec3 flux_estimate(vec3 p) const {
-    return traverse(p).guide->flux_estimate();
-  }
-  vec3 flux_estimate(vec3 p, vec3 w) const {
-    return traverse(p).guide->flux_estimate(w);
-  }
-  int max_tree_depth() const {
-    if (is_leaf())
-      return 0;
-    else
-      return 1 + psl::max(child(0).max_tree_depth(), child(1).max_tree_depth());
-  }
-
 private:
+  friend struct SpatialNodeRoot;
   float footprint() {
     return aabb.diagonal()[axis] / 2;
   }
-  SpatialNode& traverse(vec3 p) {
-    if (is_leaf())
-      return *this;
-    else
-      return child(p).traverse(p);
-  }
-  const SpatialNode& traverse(vec3 p) const {
-    if (is_leaf())
-      return *this;
-    else
-      return child(p).traverse(p);
-  }
   bool is_leaf() const {
-    return !children[0];
+    return !children;
   }
   SpatialNode& child(int index) {
-    return *children[index];
+    return (*children)[index];
   }
   const SpatialNode& child(int index) const {
-    return *children[index];
+    return (*children)[index];
   }
   SpatialNode& child(vec3 p) {
     auto index = int{p[axis] >= split_p};
@@ -347,9 +327,48 @@ private:
   float split_p = -1;
   int depth = -1;
   Atomic<size_t> n_samples{0};
-  psl::Box<SpatialNode> children[2];
+  psl::Box<psl::Array<SpatialNode, 2>> children;
   psl::optional<QuadTree> guide;
   psl::optional<QuadTree> collector;
+};
+struct SpatialNodeRoot {
+  SpatialNodeRoot() = default;
+  SpatialNodeRoot(AABB aabb, QuadTree quad) : root(aabb, quad) {
+  }
+
+  void add_sample(SpatialNode& leaf, vec3 p0, RadianceSample s, vec3 u) {
+    CHECK_GE(s.flux[0], 0.0f);
+    CHECK_GE(s.flux[1], 0.0f);
+    CHECK_GE(s.flux[2], 0.0f);
+    auto p = p0 + leaf.footprint() * 2 * (u - vec3(0.5f));
+    for (int i = 0; i < 3; i++) {
+      if (p[i] < root.aabb.lower[i])
+        p[i] += 2 * (root.aabb.lower[i] - p[i]);
+      else if (p[i] > root.aabb.upper[i])
+        p[i] += 2 * (root.aabb.upper[i] - p[i]);
+    }
+    auto& chosen_leaf = traverse(p);
+    chosen_leaf.n_samples += 1;
+    chosen_leaf.collector->add_sample(s.w, length(s.flux), s.flux);
+  }
+  int max_tree_depth() const {
+    return root.max_tree_depth();
+  }
+  SpatialNode& traverse(vec3 p) {
+    return root.traverse(p);
+  }
+  const SpatialNode& traverse(vec3 p) const {
+    return root.traverse(p);
+  }
+  void refine(int k) {
+    return root.refine(k);
+  }
+  void initial_refinement(int64_t n_samples_) {
+    return root.initial_refinement(n_samples_);
+  }
+
+private:
+  SpatialNode root;
 };
 
 struct SpatialGrid {
@@ -360,19 +379,19 @@ struct SpatialGrid {
   SpatialGrid(AABB aabb, vec3i resolution) : aabb(aabb), grid(resolution) {
   }
 
-  void add_sample(RadianceSample s, vec3 u) {
-    CHECK_GE(s.flux_color[0], 0.0f);
-    CHECK_GE(s.flux_color[1], 0.0f);
-    CHECK_GE(s.flux_color[2], 0.0f);
-    s.p += footprint() * (u - vec3(0.5f));
+  void add_sample(vec3 p, RadianceSample s, vec3 u) {
+    CHECK_GE(s.flux[0], 0.0f);
+    CHECK_GE(s.flux[1], 0.0f);
+    CHECK_GE(s.flux[2], 0.0f);
+    p += footprint() * (u - vec3(0.5f));
     for (int i = 0; i < 3; i++) {
-      if (s.p[i] < aabb.lower[i])
-        s.p[i] += 2 * (aabb.lower[i] - s.p[i]);
-      else if (s.p[i] > aabb.upper[i])
-        s.p[i] += 2 * (aabb.upper[i] - s.p[i]);
+      if (p[i] < aabb.lower[i])
+        p[i] += 2 * (aabb.lower[i] - p[i]);
+      else if (p[i] > aabb.upper[i])
+        p[i] += 2 * (aabb.upper[i] - p[i]);
     }
-    auto& leaf = traverse(s.p);
-    leaf.collector.add_sample(s.w, length(s.flux_color), s.flux_color);
+    auto& leaf = traverse(p);
+    leaf.collector.add_sample(s.w, length(s.flux), s.flux);
   }
 
   void refine(int) {
@@ -386,10 +405,7 @@ struct SpatialGrid {
   }
 
   psl::optional<PgSample> sample(vec3 p, vec2 u) const {
-    if (auto qs = traverse(p).guide.sample(u)) {
-      return PgSample(qs->w, qs->pdf);
-    } else
-      return psl::nullopt;
+    return traverse(p).guide.sample(u);
   }
   float pdf(vec3 p, vec3 w) const {
     return traverse(p).guide.pdf(w);
@@ -415,6 +431,6 @@ private:
   Array3d<Unit> grid;
 };
 
-using SpatialTree = SpatialNode;
+using SpatialTree = SpatialNodeRoot;
 
 }  // namespace pine

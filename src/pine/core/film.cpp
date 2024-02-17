@@ -34,7 +34,8 @@ void Film::offset(vec3 factor) {
   }
 }
 void Film::add_sample(vec2i p_film, vec3 color) {
-  p_film = clamp(p_film, vec2i{0}, size() - vec2i{1});
+  DCHECK_RANGE(p_film.x, 0, size().x - 1);
+  DCHECK_RANGE(p_film.y, 0, size().y - 1);
   p_film.y = size().y - 1 - p_film.y;
   auto& pixel = pixels[p_film];
   const auto alpha = pixel.w + 1;

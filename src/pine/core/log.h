@@ -25,8 +25,7 @@ private:
   psl::string message;
 };
 
-struct FatalException {};
-[[noreturn]] void stop_program();
+void optionally_stop_program_for_stacktrace();
 
 template <typename... Args>
 void Debugr(const Args&... args) {
@@ -60,12 +59,7 @@ void Warning(const Args&... args) {
 }
 template <typename... Args>
 [[noreturn]] void Fatal(const Args&... args) {
-  using psl::to_string;
-  fatal_stream(to_string(args...) + "\n");
-  stop_program();
-}
-template <typename... Args>
-[[noreturn]] void exception(const Args&... args) {
+  // optionally_stop_program_for_stacktrace();
   using psl::to_string;
   throw Exception{to_string(args...)};
 }
@@ -114,8 +108,8 @@ template <typename... Args>
 #endif
 
 struct Timer {
-  double ElapsedMs();
-  double Reset();
+  float elapsed_ms();
+  float reset();
 
 private:
   psl::clock clock;

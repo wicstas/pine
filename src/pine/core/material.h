@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/interaction.h>
 #include <pine/core/scattering.h>
 #include <pine/core/bxdf.h>
@@ -11,7 +10,7 @@ namespace pine {
 struct MaterialSampleCtx : NodeEvalCtx {
   MaterialSampleCtx(vec3 p, vec3 n, vec2 uv, vec3 wi, float u1, vec2 u2)
       : NodeEvalCtx(p, n, uv), m2w(coordinate_system(n)), u1(u1), u2(u2) {
-    this->wi = inverse(m2w) * wi;
+    this->wi = solve(m2w, wi);
   }
   MaterialSampleCtx(const Interaction& it, vec3 wi, float u1, vec2 u2)
       : MaterialSampleCtx(it.p, it.n, it.uv, wi, u1, u2){};
@@ -37,40 +36,11 @@ struct MaterialEvalCtx : NodeEvalCtx {
 
 struct LeEvalCtx : NodeEvalCtx {
   LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv) {
-    auto w2m = inverse(coordinate_system(n));
-    this->wo = w2m * wo;
+    this->wo = solve(coordinate_system(n), wo);
   };
   LeEvalCtx(const Interaction& it, vec3 wo) : LeEvalCtx(it.p, it.n, it.uv, wo){};
 
   vec3 wo;
-};
-
-struct LayeredMaterial {
-  template <psl::SameAs<BSDF>... Ts>
-  LayeredMaterial(Ts... layers) : layers(psl::vector_of(psl::move(layers)...)) {
-  }
-  LayeredMaterial(psl::vector<BSDF> layers) : layers(psl::move(layers)) {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& c) const;
-  vec3 f(const MaterialEvalCtx& c) const;
-  float pdf(const MaterialEvalCtx& c) const;
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    for (auto& layer : layers)
-      return layer.roughness_amount(nc);
-    return 1.0f;
-  }
-  bool is_delta() const {
-    for (auto& layer : layers)
-      if (!layer.is_delta())
-        return false;
-    return true;
-  }
-
-  psl::vector<BSDF> layers;
 };
 
 struct DiffuseMaterial {
@@ -254,7 +224,9 @@ struct EmissiveMaterial {
   float pdf(const MaterialEvalCtx&) const {
     return {};
   }
-  vec3 le(const LeEvalCtx&) const;
+  vec3 le(const LeEvalCtx& ec) const {
+    return color.eval(ec);
+  }
   float roughness_amount(const NodeEvalCtx&) const {
     return 1.0f;
   }
@@ -265,8 +237,8 @@ struct EmissiveMaterial {
   Node3f color;
 };
 
-struct Material : psl::variant<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial,
-                               GlossyMaterial, MirrorMaterial, WaterMaterial, EmissiveMaterial> {
+struct Material : psl::variant<DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial,
+                               MirrorMaterial, WaterMaterial, EmissiveMaterial> {
 public:
   using variant::variant;
 

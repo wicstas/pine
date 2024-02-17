@@ -30,6 +30,18 @@ struct PointLight {
   vec3 position;
   vec3 color;
 };
+struct SpotLight {
+  SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_radian,
+            float cutoff_additonal_radian = 0.0f);
+
+  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
+
+  vec3 position;
+  vec3 direction;
+  vec3 color;
+  float falloff_cos;
+  float cutoff_cos;
+};
 struct DirectionalLight {
   DirectionalLight(vec3 direction, vec3 color) : direction(normalize(direction)), color(color){};
 
@@ -83,7 +95,8 @@ private:
   vec3 tint;
 };
 
-struct Light : psl::variant<PointLight, DirectionalLight, AreaLight, Atmosphere, Sky, ImageSky> {
+struct Light
+    : psl::variant<PointLight, SpotLight, DirectionalLight, AreaLight, Atmosphere, Sky, ImageSky> {
   using variant::variant;
 
   LightSample sample(vec3 p, vec3 n, vec2 u2) const {

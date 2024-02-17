@@ -1,6 +1,5 @@
 #pragma once
 #include <pine/core/sparse_array.h>
-#include <pine/core/scene.h>
 
 #include <psl/vector.h>
 

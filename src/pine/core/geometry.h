@@ -2,99 +2,13 @@
 
 #include <pine/core/interaction.h>
 #include <pine/core/material.h>
+#include <pine/core/aabb.h>
 #include <pine/core/ray.h>
 
 #include <psl/function.h>
 #include <psl/variant.h>
 
 namespace pine {
-
-struct RayOctant {
-  RayOctant(const Ray& ray)
-      : octantx3{psl::signbit(ray.d[0]) * 3, psl::signbit(ray.d[1]) * 3,
-                 psl::signbit(ray.d[2]) * 3},
-        dir_inv(safe_rcp(ray.d)),
-        neg_org_div_dir(-ray.o * dir_inv) {
-  }
-
-  int octantx3[3];
-  vec3 dir_inv, neg_org_div_dir;
-};
-
-struct AABB {
-  AABB() = default;
-  AABB(vec3 lower, vec3 upper) : lower(lower), upper(upper){};
-  AABB(vec3 p) : lower(p), upper(p){};
-
-  vec3 centroid() const {
-    return (lower + upper) / 2;
-  }
-  float centroid(int dim) const {
-    return (lower[dim] + upper[dim]) / 2;
-  }
-  vec3 diagonal() const {
-    return max(upper - lower, vec3(0.0f));
-  }
-  AABB extend_to_max_axis() const;
-  vec3 relative_position(vec3 p) const;
-  vec3 absolute_position(vec3 p) const;
-  float relative_position(float p, int dim) const;
-  float surface_area() const;
-  void extend(vec3 p);
-  void extend(const AABB& aabb);
-  psl::pair<AABB, AABB> split_half(int axis) const;
-  friend AABB extend(AABB l, vec3 r) {
-    l.extend(r);
-    return l;
-  }
-  friend AABB union_(AABB l, const AABB& r) {
-    l.extend(r);
-    return l;
-  }
-  friend AABB intersect(const AABB& l, const AABB& r) {
-    AABB ret;
-    ret.lower = max(l.lower, r.lower);
-    ret.upper = min(l.upper, r.upper);
-    return ret;
-  }
-  bool is_valid() const {
-    return (upper.x > lower.x) && (upper.y > lower.y) && (upper.z > lower.z);
-  }
-  bool is_valid(int dim) const {
-    return upper[dim] > lower[dim];
-  }
-  bool contains(vec3 p) const {
-    return (p[0] >= lower[0] && p[0] <= upper[0]) && (p[1] >= lower[1] && p[1] <= upper[1]) &&
-           (p[2] >= lower[2] && p[2] <= upper[2]);
-  }
-
-  bool hit(const Ray& ray) const;
-  bool hit(Ray ray, float& tmin, float& tmax) const;
-
-  PINE_ALWAYS_INLINE bool hit(const RayOctant& r, float tmin, float tmax) const {
-    return hit(r, tmin, &tmax);
-  }
-  PINE_ALWAYS_INLINE bool hit(const RayOctant& r, float tmin, float* tmax) const {
-    auto p = &lower[0];
-    auto tmin0 = p[0 + r.octantx3[0]] * r.dir_inv[0] + r.neg_org_div_dir[0];
-    auto tmin1 = p[1 + r.octantx3[1]] * r.dir_inv[1] + r.neg_org_div_dir[1];
-    auto tmin2 = p[2 + r.octantx3[2]] * r.dir_inv[2] + r.neg_org_div_dir[2];
-
-    auto tmax0 = p[3 - r.octantx3[0]] * r.dir_inv[0] + r.neg_org_div_dir[0];
-    auto tmax1 = p[4 - r.octantx3[1]] * r.dir_inv[1] + r.neg_org_div_dir[1];
-    auto tmax2 = p[5 - r.octantx3[2]] * r.dir_inv[2] + r.neg_org_div_dir[2];
-
-    tmin = psl::max(tmin0, tmin1, tmin2, tmin);
-    *tmax = psl::min(tmax0, tmax1, tmax2, *tmax);
-    return tmin <= *tmax;
-  }
-  psl::string to_string() const {
-    return psl::to_string("{", lower, ", ", upper, "}");
-  }
-
-  vec3 lower = vec3{float_max};
-  vec3 upper = vec3{-float_max};
-};
 
 struct ShapeSample {
   vec3 p;
@@ -106,20 +20,15 @@ struct ShapeSample {
 };
 
 struct Plane {
-  Plane(vec3 position, vec3 normal) : position(position), n(normal) {
-    mat3 tbn = coordinate_system(normal);
-    u = tbn.x;
-    v = tbn.y;
-  };
-
+  Plane(vec3 position, vec3 normal);
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
+  ShapeSample sample(vec3 p, vec2 u) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return float_max;
   }
-  ShapeSample sample(vec3 p, vec2 u) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
 private:
   vec3 position;
@@ -128,38 +37,34 @@ private:
 };
 
 struct Sphere {
-  Sphere(vec3 position, float radius) : c(position), r(radius){};
-
+  Sphere(vec3 position, float radius);
   static float compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r);
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
+  ShapeSample sample(vec3, vec2 u) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return 4 * Pi * r * r;
   }
-  ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
+private:
   vec3 c;
   float r;
 };
 
 struct Disk {
-  Disk(vec3 position, vec3 normal, float r) : position(position), n(normal), r(r) {
-    mat3 tbn = coordinate_system(normal);
-    u = tbn.x;
-    v = tbn.y;
-  };
-
+  Disk(vec3 position, vec3 normal, float r);
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
+  ShapeSample sample(vec3, vec2) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return Pi * r * r;
   }
-  ShapeSample sample(vec3, vec2) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
+private:
   vec3 position;
   vec3 n;
   vec3 u, v;
@@ -172,12 +77,13 @@ struct Line {
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
+  ShapeSample sample(vec3, vec2) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return thickness * 2 * Pi * len;
   }
-  ShapeSample sample(vec3, vec2) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
+private:
   vec3 p0, p1;
   mat3 tbn;
   float thickness;
@@ -192,12 +98,13 @@ struct Rect {
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, Interaction& it) const;
   AABB get_aabb() const;
+  ShapeSample sample(vec3, vec2 u) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return lx * ly;
   }
-  ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
+private:
   vec3 position, ex, ey, n;
   float lx, ly;
   vec3 rx, ry;
@@ -205,9 +112,8 @@ struct Rect {
 
 struct Triangle {
   Triangle() = default;
-  Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n) : v0(v0), v1(v1), v2(v2), n{n} {};
-  Triangle(vec3 v0, vec3 v1, vec3 v2)
-      : v0(v0), v1(v1), v2(v2), n{normalize(cross(v0 - v1, v0 - v2))} {};
+  Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n);
+  Triangle(vec3 v0, vec3 v1, vec3 v2);
 
   static bool hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2);
   static bool intersect(Ray& ray, Interaction& it, vec3 v0, vec3 v1, vec3 v2);
@@ -218,12 +124,13 @@ struct Triangle {
   bool intersect(Ray& ray, Interaction& it) const;
 
   AABB get_aabb() const;
+  ShapeSample sample(vec3, vec2 u) const;
+  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
   float area() const {
     return length(cross(v1 - v0, v2 - v0)) / 2;
   }
-  ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
 
+private:
   vec3 v0, v1, v2;
   vec3 n;
 };
@@ -322,14 +229,14 @@ struct Geometry {
     return shape.hit(ray);
   }
   bool intersect(Ray& ray, Interaction& it) const;
-  float area() const {
-    return shape.area();
-  }
   AABB get_aabb() const {
     return shape.get_aabb();
   }
   ShapeSample sample(vec3 p, vec2 u) const;
   float pdf(const Interaction& it, const Ray& ray, vec3 n) const;
+  float area() const {
+    return shape.area();
+  }
 
   Shape shape;
   psl::shared_ptr<Material> material;

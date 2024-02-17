@@ -49,6 +49,7 @@ src/pine/core/accel.cpp
 src/pine/core/array.cpp
 src/pine/core/color.cpp
 src/pine/core/image.cpp
+src/pine/core/aabb.cpp
 src/pine/core/node.cpp
 src/pine/core/film.cpp
 src/pine/core/bxdf.cpp
@@ -61,7 +62,6 @@ src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/voxelcone.cpp
-#src/pine/impl/integrator/drjit.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp

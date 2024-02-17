@@ -4,6 +4,7 @@
 #include <pine/core/vecmath.h>
 #include <pine/core/primes.h>
 #include <pine/core/rng.h>
+#include <pine/core/log.h>
 
 #include <psl/variant.h>
 #include <psl/vector.h>
@@ -13,6 +14,8 @@ namespace pine {
 struct UniformSampler {
   UniformSampler(int samples_per_pixel, int seed = 0)
       : samples_per_pixel(samples_per_pixel), rng(seed) {
+    if (samples_per_pixel <= 0)
+      Fatal("`UniformSampler` should have positive samples per pixel");
   }
 
   int spp() const {
@@ -37,6 +40,10 @@ private:
 struct StratifiedSampler {
   StratifiedSampler(int xPixelSamples, int yPixelSamples, bool jitter)
       : xPixelSamples(xPixelSamples), yPixelSamples(yPixelSamples), jitter(jitter) {
+    if (xPixelSamples <= 0)
+      Fatal("`StratifiedSampler` should have positive x-samples per pixel");
+    if (yPixelSamples <= 0)
+      Fatal("`StratifiedSampler` should have positive y-samples per pixel");
     samples_per_pixel = xPixelSamples * yPixelSamples;
   }
 
@@ -120,36 +127,13 @@ private:
   static psl::vector<uint16_t> radicalInversePermutations;
 };
 
-struct ZeroTwoSequenceSampler {
-  ZeroTwoSequenceSampler(int samples_per_pixel, int nSampledDimensions);
-
-  int spp() const {
-    return samples_per_pixel;
-  }
-  void start_pixel(vec2i p, int sampleIndex);
-  void start_next_sample() {
-    currentSampleIndex++;
-    current1DDimension = 0;
-    current2DDimension = 0;
-  }
-  float get1d();
-  vec2 get2d();
-
-private:
-  int samples_per_pixel;
-  int currentSampleIndex = 0;
-  int current1DDimension = 0, current2DDimension = 0;
-  psl::vector<psl::vector<float>> samples1D;
-  psl::vector<psl::vector<vec2>> samples2D;
-  RNG rng;
-};
-
 struct MltSampler {
   MltSampler(float sigma, float largeStepProbability, int streamCount, int seed)
       : rng(seed),
         sigma(sigma),
         largeStepProbability(largeStepProbability),
-        streamCount(streamCount){};
+        streamCount(streamCount) {
+  }
 
   int spp() const {
     return 0;
@@ -224,8 +208,8 @@ private:
   int64_t lastLargeStepIndex = 0;
 };
 
-struct Sampler : private psl::variant<UniformSampler, StratifiedSampler, HaltonSampler,
-                                      ZeroTwoSequenceSampler, MltSampler> {
+struct Sampler
+    : private psl::variant<UniformSampler, StratifiedSampler, HaltonSampler, MltSampler> {
   using variant::variant;
 
   int spp() const {

@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/vecmath.h>
 #include <pine/core/log.h>
 

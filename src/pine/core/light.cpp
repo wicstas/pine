@@ -16,6 +16,37 @@ LightSample PointLight::sample(vec3 p, vec3, vec2) const {
   ls.le = color;
   return ls;
 }
+SpotLight::SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_radian,
+                     float cutoff_radian)
+    : position(position),
+      direction(normalize(direction)),
+      color(color),
+      falloff_cos(psl::cos(falloff_radian)),
+      cutoff_cos(psl::cos(cutoff_radian)) {
+  if (falloff_radian <= 0.0f)
+    Fatal("`SpotLight` invalid falloff angle");
+  if (falloff_radian > Pi2)
+    Fatal("`SpotLight` invalid falloff angle(please use radian, not degree)");
+  if (cutoff_radian <= 0.0f)
+    Fatal("`SpotLight` invalid cutoff angle");
+  if (cutoff_radian > Pi2)
+    Fatal("`SpotLight` invalid cutoff angle(please use radian, not degree)");
+  if (cutoff_radian < falloff_radian)
+    Fatal("`SpotLight` cutoff angle should be no-less than falloff angle");
+};
+LightSample SpotLight::sample(vec3 p, vec3, vec2) const {
+  LightSample ls;
+  ls.distance = distance(position, p);
+  ls.wo = normalize(position - p, ls.distance);
+  ls.pdf = psl::sqr(ls.distance);
+  auto cos = -dot(ls.wo, direction);
+  if (cos > falloff_cos) {
+    ls.le = color;
+  } else if (cos > cutoff_cos) {
+    ls.le = color * (cos - cutoff_cos) / (falloff_cos - cutoff_cos);
+  }
+  return ls;
+}
 LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
   LightSample ls;
   ls.distance = 1e+10f;
@@ -127,8 +158,11 @@ float ImageSky::pdf(vec3, vec3 wo) const {
 
 void light_context(Context& ctx) {
   ctx.type<PointLight>("PointLight").ctor<vec3, vec3>();
+  ctx.type<SpotLight>("SpotLight")
+      .ctor<vec3, vec3, vec3, float>()
+      .ctor<vec3, vec3, vec3, float, float>();
   ctx.type<DirectionalLight>("DirectionalLight").ctor<vec3, vec3>();
-  ctx.type<Light>("Light").ctor_variant<PointLight, DirectionalLight>();
+  ctx.type<Light>("Light").ctor_variant<PointLight, SpotLight, DirectionalLight>();
   ctx.type<Sky>("Sky").ctor<vec3>();
   ctx.type<Atmosphere>("Atmosphere").ctor<vec3, vec3>();
   ctx.type<ImageSky>("ImageSky")

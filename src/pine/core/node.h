@@ -173,7 +173,7 @@ private:
 struct NodeComponent {
   NodeComponent(Mnode<vec3> x, int n) : x{psl::move(x)}, n{n} {
     if (n < 0 || n > 2)
-      exception("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
+      Fatal("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
   };
   float eval(const NodeEvalCtx& ctx) const {
     CHECK_RANGE(n, 0, 2);

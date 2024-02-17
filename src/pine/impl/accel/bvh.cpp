@@ -81,7 +81,7 @@ int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
   int splitBucket = -1;
 
   for (int axis = 0; axis < 3; axis++) {
-    if (!aabbCentroid.is_valid(axis))
+    if (aabbCentroid.degenerated(axis))
       continue;
 
     Bucket buckets[nBuckets];

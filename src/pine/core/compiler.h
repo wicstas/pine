@@ -22,30 +22,18 @@ struct SourceLines {
 
   psl::optional<psl::string_view> next_line(size_t row) const;
 
-  psl::optional<char> next(size_t row, size_t column) const;
+  psl::optional<char> next(SourceLoc sl) const;
 
   template <typename... Args>
-  [[noreturn]] void error(size_t row, size_t column, const Args&... args) const {
-    error_impl(row, column, psl::to_string(args...));
+  [[noreturn]] void error(SourceLoc sl, const Args&... args) const {
+    error_impl(sl, psl::to_string(args...));
   }
 
-  [[noreturn]] void error_impl(size_t row, size_t column, psl::string_view message) const;
+  [[noreturn]] void error_impl(SourceLoc sl, psl::string_view message) const;
 
 private:
   psl::vector<psl::string> lines;
   size_t paddings = invalid;
-  static constexpr size_t invalid = static_cast<size_t>(-1);
-};
-
-struct ASTNode {
-  ASTNode() = default;
-  ASTNode(size_t row, size_t column) : row{row}, column{column} {
-  }
-  ASTNode(SourceLoc loc) : row{loc.row}, column{loc.column} {
-  }
-
-  size_t row = invalid;
-  size_t column = invalid;
   static constexpr size_t invalid = static_cast<size_t>(-1);
 };
 
@@ -54,7 +42,7 @@ struct Bytecode {
     Copy,
     MakeRef,
     LoadFunction,
-    LoadGlobalVariable,
+    LoadGlobalVar,
     LoadFloatConstant,
     LoadIntConstant,
     LoadBoolConstant,
@@ -112,15 +100,16 @@ struct Bytecode {
   };
 
   Bytecode() = default;
-  Bytecode(Instruction inst, size_t value, size_t value1 = 0)
-      : instruction(inst), value(value), value1(value1) {
+  Bytecode(SourceLoc sl, Instruction inst, size_t value, size_t value1 = 0)
+      : sl(sl), instruction(inst), value(value), value1(value1) {
   }
-  Bytecode(Instruction inst, size_t value, size_t value1, psl::span<uint16_t> args)
-      : instruction(inst), value(value), value1(value1) {
+  Bytecode(SourceLoc sl, Instruction inst, size_t value, size_t value1, psl::span<uint16_t> args)
+      : sl(sl), instruction(inst), value(value), value1(value1) {
     psl::copy(this->args.begin(), args);
     nargs = int(args.size());
   }
 
+  SourceLoc sl;
   Instruction instruction;
   size_t value = size_t(-1);
   size_t value1 = size_t(-1);
@@ -131,18 +120,19 @@ struct Bytecode {
 struct Bytecodes {
   Bytecodes(SourceLines sl);
 
-  size_t add(Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
+  size_t add(SourceLoc sl, Bytecode::Instruction instruction, size_t value0, size_t value1 = 0);
   void placehold_typed(TypeTag type, psl::string name);
-  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value,
+  void add_typed(SourceLoc sl, Bytecode::Instruction instruction, TypeTag type, size_t value,
                  psl::span<uint16_t> args = {});
-  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value, uint16_t arg0) {
+  void add_typed(SourceLoc sl, Bytecode::Instruction instruction, TypeTag type, size_t value,
+                 uint16_t arg0) {
     uint16_t args[]{arg0};
-    add_typed(instruction, type, value, args);
+    add_typed(sl, instruction, type, value, args);
   }
-  void add_typed(Bytecode::Instruction instruction, TypeTag type, size_t value, uint16_t arg0,
-                 uint16_t arg1) {
+  void add_typed(SourceLoc sl, Bytecode::Instruction instruction, TypeTag type, size_t value,
+                 uint16_t arg0, uint16_t arg1) {
     uint16_t args[]{arg0, arg1};
-    add_typed(instruction, type, value, args);
+    add_typed(sl, instruction, type, value, args);
   }
 
   void name_top_var(psl::string name);
@@ -179,8 +169,8 @@ struct Bytecodes {
   }
 
   template <typename... Args>
-  [[noreturn]] void error(const ASTNode& node, const Args&... args) const {
-    sl.error(node.row, node.column, args...);
+  [[noreturn]] void error(SourceLoc loc, const Args&... args) const {
+    sl.error(loc, args...);
   }
 
   psl::string to_string(const Context& context) const;
@@ -242,7 +232,7 @@ private:
 };
 
 struct VirtualMachine {
-  Stack<Variable, psl::default_allocator<Variable>> stack;
+  Stack<Variable> stack;
 };
 
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm);

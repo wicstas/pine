@@ -8,7 +8,6 @@ namespace psl {
 
 namespace detail {
 
-// Union for plain type
 template <typename T, typename... Ts>
 struct Union {
   using First = T;
@@ -32,14 +31,14 @@ struct Union {
   }
 
   template <typename X>
-  X& as() {
+  __attribute__((always_inline)) X& as() {
     if constexpr (SameAs<X, First>)
       return first;
     else
       return rest.template as<X>();
   }
   template <typename X>
-  const X& as() const {
+  __attribute__((always_inline)) const X& as() const {
     if constexpr (SameAs<X, First>)
       return first;
     else
@@ -72,13 +71,13 @@ struct Union<T> {
   }
 
   template <typename X>
-  X& as() {
+  __attribute__((always_inline)) X& as() {
     static_assert(SameAs<X, First>, "type X is not one of the Union's");
 
     return first;
   }
   template <typename X>
-  const X& as() const {
+  __attribute__((always_inline)) const X& as() const {
     static_assert(SameAs<X, First>, "type X is not one of the Union's");
 
     return first;

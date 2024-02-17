@@ -198,7 +198,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       candidates += name + function_signature(functions[fi]) + "\n";
     if (candidates.size())
       candidates.pop_back();
-    exception("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n",
+    Fatal("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n",
               candidates);
   } else {
     if (first != last) {
@@ -207,7 +207,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
         candidates += name + function_signature(functions[fi]) + "\n";
       if (candidates.size())
         candidates.pop_back();
-      exception("Function `", name, "(", arg_signature, ")` is not found, candidates:\n",
+      Fatal("Function `", name, "(", arg_signature, ")` is not found, candidates:\n",
                 candidates);
     } else {
       auto likely_func_name = psl::string();
@@ -220,10 +220,10 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       }
 
       if (likely_func_name != "")
-        exception("Function `", name, "(", arg_signature, ")` is not found, did you mean `",
+        Fatal("Function `", name, "(", arg_signature, ")` is not found, did you mean `",
                   likely_func_name, "`?");
       else
-        exception("Function `", name, "(", arg_signature, ")` is not found");
+        Fatal("Function `", name, "(", arg_signature, ")` is not found");
     }
   }
 }
@@ -255,13 +255,13 @@ Context::TypeTrait& Context::get_type_trait(psl::string_view name) {
   if (auto it = types.find(name); it != types.end())
     return it->second;
   else
-    exception("Type `", name, "` not register");
+    Fatal("Type `", name, "` not register");
 }
 const Context::TypeTrait& Context::get_type_trait(psl::string_view name) const {
   if (auto it = types.find(name); it != types.end())
     return it->second;
   else
-    exception("Type `", name, "` is not register");
+    Fatal("Type `", name, "` is not register");
 }
 
 static bool match_prefix(psl::string_view base, psl::string_view candidate) {

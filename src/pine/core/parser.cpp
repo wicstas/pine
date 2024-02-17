@@ -38,9 +38,9 @@ Context get_default_context() {
   ctx.type<psl::shared_ptr<Timer>>("Timer")
       .ctor(+[]() { return psl::make_shared<Timer>(); })
       .method(
-          "elapsed", +[](psl::shared_ptr<Timer>& x) { return float(x->ElapsedMs()); })
+          "elapsed", +[](psl::shared_ptr<Timer>& x) { return float(x->elapsed_ms()); })
       .method(
-          "reset", +[](psl::shared_ptr<Timer>& x) { return float(x->Reset()); });
+          "reset", +[](psl::shared_ptr<Timer>& x) { return float(x->reset()); });
   ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<BVH, EmbreeAccel>();
@@ -67,11 +67,11 @@ Context get_default_context() {
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor<Accel, Sampler, LightSampler, int, int>()
       .ctor(+[](int spp, int max_path_length) {
-        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+        return GuidedPathIntegrator(EmbreeAccel(), UniformSampler(spp), UniformLightSampler(),
                                     max_path_length);
       })
       .ctor(+[](int spp, int max_path_length, int estimate_spp) {
-        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+        return GuidedPathIntegrator(EmbreeAccel(), UniformSampler(spp), UniformLightSampler(),
                                     max_path_length, estimate_spp);
       })
       .method("render", &GuidedPathIntegrator::render);

@@ -5,111 +5,54 @@
 
 namespace pine {
 
-AABB AABB::extend_to_max_axis() const {
-  auto c = centroid();
-  auto d = vec3(max_value(diagonal()) / 2);
-  return {c - d, c + d};
+Plane::Plane(vec3 position, vec3 normal) : position(position), n(normalize(normal)) {
+  if (length(normal) == 0)
+    Fatal("`Plane` shouldn't have degenerated normal");
+  coordinate_system(normal, u, v);
 }
-vec3 AABB::relative_position(vec3 p) const {
-  vec3 o = p - lower;
-  if (upper.x > lower.x)
-    o.x /= upper.x - lower.x;
-  if (upper.y > lower.y)
-    o.y /= upper.y - lower.y;
-  if (upper.z > lower.z)
-    o.z /= upper.z - lower.z;
-  return o;
-}
-vec3 AABB::absolute_position(vec3 p) const {
-  return {lerp(p.x, lower.x, upper.x), lerp(p.y, lower.y, upper.y), lerp(p.z, lower.z, upper.z)};
-}
-float AABB::relative_position(float p, int dim) const {
-  float o = p - lower[dim];
-  float d = upper[dim] - lower[dim];
-  return d > 0.0f ? o / d : o;
-}
-float AABB::surface_area() const {
-  vec3 d = diagonal();
-  return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
-}
-void AABB::extend(vec3 p) {
-  lower = min(lower, p);
-  upper = max(upper, p);
-  if (!is_valid()) {
-    lower = min(lower, lower - vec3(1e-4f));
-    upper = max(upper, upper + vec3(1e-4f));
-  }
-}
-void AABB::extend(const AABB& aabb) {
-  lower = min(lower, aabb.lower);
-  upper = max(upper, aabb.upper);
-  if (!is_valid()) {
-    lower = min(lower, lower - vec3(1e-4f));
-    upper = max(upper, upper + vec3(1e-4f));
-  }
-}
-psl::pair<AABB, AABB> AABB::split_half(int axis) const {
-  CHECK_RANGE(axis, 0, 2);
-  auto left = *this;
-  auto right = *this;
-  left.upper[axis] = centroid(axis);
-  right.lower[axis] = centroid(axis);
-  return {left, right};
-}
-bool AABB::hit(const Ray& ray) const {
-  float tmin = ray.tmin;
-  float tmax = ray.tmax;
-  if (tmin > tmax)
+bool Plane::hit(const Ray& ray) const {
+  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
+  if (t <= ray.tmin)
     return false;
-  for (int i = 0; i < 3; i++) {
-    float invRayDir = 1.0f / ray.d[i];
-    float tNear = (lower[i] - ray.o[i]) * invRayDir;
-    float tFar = (upper[i] - ray.o[i]) * invRayDir;
-    if (ray.d[i] < 0.0f) {
-      float temp = tNear;
-      tNear = tFar;
-      tFar = temp;
-    }
-    tmin = tNear > tmin ? tNear : tmin;
-    tmax = tFar < tmax ? tFar : tmax;
-    if (tmin > tmax)
-      return false;
-  }
+  return t < ray.tmax;
+}
+bool Plane::intersect(Ray& ray, Interaction& it) const {
+  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
+  if (t < ray.tmin)
+    return false;
+  if (t >= ray.tmax)
+    return false;
+  ray.tmax = t;
+  it.p = ray.o + t * ray.d;
+  it.n = n;
+  it.uv = vec2(dot(it.p - position, u), dot(it.p - position, v));
+  it.p = position + it.uv.x * u + it.uv.y * v;
   return true;
 }
-bool AABB::hit(Ray ray, float& tmin, float& tmax) const {
-  tmin = ray.tmin;
-  tmax = ray.tmax;
-  if (tmin > tmax)
-    return false;
-  for (int i = 0; i < 3; i++) {
-    float invRayDir = 1.0f / ray.d[i];
-    float tNear = (lower[i] - ray.o[i]) * invRayDir;
-    float tFar = (upper[i] - ray.o[i]) * invRayDir;
-    if (ray.d[i] < 0.0f) {
-      float temp = tNear;
-      tNear = tFar;
-      tFar = temp;
-    }
-    tmin = tNear > tmin ? tNear : tmin;
-    tmax = tFar < tmax ? tFar : tmax;
-    if (tmin > tmax)
-      return false;
-  }
-  return true;
+AABB Plane::get_aabb() const {
+  return {vec3(-10.0f), vec3(10.0f)};
 }
-psl::optional<vec3> extend_to(Ray ray, int axis, float p) {
-  auto t = (p - ray.o[axis]) / ray.d[axis];
-  if (!(t > ray.tmin))
-    return psl::nullopt;
-  if (!(t < ray.tmax))
-    return psl::nullopt;
-  return ray(t);
+ShapeSample Plane::sample(vec3 p, vec2 u2) const {
+  auto ss = ShapeSample{};
+  auto p_sphere = uniform_hemisphere(u2);
+  auto l = absdot(p - position, n);
+  auto ex = l * p_sphere.x / p_sphere.z;
+  auto ey = l * p_sphere.y / p_sphere.z;
+  ss.p = position + u * ex + v * ey;
+  ss.n = n;
+  ss.uv = vec2{ex, ey};
+  ss.w = normalize(ss.p - p, ss.distance);
+  ss.pdf = 1.0f / (2 * Pi);
+  return ss;
 }
-vec2 project(vec3 v, int axis) {
-  return {v[(axis + 1) % 3], v[(axis + 2) % 3]};
+float Plane::pdf(const Interaction&, const Ray&, vec3) const {
+  return 1.0f / (2 * Pi);
 }
 
+Sphere::Sphere(vec3 position, float radius) : c(position), r(radius) {
+  if (radius < 0.0f)
+    Fatal("`Sphere` shouldn't have negative radius ", radius);
+}
 float Sphere::compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
   float b = 2 * dot(ro - p, rd);
   float c = dot(ro, ro) + dot(p, p) - 2 * dot(ro, p) - r * r;
@@ -150,51 +93,18 @@ ShapeSample Sphere::sample(vec3 p, vec2 u) const {
 }
 float Sphere::pdf(const Interaction& it, const Ray& ray, vec3) const {
   return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
-  ;
 }
 AABB Sphere::get_aabb() const {
   return {c - vec3(r), c + vec3(r)};
 }
 
-bool Plane::hit(const Ray& ray) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (t <= ray.tmin)
-    return false;
-  return t < ray.tmax;
+Disk::Disk(vec3 position, vec3 normal, float r) : position(position), n(normal), r(r) {
+  coordinate_system(normal, u, v);
+  if (r < 0.0f)
+    Fatal("`Disk` shouldn't have negative radius ", r);
+  if (length(normal) == 0.0f)
+    Fatal("`Disk` shouldn't have degenerated normal");
 }
-bool Plane::intersect(Ray& ray, Interaction& it) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (t < ray.tmin)
-    return false;
-  if (t >= ray.tmax)
-    return false;
-  ray.tmax = t;
-  it.p = ray.o + t * ray.d;
-  it.n = n;
-  it.uv = vec2(dot(it.p - position, u), dot(it.p - position, v));
-  it.p = position + it.uv.x * u + it.uv.y * v;
-  return true;
-}
-AABB Plane::get_aabb() const {
-  return {vec3(-10.0f), vec3(10.0f)};
-}
-ShapeSample Plane::sample(vec3 p, vec2 u2) const {
-  auto ss = ShapeSample{};
-  auto p_sphere = uniform_hemisphere(u2);
-  auto l = absdot(p - position, n);
-  auto ex = l * p_sphere.x / p_sphere.z;
-  auto ey = l * p_sphere.y / p_sphere.z;
-  ss.p = position + u * ex + v * ey;
-  ss.n = n;
-  ss.uv = vec2{ex, ey};
-  ss.w = normalize(ss.p - p, ss.distance);
-  ss.pdf = 1.0f / (2 * Pi);
-  return ss;
-}
-float Plane::pdf(const Interaction&, const Ray&, vec3) const {
-  return 1.0f / (2 * Pi);
-}
-
 bool Disk::hit(const Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
   if (t < ray.tmin)
@@ -239,6 +149,17 @@ AABB Disk::get_aabb() const {
   return {position - vec3(r, 0.0f, r), position + vec3(r, 0.0f, r)};
 }
 
+Line::Line(vec3 p0, vec3 p1, float thickness)
+    : p0(p0),
+      p1(p1),
+      tbn(coordinate_system(normalize(p1 - p0))),
+      thickness(thickness),
+      len{length(p1 - p0)} {
+  if (thickness <= 0.0f)
+    Fatal("`Line` should have positive thickness, not ", thickness);
+  if (p0 == p1)
+    Fatal("`Line` shouldn't have identical begin and end point ", p0);
+}
 bool Line::hit(const Ray& ray) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
   auto o2r = inverse(r2o);
@@ -255,12 +176,6 @@ bool Line::hit(const Ray& ray) const {
 
   return D <= thickness;
 }
-Line::Line(vec3 p0, vec3 p1, float thickness)
-    : p0(p0),
-      p1(p1),
-      tbn(coordinate_system(normalize(p1 - p0))),
-      thickness(thickness),
-      len{length(p1 - p0)} {};
 bool Line::intersect(Ray& ray, Interaction& it) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
   auto o2r = inverse(r2o);
@@ -309,6 +224,25 @@ AABB Line::get_aabb() const {
   return aabb;
 }
 
+struct FuzzyValue {
+  friend bool operator==(FuzzyValue a, float b) {
+    return psl::abs(a.value - b) <= 1e-6f;
+  }
+  friend bool operator==(float a, FuzzyValue b) {
+    return psl::abs(a - b.value) <= 1e-6f;
+  }
+  friend bool operator!=(FuzzyValue a, float b) {
+    return psl::abs(a.value - b) > 1e-6f;
+  }
+  friend bool operator!=(float a, FuzzyValue b) {
+    return psl::abs(a - b.value) > 1e-6f;
+  }
+  float value;
+};
+auto roughly(float x) {
+  return FuzzyValue{x};
+}
+
 Rect::Rect(vec3 position, vec3 ex, vec3 ey)
     : position(position),
       ex(normalize(ex)),
@@ -318,10 +252,9 @@ Rect::Rect(vec3 position, vec3 ex, vec3 ey)
       ly(length(ey)),
       rx(this->ex / lx),
       ry(this->ey / ly) {
-  CHECK(lx != 0);
-  CHECK(ly != 0);
-  CHECK(n != vec3(0.0f));
-};
+  if (length(n) != roughly(1))
+    Fatal("`Rect` has degenerated shape");
+}
 Rect Rect::from_vertex(vec3 v0, vec3 v1, vec3 v2) {
   auto ex = v1 - v0;
   auto ey = v2 - v0;
@@ -470,6 +403,19 @@ AABB Rect::get_aabb() const {
   return aabb;
 }
 
+Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n) : v0(v0), v1(v1), v2(v2), n{normalize(n)} {
+  if (v0 == v1 || v0 == v2 || v1 == v2)
+    Fatal("`Triangle` has degenerated shape");
+  if (this->n == vec3(0.0f))
+    Fatal("`Triangle` has degenerated normal");
+}
+Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2)
+    : v0(v0), v1(v1), v2(v2), n{normalize(cross(v0 - v1, v0 - v2))} {
+  if (v0 == v1 || v0 == v2 || v1 == v2)
+    Fatal("`Triangle` has degenerated shape");
+  if (n == vec3(0.0f))
+    Fatal("`Triangle` has degenerated normal: v0=", v0, ", v1=", v1, "v2=", v2);
+}
 bool Triangle::hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2) {
   vec3 E1 = v1 - v0;
   vec3 E2 = v2 - v0;
@@ -579,7 +525,7 @@ bool TriangleMesh::intersect(Ray& ray, Interaction& it, int index) const {
 AABB TriangleMesh::get_aabb(size_t index) const {
   DCHECK_LT(index, indices.size());
   return Triangle(vertices[indices[index][0]], vertices[indices[index][1]],
-                  vertices[indices[index][2]], {})
+                  vertices[indices[index][2]], vec3(0, 0, 1))
       .get_aabb();
 }
 AABB TriangleMesh::get_aabb() const {

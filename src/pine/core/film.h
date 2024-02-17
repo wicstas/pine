@@ -3,8 +3,6 @@
 #include <pine/core/atomic.h>
 #include <pine/core/array.h>
 
-#include <psl/string.h>
-
 namespace pine {
 
 struct Film {

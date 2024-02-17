@@ -566,7 +566,7 @@ struct Context {
     if (auto it = types_map.find(type_id); it != types_map.end())
       return it->second;
     else
-      exception("Type with id `", type_id, "` is not registered");
+      Fatal("Type with id `", type_id, "` is not registered");
   }
   template <typename T>
   psl::string name_of() const {
@@ -575,7 +575,7 @@ struct Context {
     if (auto it = types_map.find(psl::type_id<T>()); it != types_map.end())
       return it->second;
     else
-      exception("Type `", psl::type_name<T>(), "` is not registered");
+      Fatal("Type `", psl::type_name<T>(), "` is not registered");
   }
   template <typename R, typename... Args>
   psl::string name_of_function_type(psl::function<R(Args...)>*) const {

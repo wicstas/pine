@@ -6,35 +6,6 @@
 
 namespace pine {
 
-psl::optional<BSDFSample> LayeredMaterial::sample(const MaterialSampleCtx& c) const {
-  psl::optional<BSDFSample> bs;
-  for (auto&& bsdf : layers) {
-    bs = bsdf.sample(c.wi, c.u1, c.u2, c);
-    if (bs && SameHemisphere(c.wi, bs->wo))
-      break;
-  }
-
-  return bs;
-}
-vec3 LayeredMaterial::f(const MaterialEvalCtx& c) const {
-  vec3 f;
-  for (auto&& bsdf : layers)
-    f += bsdf.f(c.wi, c.wo, c);
-  return f;
-}
-float LayeredMaterial::pdf(const MaterialEvalCtx& c) const {
-  float pdf = 0.0f;
-  for (auto&& bsdf : layers)
-    pdf += bsdf.pdf(c.wi, c.wo, c);
-  return pdf;
-}
-
-vec3 EmissiveMaterial::le(const LeEvalCtx& ec) const {
-  if (CosTheta(ec.wo) < 0)
-    return vec3(0);
-  return color.eval(ec);
-}
-
 // vec3 Material::BumpNormal(const MaterialEvalCtx& c) const {
 // if (!bumpMap)
 // return c.n;
@@ -58,7 +29,6 @@ void material_context(Context& ctx) {
   ctx.type<SpecularReflectionBSDF>("SpecularReflectionBSDF").ctor<Node3f>();
   ctx.type<SpecularRefrectionBSDF>("SpecularRefrectionBSDF").ctor<Node3f, Nodef>();
   ctx.type<BSDF>("BSDF").ctor_variant<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
-  ctx.type<LayeredMaterial>("Layered").ctor<BSDF>().ctor<BSDF, BSDF>();
   ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
   ctx.type<MetalMaterial>("Metal").ctor<Node3f, Nodef>();
   ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>();
@@ -67,8 +37,8 @@ void material_context(Context& ctx) {
   ctx.type<WaterMaterial>("Water").ctor<Node3f, Nodef>();
   ctx.type<EmissiveMaterial>("Emissive").ctor<Node3f>();
   ctx.type<Material>("Material")
-      .ctor_variant<LayeredMaterial, DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial,
-                    MirrorMaterial, WaterMaterial, EmissiveMaterial>();
+      .ctor_variant<DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial, MirrorMaterial,
+                    WaterMaterial, EmissiveMaterial>();
 }
 
 }  // namespace pine

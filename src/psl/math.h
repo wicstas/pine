@@ -24,6 +24,28 @@ template <typename T>
 inline constexpr T max(T a, T b) {
   return a > b ? a : b;
 }
+template <typename T>
+inline constexpr int index_of_min(T a, T b) {
+  return a < b ? 0 : 1;
+}
+template <typename T>
+inline constexpr int index_of_max(T a, T b) {
+  return a > b ? 0 : 1;
+}
+template <typename T>
+inline constexpr int index_of_min(T a, T b, T c) {
+  if (a < b)
+    return a < c ? 0 : 2;
+  else
+    return b < c ? 1 : 2;
+}
+template <typename T>
+inline constexpr int index_of_max(T a, T b, T c) {
+  if (a > b)
+    return a > c ? 0 : 2;
+  else
+    return b > c ? 1 : 2;
+}
 
 template <typename T, typename... Ts>
 requires(sizeof...(Ts) > 0)

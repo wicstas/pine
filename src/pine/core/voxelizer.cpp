@@ -3,6 +3,7 @@
 #include <pine/core/parallel.h>
 #include <pine/core/profiler.h>
 #include <pine/core/sampler.h>
+#include <pine/core/scene.h>
 #include <pine/core/accel.h>
 
 namespace pine {

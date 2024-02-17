@@ -59,7 +59,7 @@ Profiler::Profiler(psl::string description) {
 Profiler::~Profiler() {
   psl::shared_ptr<Record> rec = profilerRecord;
 
-  rec->time += timer.ElapsedMs();
+  rec->time += timer.elapsed_ms();
   rec->sampleCount++;
 
   profilerRecord = rec->parent;

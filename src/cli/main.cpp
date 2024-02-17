@@ -23,7 +23,15 @@ int main(int argc, char* argv[]) {
   try {
     auto context = get_default_context();
 
-    auto task = std::async(std::launch::async, [&]() { interpret_file(context, argv[1]); });
+    auto task = std::async(std::launch::async, [&]() {
+      try {
+        interpret_file(context, argv[1]);
+      } catch (const Exception& e) {
+        Log(e.what());
+      } catch (const std::exception& e) {
+        Log(e.what());
+      }
+    });
     while (true) {
       if (get_progress() != 0)
         Logr(get_progress(), "\r");
@@ -32,12 +40,10 @@ int main(int argc, char* argv[]) {
         break;
     }
     Log("");
-
-  } catch (const FatalException&) {
   } catch (const Exception& e) {
-    Log("Uncaught Pine exception: ", e.what());
+    Log(e.what());
   } catch (const std::exception& e) {
-    Log("Uncaught unknown exception: ", e.what());
+    Log(e.what());
   }
 
   Profiler::Finalize();

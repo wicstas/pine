@@ -6,6 +6,8 @@
 #include <pine/core/scene.h>
 #include <pine/core/color.h>
 
+#include <tbb/parallel_for.h>
+
 namespace pine {
 
 static SpatialTree guide;
@@ -43,11 +45,11 @@ void GuidedPathIntegrator::render(Scene& scene) {
     const auto iter_samples = initial_samples * (1 << iteration);
     const auto is_last_iter = iteration + 1 == n_iterations;
 
-    use_learned_ratio = psl::sqrt(psl::min(float(iteration) / n_iterations, 1.0f));
+    use_learned_ratio = psl::min(psl::sqrt(float(iteration) / n_iterations), 0.8f);
     if (is_last_iter) {
       if (!use_estimate)
         collect_radiance_sample = false;
-      use_learned_ratio = 1.0f;
+      use_learned_ratio = 0.8f;
     }
 
     const auto downscale = psl::min(psl::sqrt(float(iter_samples) / total_pixels), 1.0f);
@@ -74,7 +76,6 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
   if (use_estimate) {
     collect_radiance_sample = false;
-    use_learned_ratio = 1.0f;
     for (int si = 0; si < estimate_samples; si++) {
       parallel_for(film.size(), [&](vec2i p) {
         auto& sampler = samplers[threadIdx].start_pixel(p, current_sample_index);
@@ -116,6 +117,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
   if (pv.length + 1 >= max_path_length)
     return {Lo, psl::nullopt};
 
+  auto& leaf = guide.traverse(it.p);
+
   if (!it.material()->is_delta())
     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
       if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
@@ -123,29 +126,43 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
         auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
         auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
         if (collect_radiance_sample)
-          guide.add_sample(RadianceSample(it.p, ls->wo, ls->le / ls->pdf), sampler.get3d());
+          guide.add_sample(leaf, it.p, RadianceSample(ls->wo, ls->le / ls->pdf), sampler.get3d());
         Lo += ls->le * cosine * f / ls->pdf * mis;
       }
     }
 
-  if ((sampler.get1d() < use_learned_ratio) && !it.material()->is_delta()) {
-    if (auto gs = guide.sample(it.p, sampler.get2d())) {
-      auto [Li, mis] = radiance(scene, it.spawn_ray(gs->wo), sampler,
-                                Vertex(pv.length + 1, it.n, it.p, gs->pdf));
+  auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
+  if (prob_a > 0.0f && sampler.get1d() < prob_a) {
+    if (auto gs = leaf.sample(sampler.get2d())) {
+      auto [Li, mis_direct] = radiance(scene, it.spawn_ray(gs->wo), sampler,
+                                       Vertex(pv.length + 1, it.n, it.p, gs->pdf));
       auto cosine = absdot(gs->wo, it.n);
-      auto f = it.material()->f({it, wi, gs->wo});
+      auto mec = MaterialEvalCtx(it, wi, gs->wo);
+      auto f = it.material()->f(mec);
       if (collect_radiance_sample)
-        guide.add_sample(RadianceSample(it.p, gs->wo, Li / gs->pdf), sampler.get3d());
-      Lo += Li * cosine * f / gs->pdf * (mis ? *mis : 1.0f);
+        guide.add_sample(leaf, it.p, RadianceSample(gs->wo, Li / gs->pdf), sampler.get3d());
+      if (mis_direct) {
+        Lo += Li * cosine * f / gs->pdf * (*mis_direct);
+      } else {
+        auto bsdf_pdf = it.material()->pdf(mec);
+        auto mis_indirect = prob_a == 1.0f ? 1.0f : balance_heuristic(gs->pdf, bsdf_pdf);
+        Lo += Li * cosine * f / gs->pdf * mis_indirect / prob_a;
+      }
     }
   } else {
     if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto nv = Vertex(pv.length + 1, it.n, it.p, bs->pdf, it.material()->is_delta());
-      auto [Li, mis] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
+      auto [Li, mis_direct] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
       auto cosine = absdot(bs->wo, it.n);
       if (collect_radiance_sample && !it.material()->is_delta())
-        guide.add_sample(RadianceSample(it.p, bs->wo, Li / bs->pdf), sampler.get3d());
-      Lo += Li * cosine * bs->f / bs->pdf * (mis ? *mis : 1.0f);
+        guide.add_sample(leaf, it.p, RadianceSample(bs->wo, Li / bs->pdf), sampler.get3d());
+      if (mis_direct) {
+        Lo += Li * cosine * bs->f / bs->pdf * (*mis_direct);
+      } else {
+        auto guide_pdf = leaf.pdf(bs->wo);
+        auto mis_indirect = prob_a == 0.0f ? 1.0f : balance_heuristic(bs->pdf, guide_pdf);
+        Lo += Li * cosine * bs->f / bs->pdf * mis_indirect / (1 - prob_a);
+      }
     }
   }
 

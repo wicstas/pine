@@ -4,11 +4,10 @@
 
 namespace pine {
 
-void stop_program() {
+void optionally_stop_program_for_stacktrace() {
 #ifndef NDEBUG
   psl::abort();
 #endif
-  throw FatalException{};
 }
 
 void null_stream(psl::string_view) {
@@ -22,11 +21,11 @@ void (*log_stream)(psl::string_view data) = cout_stream;
 void (*warning_stream)(psl::string_view data) = cout_stream;
 void (*fatal_stream)(psl::string_view data) = cout_stream;
 
-double Timer::ElapsedMs() {
-  return (clock.now() - t0) * 1000.0;
+float Timer::elapsed_ms() {
+  return (clock.now() - t0) * 1000.0f;
 }
-double Timer::Reset() {
-  double elapsed = ElapsedMs();
+float Timer::reset() {
+  auto elapsed = elapsed_ms();
   t0 = clock.now();
   return elapsed;
 }
