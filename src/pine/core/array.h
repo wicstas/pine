@@ -23,6 +23,26 @@ struct Array2d {
     DCHECK_RANGE(p[1], 0, size_[1] - 1);
     return data()[p[0] + p[1] * size_[0]];
   }
+  Array2d &operator*=(auto rhs) {
+    for (auto &x : (*this))
+      x *= rhs;
+    return *this;
+  }
+  Array2d &operator/=(auto rhs) {
+    for (auto &x : (*this))
+      x /= rhs;
+    return *this;
+  }
+  Array2d &operator+=(auto rhs) {
+    for (auto &x : (*this))
+      x += rhs;
+    return *this;
+  }
+  Array2d &operator-=(auto rhs) {
+    for (auto &x : (*this))
+      x -= rhs;
+    return *this;
+  }
 
   T *data() {
     return data_.data();

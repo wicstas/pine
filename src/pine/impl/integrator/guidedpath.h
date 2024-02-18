@@ -13,7 +13,7 @@ public:
         light_sampler{psl::move(light_sampler)},
         max_path_length{max_path_length},
         estimate_samples{psl::max(estimate_samples, 0)},
-        use_estimate{estimate_samples > 0} {
+        use_estimated_radiance{estimate_samples > 0} {
   }
 
   void render(Scene& scene) override;
@@ -41,7 +41,8 @@ private:
   LightSampler light_sampler;
   int max_path_length;
   int estimate_samples;
-  bool use_estimate;
+  bool use_estimated_radiance;
+  bool estimate_radiance;
   bool collect_radiance_sample;
   float use_learned_ratio;
 };

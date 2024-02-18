@@ -22,45 +22,61 @@ struct PgSample {
   float pdf = 0;
 };
 
+struct AtomicFloat {
+  AtomicFloat() = default;
+  AtomicFloat(float v) : value(v){};
+
+  AtomicFloat(const AtomicFloat& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  AtomicFloat(AtomicFloat&& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  AtomicFloat& operator=(const AtomicFloat& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+  AtomicFloat& operator==(AtomicFloat&& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+
+  operator float() const {
+    return value;
+  }
+  auto& operator=(float rhs) {
+    value = rhs;
+    return *this;
+  }
+  AtomicFloat& operator+=(float rhs) {
+    value += rhs;
+    return *this;
+  }
+
+private:
+  std::atomic<float> value;
+};
+
 struct QuadNode {
   QuadNode() = default;
-  QuadNode(vec2 lower, vec2 upper) : lower(lower), upper(upper) {
+  QuadNode(vec2 lower, vec2 upper) : lower(lower), mid((lower + upper) / 2) {
   }
 
   float footprint(vec2 sc) const {
-    if (is_leaf())
-      return (upper[0] - lower[0]) / 2;
+    if (PINE_UNLIKELY(is_leaf()))
+      return (mid[0] - lower[0]) * 2;
     else
       return child(sc).footprint(sc);
   }
 
-  void add_sample(vec2 sc, float flux, vec3 flux_color) {
-    lock.lock();
+  void add_sample(vec2 sc, float flux) {
     this->flux += flux;
-    this->flux_color += flux_color;
-    lock.unlock();
     if (PINE_LIKELY(!is_leaf()))
-      child(sc).add_sample(sc, flux, flux_color);
-    return;
-
-    // auto x0 = psl::max(lower[0], sc[0] - footprint);
-    // auto x1 = psl::min(upper[0], sc[0] + footprint);
-    // auto y0 = psl::max(lower[1], sc[1] - footprint);
-    // auto y1 = psl::min(upper[1], sc[1] + footprint);
-    // auto weight = psl::max(x1 - x0, 0.0f) * psl::max(y1 - y0, 0.0f) * total_area;
-    // lock.lock();
-    // this->flux += weight * flux;
-    // this->flux_color += weight * flux_color;
-    // lock.unlock();
-    // if (psl::abs(weight) > 0.01f && !is_leaf())
-    //   for (int i = 0; i < 4; i++)
-    //     child(i).add_sample(sc, footprint, total_area, flux, flux_color);
+      child(sc).add_sample(sc, flux);
   }
   psl::optional<PgSample> sample(vec2d u, float pdf = 1) const {
     if (flux == 0.0f)
       return psl::nullopt;
     if (PINE_UNLIKELY(is_leaf())) {
-      return PgSample(uniform_sphere(lerp(vec2(u), lower, upper)), pdf / (4 * Pi));
+      return PgSample(uniform_sphere(lerp(vec2(u), lower, mid * 2 - lower)), pdf / (4 * Pi));
     } else {
       auto& c0 = child(0);
       auto& c2 = child(2);
@@ -101,21 +117,14 @@ struct QuadNode {
       return 4 * c.flux / flux * c.pdf(sc);
     }
   }
-  vec3 flux_estimate(vec2 sc) const {
-    if (is_leaf())
-      return flux_color / (area(upper - lower) * 4 * Pi);
-    else
-      return child(sc).flux_estimate(sc);
-  }
   void clear() {
     flux = 0;
-    flux_color = vec3(0);
     if (!is_leaf())
       for (int i = 0; i < 4; i++)
         child(i).clear();
   }
   int depth() const {
-    return -psl::log2(upper[0] - lower[0]);
+    return -psl::log2(mid[0] - lower[0]) - 1;
   }
   int tree_depth(vec2 sc) const {
     if (is_leaf())
@@ -127,14 +136,13 @@ struct QuadNode {
   void refine(float total_flux) {
     if (flux > total_flux * 0.01f && depth() < 15) {
       if (is_leaf()) {
-        auto mid = (lower + upper) / 2;
+        auto upper = mid * 2 - lower;
         children = psl::array_of(QuadNode(vec2(lower[0], lower[1]), vec2(mid[0], mid[1])),
                                  QuadNode(vec2(mid[0], lower[1]), vec2(upper[0], mid[1])),
                                  QuadNode(vec2(lower[0], mid[1]), vec2(mid[0], upper[1])),
                                  QuadNode(vec2(mid[0], mid[1]), vec2(upper[0], upper[1])));
         for (int i = 0; i < 4; i++) {
           child(i).flux = flux / 4;
-          child(i).flux_color = flux_color / 4;
           child(i).refine(total_flux);
         }
       } else {
@@ -153,14 +161,14 @@ private:
   }
   QuadNode& child(vec2 sc) {
     auto index = 0;
-    index += int{sc[0] > (lower[0] + upper[0]) / 2};
-    index += 2 * int{sc[1] > (lower[1] + upper[1]) / 2};
+    index += int{sc[0] > mid[0]};
+    index += 2 * int{sc[1] > mid[1]};
     return (*children)[index];
   }
   const QuadNode& child(vec2 sc) const {
     auto index = 0;
-    index += int{sc[0] > (lower[0] + upper[0]) / 2};
-    index += 2 * int{sc[1] > (lower[1] + upper[1]) / 2};
+    index += int{sc[0] > mid[0]};
+    index += 2 * int{sc[1] > mid[1]};
     return (*children)[index];
   }
   QuadNode& child(int index) {
@@ -171,11 +179,9 @@ private:
   }
 
   friend struct QuadTree;
-  SpinLock lock;
-  float flux = 0.0f;
-  vec3 flux_color;
+  AtomicFloat flux{0.0f};
   vec2 lower;
-  vec2 upper;
+  vec2 mid;
   psl::Box<psl::Array<QuadNode, 4>> children;
 };
 
@@ -183,10 +189,14 @@ struct QuadTree {
   QuadTree() : root(vec2(0, 0), vec2(1, 1)) {
   }
 
-  void add_sample(vec3 w, float flux, vec3 flux_color) {
+  void add_sample(vec3 w, float flux, vec2) {
     CHECK_GE(flux, 0);
     auto sc = inverse_uniform_sphere(w);
-    root.add_sample(sc, flux, flux_color);
+    // auto footprint = root.footprint(sc);
+    // sc += footprint * (u - vec2(0.5f));
+    // sc.x = psl::fract(sc.x);
+    // sc.y = psl::clamp(sc.y, 0.0f, 1.0f);
+    root.add_sample(sc, flux);
     n_samples += 1;
   }
   psl::optional<PgSample> sample(vec2d u) const {
@@ -194,16 +204,6 @@ struct QuadTree {
   }
   float pdf(vec3 w) const {
     return root.pdf(inverse_uniform_sphere(w));
-  }
-  vec3 flux_estimate(vec3 w) const {
-    if (n_samples == 0)
-      return vec3(0.0f);
-    return root.flux_estimate(inverse_uniform_sphere(w)) / int64_t(n_samples);
-  }
-  vec3 flux_estimate() const {
-    if (n_samples == 0)
-      return vec3(0.0f);
-    return root.flux_color / (Pi * 4) / int64_t(n_samples);
   }
   void clear() {
     root.clear();
@@ -240,12 +240,6 @@ struct SpatialNode {
   }
   float pdf(vec3 w) const {
     return guide->pdf(w);
-  }
-  vec3 flux_estimate() const {
-    return guide->flux_estimate();
-  }
-  vec3 flux_estimate(vec3 w) const {
-    return guide->flux_estimate(w);
   }
   int max_tree_depth() const {
     if (is_leaf())
@@ -302,7 +296,7 @@ struct SpatialNode {
 private:
   friend struct SpatialNodeRoot;
   float footprint() {
-    return aabb.diagonal()[axis] / 2;
+    return aabb.diagonal()[axis];
   }
   bool is_leaf() const {
     return !children;
@@ -336,11 +330,11 @@ struct SpatialNodeRoot {
   SpatialNodeRoot(AABB aabb, QuadTree quad) : root(aabb, quad) {
   }
 
-  void add_sample(SpatialNode& leaf, vec3 p0, RadianceSample s, vec3 u) {
-    CHECK_GE(s.flux[0], 0.0f);
-    CHECK_GE(s.flux[1], 0.0f);
-    CHECK_GE(s.flux[2], 0.0f);
-    auto p = p0 + leaf.footprint() * 2 * (u - vec3(0.5f));
+  void add_sample(SpatialNode& leaf, vec3 p0, RadianceSample s, vec3 u, vec2 ud) {
+    DCHECK_GE(s.flux[0], 0.0f);
+    DCHECK_GE(s.flux[1], 0.0f);
+    DCHECK_GE(s.flux[2], 0.0f);
+    auto p = p0 + leaf.footprint() * (u - vec3(0.5f));
     for (int i = 0; i < 3; i++) {
       if (p[i] < root.aabb.lower[i])
         p[i] += 2 * (root.aabb.lower[i] - p[i]);
@@ -349,7 +343,7 @@ struct SpatialNodeRoot {
     }
     auto& chosen_leaf = traverse(p);
     chosen_leaf.n_samples += 1;
-    chosen_leaf.collector->add_sample(s.w, length(s.flux), s.flux);
+    chosen_leaf.collector->add_sample(s.w, length(s.flux), ud);
   }
   int max_tree_depth() const {
     return root.max_tree_depth();
@@ -379,7 +373,7 @@ struct SpatialGrid {
   SpatialGrid(AABB aabb, vec3i resolution) : aabb(aabb), grid(resolution) {
   }
 
-  void add_sample(vec3 p, RadianceSample s, vec3 u) {
+  void add_sample(vec3 p, RadianceSample s, vec3 u, vec2 ud) {
     CHECK_GE(s.flux[0], 0.0f);
     CHECK_GE(s.flux[1], 0.0f);
     CHECK_GE(s.flux[2], 0.0f);
@@ -391,7 +385,7 @@ struct SpatialGrid {
         p[i] += 2 * (aabb.upper[i] - p[i]);
     }
     auto& leaf = traverse(p);
-    leaf.collector.add_sample(s.w, length(s.flux), s.flux);
+    leaf.collector.add_sample(s.w, length(s.flux), ud);
   }
 
   void refine(int) {
@@ -409,9 +403,6 @@ struct SpatialGrid {
   }
   float pdf(vec3 p, vec3 w) const {
     return traverse(p).guide.pdf(w);
-  }
-  vec3 flux_estimate(vec3 p) const {
-    return traverse(p).collector.flux_estimate();
   }
 
 private:

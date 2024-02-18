@@ -6,8 +6,6 @@
 #include <pine/core/scene.h>
 #include <pine/core/color.h>
 
-#include <tbb/parallel_for.h>
-
 namespace pine {
 
 static SpatialTree guide;
@@ -25,70 +23,118 @@ void GuidedPathIntegrator::render(Scene& scene) {
   Profiler _("Rendering");
 
   auto total_pixels = size_t(area(film.size()));
-  auto learning_samples = total_pixels * samples_per_pixel;
-  auto total_samples = double(learning_samples + total_pixels * estimate_samples);
+  auto total_samples = double(total_pixels * samples_per_pixel);
   auto initial_samples = size_t(1024 * 16);
-  auto n_iterations = int(psl::ceil(psl::log2(learning_samples / initial_samples + 1.0f)));
-  Debug("[GuidedPath]", n_iterations, " learning iterations");
 
   guide = SpatialTree(scene.get_aabb(), QuadTree());
   guide.initial_refinement(initial_samples * 4);
 
   auto current_sample_index = 0;
   auto current_samples = size_t(0);
+  auto weights = psl::vector<float>();
+  auto images = psl::vector<Array2d3f>();
+  auto image = Array2d3f(film.size());
+  auto squared_image = Array2d3f(film.size());
+  auto prev_variance = 1e+10;
+  auto on_final_rendering = false;
+  auto stablizer = 0;
 
   set_progress(0);
   collect_radiance_sample = true;
+  estimate_radiance = false;
   use_learned_ratio = 0.0f;
-  for (int iteration = 0; iteration < n_iterations; iteration++) {
-    Debug("iter: ", iteration, ", max tree depth: ", guide.max_tree_depth());
-    const auto iter_samples = initial_samples * (1 << iteration);
-    const auto is_last_iter = iteration + 1 == n_iterations;
 
-    use_learned_ratio = psl::min(psl::sqrt(float(iteration) / n_iterations), 0.8f);
-    if (is_last_iter) {
-      if (!use_estimate)
-        collect_radiance_sample = false;
-      use_learned_ratio = 0.8f;
-    }
-
+  for (int iteration = 0; current_samples < total_samples; iteration++) {
+    auto iter_samples = initial_samples * (1 << iteration);
     const auto downscale = psl::min(psl::sqrt(float(iter_samples) / total_pixels), 1.0f);
     const auto iter_image_size = vec2i(film.size() * downscale);
     const auto iter_n_pass = iter_samples / area(iter_image_size);
-    for (size_t si = 0; si < iter_n_pass; si++) {
+    iter_samples = iter_n_pass * area(iter_image_size);
+
+    use_learned_ratio = iter_n_pass > 1 ? 0.8f : 0.0f;
+    if (current_samples + iter_samples * 2.0 >= total_samples)
+      on_final_rendering = true;
+    if (on_final_rendering) {
+      collect_radiance_sample = false;
+      estimate_radiance = use_estimated_radiance;
+    }
+
+    size_t si = 0;
+    while (true) {
       parallel_for(iter_image_size, [&](vec2i p) {
         auto& sampler = samplers[threadIdx].start_pixel(p, current_sample_index);
         auto p_film = vec2(p + sampler.get2d()) / iter_image_size;
         auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
         auto [L, _] = radiance(scene, ray, sampler, Vertex::first_vertex());
-        if (is_last_iter && !use_estimate)
-          film.add_sample(p_film * film.size(), L);
+        image[p] += L;
+        squared_image[p] += L * L;
       });
       current_sample_index += 1;
       current_samples += area(iter_image_size);
       set_progress(current_samples / total_samples);
+      si++;
+      if (!on_final_rendering && si >= iter_n_pass)
+        break;
+      if (on_final_rendering && si >= iter_n_pass && current_samples >= total_samples)
+        break;
+    }
+    if (si != 1) {
+      image /= si;
+      squared_image /= si;
     }
 
-    if (!is_last_iter || use_estimate)
+    if (iter_n_pass > 1 || on_final_rendering) {
+      auto variance = 0.0;
+      if (iter_n_pass > 1) {
+        parallel_for(iter_image_size, [&](vec2i p) {
+          auto s_c = squared_image[p];
+          auto c = image[p];
+          auto local_variance = psl::sqr(luminance(abs(s_c - c * c)));
+          variance += double(local_variance);
+        });
+        variance = variance / (area(iter_image_size) * psl::max(si - 1, size_t(1)));
+      } else {
+        variance = 1.0f;
+      }
+      weights.push_back(1.0f / variance);
+      images.push_back(image);
+
+      if (!on_final_rendering) {
+        Debug("Variance: ", float(variance));
+        if (variance > prev_variance / 2.0f) {
+          stablizer++;
+          if (stablizer > 1) {
+            on_final_rendering = true;
+            Debug("Done learning, start rendering");
+          }
+          prev_variance = psl::min(variance, prev_variance);
+        } else {
+          stablizer = 0;
+          prev_variance = variance;
+        }
+      }
+    }
+    if (!on_final_rendering)
       guide.refine(iteration);
-    Debug("iter: ", iteration, ", max tree depth: ", guide.max_tree_depth());
+    for (auto& pixel : image)
+      pixel = vec3(0);
+    for (auto& pixel : squared_image)
+      pixel = vec3(0);
   }
 
-  if (use_estimate) {
-    collect_radiance_sample = false;
-    for (int si = 0; si < estimate_samples; si++) {
-      parallel_for(film.size(), [&](vec2i p) {
-        auto& sampler = samplers[threadIdx].start_pixel(p, current_sample_index);
-        auto p_film = vec2(p + sampler.get2d()) / film.size();
-        auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-        auto [L, _] = radiance(scene, ray, sampler, Vertex::first_vertex());
-        film.add_sample(p, L);
-      });
-      current_sample_index += 1;
-      current_samples += area(film.size());
-      set_progress(current_samples / total_samples);
-    }
+  auto total_weight = psl::sum(weights);
+  for (auto& w : weights)
+    w /= total_weight;
+  if (estimate_radiance) {
+    for (auto& w : weights)
+      w = 0;
+    weights.back() = 1.0f;
   }
+  Debug(weights);
+  for_2d(film.size(), [&](vec2i p) {
+    for (size_t i = 0; i < images.size(); i++)
+      film.add_sample_no_acc(p, images[i][p] * weights[i]);
+  });
 
   set_progress(1.0f);
 }
@@ -119,20 +165,32 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
 
   auto& leaf = guide.traverse(it.p);
 
+  auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
+  auto select_guide = prob_a > 0.0f && sampler.get1d() < prob_a;
   if (!it.material()->is_delta())
     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
       if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
         auto cosine = absdot(ls->wo, it.n);
-        auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
-        auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-        if (collect_radiance_sample)
-          guide.add_sample(leaf, it.p, RadianceSample(ls->wo, ls->le / ls->pdf), sampler.get3d());
-        Lo += ls->le * cosine * f / ls->pdf * mis;
+        if (select_guide) {
+          auto f = it.material()->f({it, wi, ls->wo});
+          auto guide_pdf = leaf.pdf(ls->wo);
+          auto mis = balance_heuristic(ls->pdf, guide_pdf);
+          if (collect_radiance_sample)
+            guide.add_sample(leaf, it.p, RadianceSample(ls->wo, ls->le / ls->pdf), sampler.get3d(),
+                             sampler.get2d());
+          Lo += ls->le * cosine * f / ls->pdf * mis;
+        } else {
+          auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+          auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+          if (collect_radiance_sample)
+            guide.add_sample(leaf, it.p, RadianceSample(ls->wo, ls->le / ls->pdf), sampler.get3d(),
+                             sampler.get2d());
+          Lo += ls->le * cosine * f / ls->pdf * mis;
+        }
       }
     }
 
-  auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
-  if (prob_a > 0.0f && sampler.get1d() < prob_a) {
+  if (select_guide) {
     if (auto gs = leaf.sample(sampler.get2d())) {
       auto [Li, mis_direct] = radiance(scene, it.spawn_ray(gs->wo), sampler,
                                        Vertex(pv.length + 1, it.n, it.p, gs->pdf));
@@ -140,7 +198,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       auto mec = MaterialEvalCtx(it, wi, gs->wo);
       auto f = it.material()->f(mec);
       if (collect_radiance_sample)
-        guide.add_sample(leaf, it.p, RadianceSample(gs->wo, Li / gs->pdf), sampler.get3d());
+        guide.add_sample(leaf, it.p, RadianceSample(gs->wo, Li / gs->pdf), sampler.get3d(),
+                         sampler.get2d());
       if (mis_direct) {
         Lo += Li * cosine * f / gs->pdf * (*mis_direct);
       } else {
@@ -155,7 +214,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       auto [Li, mis_direct] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
       auto cosine = absdot(bs->wo, it.n);
       if (collect_radiance_sample && !it.material()->is_delta())
-        guide.add_sample(leaf, it.p, RadianceSample(bs->wo, Li / bs->pdf), sampler.get3d());
+        guide.add_sample(leaf, it.p, RadianceSample(bs->wo, Li / bs->pdf), sampler.get3d(),
+                         sampler.get2d());
       if (mis_direct) {
         Lo += Li * cosine * bs->f / bs->pdf * (*mis_direct);
       } else {

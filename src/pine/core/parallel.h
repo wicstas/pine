@@ -57,28 +57,6 @@ void parallel_for(vec3i64 size, F&& f) {
   });
 }
 
-struct AtomicFloat {
-  explicit AtomicFloat(float v = 0) {
-    bits = psl::bitcast<uint32_t>(v);
-  };
-  operator float() const {
-    return psl::bitcast<float>(bits);
-  }
-  AtomicFloat& operator=(float v) {
-    bits = psl::bitcast<uint32_t>(v);
-    return *this;
-  }
-  void Add(float v) {
-    uint32_t oldBits = bits, newBits;
-    do {
-      newBits = psl::bitcast<uint32_t>(psl::bitcast<float>(oldBits) + v);
-    } while (!bits.compare_exchange_weak(oldBits, newBits));
-  }
-
-private:
-  std::atomic<uint32_t> bits;
-};
-
 void parallel_context(Context& ctx);
 
 }  // namespace pine

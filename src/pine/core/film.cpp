@@ -33,6 +33,12 @@ void Film::offset(vec3 factor) {
     pixel += vec4{factor, 0.0f};
   }
 }
+void Film::add_sample_no_acc(vec2i p_film, vec3 color) {
+  DCHECK_RANGE(p_film.x, 0, size().x - 1);
+  DCHECK_RANGE(p_film.y, 0, size().y - 1);
+  p_film.y = size().y - 1 - p_film.y;
+  pixels[p_film] += vec4(color, 1.0f);
+}
 void Film::add_sample(vec2i p_film, vec3 color) {
   DCHECK_RANGE(p_film.x, 0, size().x - 1);
   DCHECK_RANGE(p_film.y, 0, size().y - 1);

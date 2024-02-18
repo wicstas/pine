@@ -649,6 +649,16 @@ auto sum(Range auto&& range) {
     s += x;
   return s;
 }
+auto mean(Range auto&& range) {
+  return sum(range) / psl::size(range);
+}
+auto variance(Range auto&& range) {
+  auto var = psl::Decay<decltype(*psl::begin(range))>{0};
+  auto mean = psl::mean(range);
+  for (auto&& x : range)
+    var += (x - mean) * (x - mean);
+  return var / psl::size(range);
+}
 
 auto find_last_of(Range auto&& range, const auto& value) {
   return find_if(psl::reverse_adapter(range), equal_to(value)).unwrap();
@@ -658,6 +668,11 @@ template <Range RangeA, Range RangeB>
 auto tie(RangeA&& a, RangeB&& b) {
   struct Ranger {
     struct Iterator {
+      decltype(auto) operator*() {
+        decltype(auto) a = *a_it;
+        decltype(auto) b = *b_it;
+        return psl::pair<decltype(a), decltype(b)>{FWD(a), FWD(b)};
+      }
       decltype(auto) operator*() const {
         decltype(auto) a = *a_it;
         decltype(auto) b = *b_it;
