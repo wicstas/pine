@@ -77,6 +77,7 @@ auto overloaded_r(R (*f)(Args...)) {
 struct VariableConcept {
   virtual ~VariableConcept() = default;
   virtual psl::unique_ptr<VariableConcept> clone() = 0;
+  virtual psl::unique_ptr<VariableConcept> copy() = 0;
   virtual psl::unique_ptr<VariableConcept> create_ref() = 0;
   virtual void* ptr() = 0;
   virtual size_t type_id() const = 0;
@@ -89,7 +90,13 @@ struct Variable {
     VariableModel(T base) : base{psl::move(base)} {
     }
     psl::unique_ptr<VariableConcept> clone() override {
-      return psl::make_unique<VariableModel<R, R>>(*reinterpret_cast<R*>(ptr()));
+      return psl::make_unique<VariableModel>(base);
+    }
+    psl::unique_ptr<VariableConcept> copy() override {
+      if constexpr (psl::is_psl_ref<T>)
+        return psl::make_unique<VariableModel<R, R>>(*base);
+      else
+        return psl::make_unique<VariableModel<R, R>>(base);
     }
     psl::unique_ptr<VariableConcept> create_ref() override {
       if constexpr (psl::is_psl_ref<T>)
@@ -135,8 +142,8 @@ struct Variable {
   Variable(Variable&& rhs) = default;
   Variable& operator=(Variable&& rhs) = default;
 
-  Variable clone() const {
-    return Variable(model->clone());
+  Variable copy() const {
+    return Variable(model->copy());
   }
   Variable create_ref() const {
     return Variable(model->create_ref());

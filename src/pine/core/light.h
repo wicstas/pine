@@ -12,8 +12,9 @@ namespace pine {
 struct LightSample {
   vec3 le;
   vec3 wo;
-  float distance = 1.0f;
-  float pdf = 1.0f;
+  float distance;
+  float pdf;
+  bool is_delta;
   const Light* light = nullptr;
 };
 struct LightLeSample {
@@ -34,7 +35,7 @@ struct SpotLight {
   SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_radian,
             float cutoff_additonal_radian = 0.0f);
 
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
+  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const;
 
   vec3 position;
   vec3 direction;
@@ -53,7 +54,7 @@ struct DirectionalLight {
 struct AreaLight {
   AreaLight(psl::shared_ptr<Geometry> geometry) : geometry{psl::move(geometry)} {};
 
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
+  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const;
 
   psl::shared_ptr<Geometry> geometry;
 };
@@ -99,8 +100,8 @@ struct Light
     : psl::variant<PointLight, SpotLight, DirectionalLight, AreaLight, Atmosphere, Sky, ImageSky> {
   using variant::variant;
 
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const {
-    return dispatch([&](auto&& x) { return x.sample(p, n, u2); });
+  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const {
+    return dispatch([&](auto&& x) -> psl::optional<LightSample> { return x.sample(p, n, u2); });
   }
   bool is_delta() const {
     return is<PointLight>() || is<SpotLight>() || is<DirectionalLight>();

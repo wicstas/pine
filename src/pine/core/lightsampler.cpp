@@ -14,14 +14,16 @@ psl::optional<LightSample> UniformLightSampler::sample(vec3 p, vec3 n, float u1,
   if (N == 0)
     return psl::nullopt;
   auto index = psl::min(static_cast<size_t>(u1 * N), N - 1);
-  auto s = lights[index].sample(p, n, u2);
-  if (s.pdf == 0.0f)
+  if (auto s = lights[index].sample(p, n, u2)) {
+    if (s->pdf == 0.0f)
+      return psl::nullopt;
+    s->light = &lights[index];
+    s->pdf = s->pdf / N;
+    s->is_delta = s->light->is_delta();
+    return s;
+  } else {
     return psl::nullopt;
-  s.light = &lights[index];
-
-  s.pdf = s.pdf / N;
-
-  return s;
+  }
 }
 float UniformLightSampler::pdf(const Geometry* light, const Interaction& it, const Ray& ray,
                                vec3 n) const {

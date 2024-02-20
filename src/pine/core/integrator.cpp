@@ -36,7 +36,7 @@ void RayIntegrator::render(Scene& scene) {
     parallel_for(film.size(), [&](vec2i p) {
       Sampler& sampler = samplers[threadIdx];
       sampler.start_pixel(p, i * primary_ratio);
-      auto p_film = vec2(p + sampler.get2d()) / scene.camera.film().size();
+      auto p_film = vec2(p + sampler.get2d()) / film.size();
       auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
       auto it = Interaction();
       auto is_hit = intersect(ray, it);
