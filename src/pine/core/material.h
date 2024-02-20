@@ -22,23 +22,20 @@ struct MaterialSampleCtx : NodeEvalCtx {
 };
 
 struct MaterialEvalCtx : NodeEvalCtx {
-  MaterialEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wi, vec3 wo) : NodeEvalCtx(p, n, uv) {
-    auto w2m = inverse(coordinate_system(n));
-    this->wi = w2m * wi;
-    this->wo = w2m * wo;
-  };
+public:
   MaterialEvalCtx(const Interaction& it, vec3 wi, vec3 wo)
-      : MaterialEvalCtx(it.p, it.n, it.uv, wi, wo){};
+      : NodeEvalCtx(it.p, it.n, it.uv), wi(it.to_local(wi)), wo(it.to_local(wo)) {
+  }
 
   vec3 wi;
   vec3 wo;
 };
 
 struct LeEvalCtx : NodeEvalCtx {
-  LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv) {
-    this->wo = solve(coordinate_system(n), wo);
-  };
-  LeEvalCtx(const Interaction& it, vec3 wo) : LeEvalCtx(it.p, it.n, it.uv, wo){};
+  LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv), wo(wo) {
+  }
+  LeEvalCtx(const Interaction& it, vec3 wo) : NodeEvalCtx(it.p, it.n, it.uv), wo(wo) {
+  }
 
   vec3 wo;
 };

@@ -63,10 +63,9 @@ void hit8_func(const RTCOccludedFunctionNArguments* args) {
 #pragma unroll
   for (int i = 0; i < 8; i++) {
     if (args->valid[i]) {
-      auto ray =
-          Ray(vec3(ray_.org_x[i], ray_.org_y[i], ray_.org_z[i]),
-              vec3(ray_.dir_x[i], ray_.dir_y[i], ray_.dir_z[i]), ray_.tnear[i], ray_.tfar[i]);
-      if (shape.hit(ray))
+      if (shape.hit(Ray(vec3(ray_.org_x[i], ray_.org_y[i], ray_.org_z[i]),
+                        vec3(ray_.dir_x[i], ray_.dir_y[i], ray_.dir_z[i]), ray_.tnear[i],
+                        ray_.tfar[i])))
         ray_.tfar[i] = -Infinity;
     }
   }

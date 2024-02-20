@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-add_compile_options(-Wall -Wextra -pedantic -ffast-math)
+add_compile_options(-Wall -Wextra -pedantic)
 
 #psl Library
 add_library(psl
@@ -56,11 +56,10 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
-#src/pine/impl/integrator/spatial_tree.cpp
+src/pine/impl/integrator/filteredpath.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
-src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/voxelcone.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp

@@ -50,12 +50,11 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
       if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
-          auto mec = MaterialEvalCtx(it, -ray.d, ls->wo);
-          auto f = it.material()->f(mec);
-          auto pdf = it.material()->pdf(mec);
+          auto [f, pdf] = it.material()->f_pdf({it, -ray.d, ls->wo});
           auto mis = 1.0f;
+          //TODO guide
           if (!ls->light->is_delta())
-            mis = power_heuristic(1, ls->pdf, 1, pdf);
+            mis = balance_heuristic(ls->pdf, pdf);
           L += beta * cosine * ls->le / ls->pdf * f * mis;
         }
       }

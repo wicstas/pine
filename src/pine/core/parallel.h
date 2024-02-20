@@ -20,20 +20,30 @@ void parallel_for_impl(int64_t nItems, F&& f) {
   psl::vector<std::thread> threads{static_cast<size_t>(n_threads())};
   std::atomic<int64_t> i{0};
   int tid = 0;
+  std::exception_ptr eptr = nullptr;
 
   for (auto& thread : threads)
     thread = std::thread([&, tid = tid++]() {
-      threadIdx = tid;
-      while (true) {
-        if (auto index = i++; index < nItems)
-          f(index);
-        else
-          break;
+      try {
+        threadIdx = tid;
+        while (true) {
+          if (auto index = i++; index < nItems)
+            f(index);
+          else
+            break;
+
+          if (eptr)
+            return;
+        }
+      } catch (...) {
+        eptr = std::current_exception();
       }
     });
 
   for (auto& thread : threads)
     thread.join();
+  if (eptr)
+    std::rethrow_exception(eptr);
 }
 
 template <typename F, typename... Args>

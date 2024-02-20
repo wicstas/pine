@@ -17,9 +17,19 @@ struct DiffuseBSDF {
   DiffuseBSDF(Node3f albedo) : albedo{psl::move(albedo)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u, const NodeEvalCtx& nc) const;
-  vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
-  float pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const;
-  float roughness_amount(const NodeEvalCtx& nc) const;
+  vec3 f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
+    if (!SameHemisphere(wi, wo))
+      return vec3(0.0f);
+    return albedo(nc) / Pi;
+  }
+  float pdf(vec3 wi, vec3 wo, const NodeEvalCtx&) const {
+    if (!SameHemisphere(wi, wo))
+      return epsilon;
+    return AbsCosTheta(wo) / Pi;
+  }
+  float roughness_amount(const NodeEvalCtx&) const {
+    return 1.0f;
+  }
   bool is_delta() const {
     return false;
   }

@@ -1263,8 +1263,6 @@ inline vec3 unit_square_to_cartesian(vec2 sc) {
 }
 
 
-// The following function is by Francesco Mazzoli
-// detailed in article "Speeding up atan2f by 50x": https://mazzo.li/posts/vectorized-atan2.html
 float atan2_approx(float y, float x);
 inline float phi2pi(float x, float y) {
   // float phi = psl::atan2(y, x);

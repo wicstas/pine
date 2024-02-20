@@ -18,19 +18,6 @@ psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const Node
     return psl::nullopt;
   return bs;
 }
-vec3 DiffuseBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
-  if (!SameHemisphere(wi, wo))
-    return vec3(0.0f);
-  return albedo(nc) / Pi;
-}
-float DiffuseBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx&) const {
-  if (!SameHemisphere(wi, wo))
-    return epsilon;
-  return AbsCosTheta(wo) / Pi;
-}
-float DiffuseBSDF::roughness_amount(const NodeEvalCtx&) const {
-  return 1.0f;
-}
 
 psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
                                                 const NodeEvalCtx& nc) const {

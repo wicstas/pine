@@ -17,16 +17,23 @@ inline float atan_fma_approximation(float x) {
   return x * fmaf(x_sq, fmaf(x_sq, fmaf(x_sq, fmaf(x_sq, fmaf(x_sq, a11, a9), a7), a5), a3), a1);
 }
 float atan2_approx(float y, float x) {
-  return psl::atan2(y, x);
-  auto swap = fabs(x) < fabs(y);
-  auto atan_input = (swap ? x : y) / (swap ? y : x);
-  float res = atan_fma_approximation(atan_input);
-  res = swap ? copysignf(Pi2, atan_input) - res : res;
-  if (x < 0.0f) {
-    res = copysignf(Pi, y) + res;
-  }
-  return res;
+  float abs_y = std::fabs(y) + 1e-10f;
+  float r = (x - std::copysign(abs_y, x)) / (abs_y + std::fabs(x));
+  float angle = M_PI / 2.f - std::copysign(M_PI / 4.f, x);
+
+  angle += (0.1963f * r * r - 0.9817f) * r;
+  return std::copysign(angle, y);
 }
+// float atan2_approx(float y, float x) {
+//   auto swap = fabs(x) < fabs(y);
+//   auto atan_input = (swap ? x : y) / (swap ? y : x);
+//   float res = atan_fma_approximation(atan_input);
+//   res = swap ? copysignf(Pi2, atan_input) - res : res;
+//   if (x < 0.0f) {
+//     res = copysignf(Pi, y) + res;
+//   }
+//   return res;
+// }
 
 vec3 solve(mat3 m, vec3 b) {
   return inverse(m) * b;

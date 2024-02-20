@@ -5,9 +5,8 @@
 
 namespace pine {
 
-class GuidedPathIntegrator : public RTIntegrator {
-public:
-  GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+struct FilteredPathIntegrator : public RTIntegrator {
+  FilteredPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                        int max_path_length)
       : RTIntegrator{psl::move(accel), psl::move(sampler)},
         light_sampler{psl::move(light_sampler)},
@@ -30,16 +29,14 @@ public:
     bool is_delta;
   };
   struct RadianceResult {
-    vec3 Lo;
-    psl::optional<float> mis_term;
+    vec3 li;
+    psl::optional<float> mis;
   };
-  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
+  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv) const;
 
 private:
   LightSampler light_sampler;
   int max_path_length;
-  bool collect_radiance_sample;
-  float use_learned_ratio;
 };
 
 }  // namespace pine

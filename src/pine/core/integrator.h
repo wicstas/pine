@@ -31,7 +31,10 @@ public:
     return accel.hit8(rays);
   }
   bool intersect(Ray& ray, Interaction& it) const {
-    return accel.intersect(ray, it);
+    auto is_hit = accel.intersect(ray, it);
+    if (is_hit)
+      it.compute_transformation();
+    return is_hit;
   }
 
 protected:

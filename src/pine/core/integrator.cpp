@@ -30,7 +30,7 @@ void RayIntegrator::render(Scene& scene) {
 
   auto primary_spp = psl::max(samples_per_pixel / primary_ratio, 1);
   auto secondary_spp = psl::max(samples_per_pixel / primary_spp, 1);
-  Profiler _("Rendering");
+  Profiler _("[Integrator]Rendering");
   for (int i = 0; i < primary_spp; i++) {
     Atomic<int64_t> max_index = 0;
     parallel_for(film.size(), [&](vec2i p) {

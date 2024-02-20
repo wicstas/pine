@@ -10,14 +10,22 @@ struct Interaction {
     Ray ray;
     ray.d = wo;
     ray.o = offset_ray_origin(p, face_same_hemisphere(n, ray.d));
-    ray.tmin = 1e-6f;
-    ray.tmax = distance * (1.0f - 1e-3f);
+    ray.tmin = 1e-8f;
+    ray.tmax = distance * (1.0f - 1e-4f);
     return ray;
+  }
+
+  void compute_transformation() {
+    world_to_local = inverse(coordinate_system(n));
+  }
+  vec3 to_local(vec3 w) const {
+    return world_to_local * w;
   }
 
   vec3 p;
   vec3 n;
   vec2 uv;
+  mat3 world_to_local;
 
   const Material* material() const;
 

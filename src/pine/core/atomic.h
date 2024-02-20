@@ -1,5 +1,7 @@
 #pragma once
 
+#include <psl/type_traits.h>
+
 #include <atomic>
 
 namespace pine {
@@ -57,12 +59,82 @@ struct Atomic {
     return *this;
   }
   operator T() const {
-    return value;
+    lock.lock();
+    auto val = value;
+    lock.unlock();
+    return val;
   }
 
 private:
   T value;
-  SpinLock lock;
+  mutable SpinLock lock;
+};
+
+template <psl::FloatingPoint T>
+struct Atomic<T> {
+  Atomic() = default;
+  Atomic(T v) : value(v){};
+
+  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  Atomic& operator=(const Atomic& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+  Atomic& operator==(Atomic&& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+
+  operator T() const {
+    return value;
+  }
+  void operator=(T rhs) {
+    value = rhs;
+  }
+  void operator+=(T rhs) {
+    value += rhs;
+  }
+
+private:
+  std::atomic<T> value;
+};
+template <psl::Integral T>
+struct Atomic<T> {
+  Atomic() = default;
+  Atomic(T v) : value(v){};
+
+  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  }
+  Atomic& operator=(const Atomic& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+  Atomic& operator==(Atomic&& rhs) {
+    value = rhs.value.load(std::memory_order_relaxed);
+    return *this;
+  }
+
+  operator T() const {
+    return value;
+  }
+  auto& operator=(T rhs) {
+    value = rhs;
+    return *this;
+  }
+  void operator+=(T rhs) {
+    value += rhs;
+  }
+  T operator++(int) {
+    return value++;
+  }
+
+private:
+  std::atomic<T> value;
 };
 
 }  // namespace pine

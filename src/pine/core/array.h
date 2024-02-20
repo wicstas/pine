@@ -91,6 +91,9 @@ struct Array3d {
     return data()[p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1]];
   }
 
+  size_t index(vec3i64 p) const {
+    return p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1];
+  }
   T *data() {
     return data_.data();
   }

@@ -218,7 +218,6 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     }
 
     if (mesh->HasTextureCoords(0)) {
-      Debug(mesh->mName.C_Str(), " has texture coords");
       for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         aiVector3D aiTexCoords = mesh->mTextureCoords[0][i];
         texcoords.push_back(vec2(aiTexCoords.x, aiTexCoords.y));
@@ -226,7 +225,6 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     }
 
     if (mesh->HasNormals()) {
-      Debug(mesh->mName.C_Str(), " has normals");
       for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         aiVector3D aiNormal = mesh->mNormals[i];
         normals.push_back(vec3(aiNormal.x, aiNormal.y, aiNormal.z));
@@ -235,9 +233,6 @@ void load_scene(Scene &scene_, psl::string_view filename) {
 
     CHECK_RANGE(mesh->mMaterialIndex, 0, scene->mNumMaterials - 1);
     auto material = scene->mMaterials[mesh->mMaterialIndex];
-    auto bc = aiColor3D(0.5, 0.5, 0.5);
-    if (material->Get(AI_MATKEY_COLOR_DIFFUSE, bc) == aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has basecolor ", bc.r, ' ', bc.g, ' ', bc.b);
     auto dc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
       Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
@@ -257,7 +252,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
 
     auto material_ = Material();
     if (diffuse_texture.length != 0) {
-      auto basecolor = vec3(bc.r, bc.g, bc.b) * vec3(dc.r, dc.g, dc.b);
+      auto basecolor = vec3(dc.r, dc.g, dc.b);
       if (basecolor == vec3(1.0f))
         material_ = DiffuseMaterial(
             NodeImage(NodeUV(), load_image(working_directory + diffuse_texture.C_Str())));
@@ -266,7 +261,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
             Node3f(basecolor),
             NodeImage(NodeUV(), load_image(working_directory + diffuse_texture.C_Str()))));
     } else {
-      material_ = DiffuseMaterial(vec3(bc.r, bc.g, bc.b) * vec3(dc.r, dc.g, dc.b));
+      material_ = DiffuseMaterial(vec3(dc.r, dc.g, dc.b));
     }
 
     scene_.add_geometry(TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords),

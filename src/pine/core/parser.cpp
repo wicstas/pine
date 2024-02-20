@@ -5,12 +5,11 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
+#include <pine/impl/integrator/filteredpath.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
-#include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/voxelcone.h>
-// #include <pine/impl/integrator/drjit.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
@@ -65,28 +64,18 @@ Context get_default_context() {
       .method("render", &PathIntegrator::render);
   ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor<Accel, Sampler, LightSampler, int, int>()
       .ctor(+[](int spp, int max_path_length) {
         return GuidedPathIntegrator(EmbreeAccel(), UniformSampler(spp), UniformLightSampler(),
                                     max_path_length);
       })
-      .ctor(+[](int spp, int max_path_length, int estimate_spp) {
-        return GuidedPathIntegrator(EmbreeAccel(), UniformSampler(spp), UniformLightSampler(),
-                                    max_path_length, estimate_spp);
-      })
       .method("render", &GuidedPathIntegrator::render);
-  ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
-      .ctor<Accel, Sampler, LightSampler, int, int>()
-      .ctor<Accel, Sampler, LightSampler, int, int, int, bool>()
-      .ctor(+[](int spp, int max_path_length, int resolution) {
-        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
-                                    max_path_length, resolution);
+  ctx.type<FilteredPathIntegrator>("FilteredPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return FilteredPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length);
       })
-      .ctor(+[](int spp, int max_path_length, int resolution, int starting_depth, bool use_filter) {
-        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
-                                    max_path_length, resolution, starting_depth, use_filter);
-      })
-      .method("render", &CachedPathIntegrator::render);
+      .method("render", &FilteredPathIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor(+[](psl::string type) {
         return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);

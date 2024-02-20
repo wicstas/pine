@@ -103,7 +103,7 @@ struct Light
     return dispatch([&](auto&& x) { return x.sample(p, n, u2); });
   }
   bool is_delta() const {
-    return !is<AreaLight>();
+    return is<PointLight>() || is<SpotLight>() || is<DirectionalLight>();
   }
 };
 struct EnvironmentLight : psl::variant<Atmosphere, Sky, ImageSky> {

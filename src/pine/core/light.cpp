@@ -44,6 +44,8 @@ LightSample SpotLight::sample(vec3 p, vec3, vec2) const {
     ls.le = color;
   } else if (cos > cutoff_cos) {
     ls.le = color * (cos - cutoff_cos) / (falloff_cos - cutoff_cos);
+  } else {
+    // TODO
   }
   return ls;
 }

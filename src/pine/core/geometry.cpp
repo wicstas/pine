@@ -404,17 +404,13 @@ AABB Rect::get_aabb() const {
 }
 
 Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n) : v0(v0), v1(v1), v2(v2), n{normalize(n)} {
-  if (v0 == v1 || v0 == v2 || v1 == v2)
-    Fatal("`Triangle` has degenerated shape");
   if (this->n == vec3(0.0f))
-    Fatal("`Triangle` has degenerated normal");
+    this->n = vec3(0, 0, 1);
 }
 Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2)
     : v0(v0), v1(v1), v2(v2), n{normalize(cross(v0 - v1, v0 - v2))} {
-  if (v0 == v1 || v0 == v2 || v1 == v2)
-    Fatal("`Triangle` has degenerated shape");
   if (n == vec3(0.0f))
-    Fatal("`Triangle` has degenerated normal: v0=", v0, ", v1=", v1, "v2=", v2);
+    n = vec3(0, 0, 1);
 }
 bool Triangle::hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2) {
   vec3 E1 = v1 - v0;
