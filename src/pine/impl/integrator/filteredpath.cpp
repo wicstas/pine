@@ -68,43 +68,33 @@ struct IrradianceSample {
 };
 
 struct SpatialNode {
-  void add_sample(IrradianceSample s) {
-    samples.push_back(s);
-  }
   void add_sample(vec3 p, vec3 n, vec3 w, vec3 l) {
+    lock.lock();
     samples.emplace_back(p, n, w, l);
+    lock.unlock();
   }
 
+  SpinLock lock;
   psl::vector<IrradianceSample> samples;
 };
 
 struct SpatialTree {
-  struct IndexedIrradianceSample : IrradianceSample {
-    size_t index;
-  };
   SpatialTree() = default;
   SpatialTree(AABB aabb, vec3i resolution) : aabb(aabb), resolution(resolution), nodes(resolution) {
     cube_size = aabb.diagonal() / resolution;
   }
-  void reserve_samples(size_t n) {
-    Debug("Reserving ", psl::max(n / 1000000, size_t(1)), "M samples");
-    samples.reserve(n);
-  }
   void add_sample(vec3 p, vec3 n, vec3 w, vec3 li) {
-    samples[sample_index++] = IndexedIrradianceSample{{p, n, w, li}, index_at(p)};
+    node_at(p).add_sample(p, n, w, li);
   }
-  void populate_cells() {
-    Profiler _("[FilteredPath]Populate cells");
-    auto size = psl::exchange(sample_index, 0);
-    for (int64_t i = 0; i < size; i++)
-      nodes.data()[samples[i].index].add_sample(samples[i]);
-  };
 
-  size_t index_at(vec3 p) {
+  SpatialNode& node_at(vec3 p) {
     auto rp = aabb.relative_position(p);
     auto ip = vec3i(rp * resolution);
     ip = min(ip, resolution - vec3i(1));
-    return nodes.index(ip);
+    return nodes[ip];
+  }
+  const SpatialNode& node_at(vec3 p) const {
+    return const_cast<SpatialTree*>(this)->node_at(p);
   }
   void for_each_sample_near(vec3 p, float radius, auto f) const {
     auto r2 = radius * radius;
@@ -127,8 +117,6 @@ struct SpatialTree {
 private:
   AABB aabb;
   vec3i resolution;
-  psl::vector<IndexedIrradianceSample> samples;
-  Atomic<int64_t> sample_index{0};
   Array3d<SpatialNode> nodes;
   vec3 cube_size;
 };
@@ -153,8 +141,6 @@ void FilteredPathIntegrator::render(Scene& scene) {
   film.clear();
   set_progress(0);
 
-  stree.reserve_samples(samples_per_pixel * area(film.size()) * (max_path_length - 1) * 2);
-
   Profiler _("[Integrator]Rendering");
   for (int si = 0; si < samples_per_pixel; si++) {
     parallel_for(film.size(), [&](vec2i p) {
@@ -165,8 +151,6 @@ void FilteredPathIntegrator::render(Scene& scene) {
     });
     set_progress(static_cast<float>(si) / samples_per_pixel);
   }
-
-  stree.populate_cells();
 
   auto r0 = 10.0f * 2 / film.size()[0] * scene.camera.as<ThinLenCamera>().fov2d[0];
   r0 /= psl::pow(float(samples_per_pixel), 0.25f);
