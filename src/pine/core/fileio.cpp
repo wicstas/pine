@@ -231,7 +231,6 @@ void load_scene(Scene &scene_, psl::string_view filename) {
       }
     }
 
-    CHECK_RANGE(mesh->mMaterialIndex, 0, scene->mNumMaterials - 1);
     auto material = scene->mMaterials[mesh->mMaterialIndex];
     auto dc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)

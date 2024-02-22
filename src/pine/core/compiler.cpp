@@ -467,7 +467,8 @@ struct IfElseChain {
   psl::optional<Else> else_;
 };
 struct ParameterDeclaration {
-  ParameterDeclaration(Id name, Id type): name(name), type(type){}
+  ParameterDeclaration(Id name, Id type) : name(name), type(type) {
+  }
   Id name;
   Id type;
 };
@@ -724,7 +725,7 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
     }
     for (const auto& [name, type] : body->params) {
       auto ptype = type_tag_from_string(type.value);
-      //TODO: replace name by type and see what happens
+      // TODO: replace name by type and see what happens
       fbcodes.placehold_typed(ptype, name.value);
       ptypes.push_back(ptype);
     }

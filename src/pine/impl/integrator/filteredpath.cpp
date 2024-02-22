@@ -75,7 +75,6 @@ struct SpatialNode {
     lock.unlock();
   }
 
-  SpinLock lock;
   psl::vector<IrradianceSample> samples;
   SpinLock lock;
 };
