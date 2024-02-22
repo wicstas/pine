@@ -361,7 +361,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 
       int leftChildIndex = -1, rightChildIndex = -1;
       float t0 = ray.tmax, t1 = ray.tmax;
-      if (node.aabbs[0].hit(rayOctant, ray.tmin, &t0)) {
+      if (node.aabbs[0].hit(rayOctant, ray.tmin, t0)) {
         const Node& leftChild = nodes[node.children[0]];
         if (PINE_LIKELY(!leftChild.primitiveIndices.size())) {
           leftChildIndex = node.children[0];
@@ -371,7 +371,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
               return true;
         }
       }
-      if (node.aabbs[1].hit(rayOctant, ray.tmin, &t1)) {
+      if (node.aabbs[1].hit(rayOctant, ray.tmin, t1)) {
         const Node& rightChild = nodes[node.children[1]];
         if (PINE_LIKELY(!rightChild.primitiveIndices.size())) {
           rightChildIndex = node.children[1];
@@ -434,7 +434,7 @@ bool BVHImpl::Intersect(Ray& ray, Interaction& it, F&& f) const {
 
       int leftChildIndex = -1, rightChildIndex = -1;
       float t0 = ray.tmax, t1 = ray.tmax;
-      if (node.aabbs[0].hit(rayOctant, ray.tmin, &t0)) {
+      if (node.aabbs[0].hit(rayOctant, ray.tmin, t0)) {
         const Node& leftChild = nodes[node.children[0]];
         if (PINE_LIKELY(!leftChild.primitiveIndices.size())) {
           leftChildIndex = node.children[0];
@@ -444,7 +444,7 @@ bool BVHImpl::Intersect(Ray& ray, Interaction& it, F&& f) const {
               hit = true;
         }
       }
-      if (node.aabbs[1].hit(rayOctant, ray.tmin, &t1)) {
+      if (node.aabbs[1].hit(rayOctant, ray.tmin, t1)) {
         const Node& rightChild = nodes[node.children[1]];
         if (PINE_LIKELY(!rightChild.primitiveIndices.size())) {
           rightChildIndex = node.children[1];

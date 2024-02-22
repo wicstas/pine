@@ -93,7 +93,7 @@ struct QuadNode {
   }
 
   void refine(float total_flux) {
-    if (flux > total_flux * 0.01f && depth < 15) {
+    if (flux > total_flux * 0.01f && depth < 20) {
       if (is_leaf()) {
         children = psl::array_of(QuadNode(depth + 1), QuadNode(depth + 1), QuadNode(depth + 1),
                                  QuadNode(depth + 1));
@@ -153,7 +153,7 @@ private:
 
   friend struct QuadTree;
   Atomic<float> flux{0.0f};
-  int depth = -1;  // use uint8_t
+  uint8_t depth;
   psl::Box<psl::Array<QuadNode, 4>> children;
 };
 

@@ -33,18 +33,14 @@ float AABB::surface_area() const {
 void AABB::extend(vec3 p) {
   lower = min(lower, p);
   upper = max(upper, p);
-  if (!degenerated()) {
-    lower = min(lower, lower - vec3(1e-4f));
-    upper = max(upper, upper + vec3(1e-4f));
-  }
 }
 void AABB::extend(const AABB& aabb) {
   lower = min(lower, aabb.lower);
   upper = max(upper, aabb.upper);
-  if (!degenerated()) {
-    lower = min(lower, lower - vec3(1e-4f));
-    upper = max(upper, upper + vec3(1e-4f));
-  }
+}
+void AABB::extend_by(float amount) {
+  lower -= vec3(amount);
+  upper += vec3(amount);
 }
 psl::pair<AABB, AABB> AABB::split_half(int axis) const {
   CHECK_RANGE(axis, 0, 2);

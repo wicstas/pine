@@ -83,7 +83,7 @@ psl::optional<char> SourceLines::next(SourceLoc sl) const {
   if (vicinity.size())
     vicinity.pop_back();
 
-  Fatal(message, "\n", vicinity);
+  ReturnControlToMain(message, "\n", vicinity);
 }
 
 Bytecodes::Bytecodes(SourceLines sl) : sl(psl::move(sl)) {
@@ -115,10 +115,11 @@ const TypeTag& Bytecodes::var_type(size_t var_index) const {
 uint16_t Bytecodes::var_index_by_name(psl::string_view name) const {
   if (auto it = psl::find_if(psl::reverse_adapter(variable_map),
                              psl::composite(psl::equal_to(name), psl::first_of_pair));
-      it.unwrap() != variable_map.end())
+      it.unwrap() != variable_map.end()) {
     return it->second;
-  else
+  } else {
     return uint16_t(-1);
+  }
 }
 uint16_t Bytecodes::top_var_index() const {
   CHECK(stack.size() != 0);
@@ -723,10 +724,9 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
       cptypes.push_back(ptype);
       args.push_back(capture);
     }
-    for (const auto& [name, type] : body->params) {
-      auto ptype = type_tag_from_string(type.value);
-      // TODO: replace name by type and see what happens
-      fbcodes.placehold_typed(ptype, name.value);
+    for (const auto& param : body->params) {
+      auto ptype = type_tag_from_string(param.type.value);
+      fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
     context.function_rtype = rtype;
@@ -1087,9 +1087,9 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
     auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = type_tag_from_string(return_type.value);
     auto ptypes = psl::vector<TypeTag>();
-    for (const auto& [name, type] : this->params) {
-      auto ptype = type_tag_from_string(type.value);
-      fbcodes.placehold_typed(ptype, name.value);
+    for (const auto& param : this->params) {
+      auto ptype = type_tag_from_string(param.type.value);
+      fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
     context.function_rtype = rtype;

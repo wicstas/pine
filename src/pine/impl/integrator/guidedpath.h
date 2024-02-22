@@ -8,11 +8,7 @@ namespace pine {
 class GuidedPathIntegrator : public RTIntegrator {
 public:
   GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
-                       int max_path_length)
-      : RTIntegrator{psl::move(accel), psl::move(sampler)},
-        light_sampler{psl::move(light_sampler)},
-        max_path_length{max_path_length} {
-  }
+                       int max_path_length);
 
   void render(Scene& scene) override;
 

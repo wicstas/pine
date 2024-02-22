@@ -3,6 +3,12 @@
 
 namespace pine {
 
+RandomWalkIntegrator::RandomWalkIntegrator(Accel accel, Sampler sampler, int max_path_length)
+    : RayIntegrator{psl::move(accel), psl::move(sampler)}, max_path_length{max_path_length} {
+  if (max_path_length <= 0)
+    Fatal("`RandomWalkIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+}
+
 vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
                                     Sampler& sampler) {
   auto L = vec3{0.0f};

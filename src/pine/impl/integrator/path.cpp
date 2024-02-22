@@ -3,6 +3,15 @@
 
 namespace pine {
 
+PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+                               int max_path_length)
+    : RayIntegrator{psl::move(accel), psl::move(sampler)},
+      light_sampler{psl::move(light_sampler)},
+      max_path_length{max_path_length} {
+  if (max_path_length <= 0)
+    Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+}
+
 vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
                               Sampler& sampler) {
   auto L = vec3{0.0f};
@@ -52,7 +61,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
           auto cosine = absdot(ls->wo, it.n);
           auto [f, pdf] = it.material()->f_pdf({it, -ray.d, ls->wo});
           auto mis = 1.0f;
-          //TODO guide
+          // TODO guide
           if (!ls->light->is_delta())
             mis = balance_heuristic(ls->pdf, pdf);
           L += beta * cosine * ls->le / ls->pdf * f * mis;

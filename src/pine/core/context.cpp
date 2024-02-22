@@ -244,11 +244,11 @@ void Context::add_f(Function func) {
   functions.push_back(psl::move(func));
 }
 
-size_t Context::find_variable(psl::string_view name) const {
+uint16_t Context::find_variable(psl::string_view name) const {
   if (auto it = variables_map.find(name); it != variables_map.end())
     return it->second;
   else
-    return size_t(-1);
+    return uint16_t(-1);
 }
 
 Context::TypeTrait& Context::get_type_trait(psl::string_view name) {

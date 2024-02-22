@@ -24,6 +24,17 @@ struct Exception {
 private:
   psl::string message;
 };
+struct FallthroughException {
+  FallthroughException(psl::string message) : message{psl::move(message)} {
+  }
+
+  psl::string_view what() const {
+    return message;
+  }
+
+private:
+  psl::string message;
+};
 
 void optionally_stop_program_for_stacktrace();
 
@@ -59,9 +70,13 @@ void Warning(const Args&... args) {
 }
 template <typename... Args>
 [[noreturn]] void Fatal(const Args&... args) {
-  // optionally_stop_program_for_stacktrace();
   using psl::to_string;
   throw Exception{to_string(args...)};
+}
+template <typename... Args>
+[[noreturn]] void ReturnControlToMain(const Args&... args) {
+  using psl::to_string;
+  throw FallthroughException{to_string(args...)};
 }
 
 #define CHECK(x)                                                                            \

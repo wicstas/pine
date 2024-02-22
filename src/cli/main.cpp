@@ -28,6 +28,8 @@ int main(int argc, char* argv[]) {
         interpret_file(context, argv[1]);
       } catch (const Exception& e) {
         Log(e.what());
+      } catch (const FallthroughException& e) {
+        Log(e.what());
       } catch (const std::exception& e) {
         Log(e.what());
       }
@@ -40,8 +42,6 @@ int main(int argc, char* argv[]) {
         break;
     }
     Log("");
-  } catch (const Exception& e) {
-    Log(e.what());
   } catch (const std::exception& e) {
     Log(e.what());
   }

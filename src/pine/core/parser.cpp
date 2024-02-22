@@ -5,11 +5,10 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
-#include <pine/impl/integrator/diffuse_filtered_path.h>
-#include <pine/impl/integrator/filteredpath.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
+#include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/voxelcone.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
@@ -70,20 +69,13 @@ Context get_default_context() {
                                     max_path_length);
       })
       .method("render", &GuidedPathIntegrator::render);
-  ctx.type<FilteredPathIntegrator>("FilteredPathIntegrator")
-      .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](int spp, int max_path_length) {
-        return FilteredPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
-                                      max_path_length);
+  ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int, int, int>()
+      .ctor(+[](int spp, int max_path_length, int max_axis_resolution, int starting_depth) {
+        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                                    max_path_length, max_axis_resolution, starting_depth);
       })
-      .method("render", &FilteredPathIntegrator::render);
-  ctx.type<DiffuseFilteredPathIntegrator>("DiffuseFilteredPathIntegrator")
-      .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](int spp, int max_path_length) {
-        return DiffuseFilteredPathIntegrator(EmbreeAccel(), HaltonSampler(spp),
-                                             UniformLightSampler(), max_path_length);
-      })
-      .method("render", &DiffuseFilteredPathIntegrator::render);
+      .method("render", &CachedPathIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor(+[](psl::string type) {
         return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);

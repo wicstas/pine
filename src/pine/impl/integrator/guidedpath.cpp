@@ -10,6 +10,15 @@ namespace pine {
 
 static SpatialTree guide;
 
+GuidedPathIntegrator::GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+                                           int max_path_length)
+    : RTIntegrator{psl::move(accel), psl::move(sampler)},
+      light_sampler{psl::move(light_sampler)},
+      max_path_length{max_path_length} {
+  if (max_path_length <= 0)
+    Fatal("`GuidedPathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+}
+
 void GuidedPathIntegrator::render(Scene& scene) {
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())

@@ -5,9 +5,7 @@
 namespace pine {
 
 struct RandomWalkIntegrator : public RayIntegrator {
-  RandomWalkIntegrator(Accel accel, Sampler sampler, int max_path_length)
-      : RayIntegrator{psl::move(accel), psl::move(sampler)}, max_path_length{max_path_length} {
-  }
+  RandomWalkIntegrator(Accel accel, Sampler sampler, int max_path_length);
 
   vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override;
 

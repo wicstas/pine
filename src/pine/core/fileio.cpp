@@ -235,7 +235,6 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     auto dc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
       Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
-    auto sc = aiColor3D(1.0, 1.0, 1.0);
     auto diffuse_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_DIFFUSE, 0), diffuse_texture) ==
         aiReturn_SUCCESS)

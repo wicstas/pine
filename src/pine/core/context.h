@@ -1,7 +1,6 @@
 #pragma once
 
 #include <pine/core/log.h>
-#include <pine/core/vecmath.h>
 
 #include <psl/unordered_map.h>
 #include <psl/type_traits.h>
@@ -551,7 +550,7 @@ struct Context {
     return call(name, tags<Args...>(), psl::vector_of<Variable>(FWD(args)...)).template as<T>();
   }
 
-  size_t find_variable(psl::string_view name) const;
+  uint16_t find_variable(psl::string_view name) const;
   template <typename T>
   void add_variable(psl::string name, T x) {
     variables_map.insert({psl::move(name), variables.size()});

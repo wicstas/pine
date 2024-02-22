@@ -6,11 +6,7 @@
 namespace pine {
 
 struct PathIntegrator : public RayIntegrator {
-  PathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler, int max_path_length)
-      : RayIntegrator{psl::move(accel), psl::move(sampler)},
-        light_sampler{psl::move(light_sampler)},
-        max_path_length{max_path_length} {
-  }
+  PathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler, int max_path_length);
 
   void render(Scene& scene) override {
     light_sampler.build(&scene);
