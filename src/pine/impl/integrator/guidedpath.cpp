@@ -18,7 +18,6 @@ void GuidedPathIntegrator::render(Scene& scene) {
   accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
-  film.clear();
 
   Profiler _("[Integrator]Rendering");
 
@@ -35,9 +34,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto images = psl::vector<Array2d3f>();
   auto image = Array2d3f(film.size());
   auto squared_image = Array2d3f(film.size());
-  auto prev_variance = 1e+10;
   auto on_final_rendering = false;
-  auto stablizer = 0;
 
   set_progress(0);
   collect_radiance_sample = true;
@@ -101,21 +98,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       }
       weights.push_back(1.0f / variance);
       images.push_back(image);
-
-      if (!on_final_rendering) {
-        Debug("Variance: ", float(variance));
-        if (variance > prev_variance / 2.0f) {
-          stablizer++;
-          if (stablizer > 1) {
-            on_final_rendering = true;
-            Debug("Done learning, start rendering");
-          }
-          prev_variance = psl::min(variance, prev_variance);
-        } else {
-          stablizer = 0;
-          prev_variance = variance;
-        }
-      }
+      Debug("Variance: ", float(variance));
     }
     if (!on_final_rendering)
       guide.refine(iteration);
@@ -193,7 +176,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       }
     }
 
-  // Add irradiance in one call?
+  // TODO Add irradiance in one call?
+  // accumulate film sample with only 2 films
   if (select_guide) {
     if (auto gs = leaf.sample(sampler.get2d())) {
       auto nv = Vertex(pv.length + 1, it.n, it.p, gs->pdf);

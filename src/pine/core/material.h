@@ -63,7 +63,6 @@ struct DiffuseMaterial {
     return false;
   }
 
-private:
   DiffuseBSDF bsdf;
 };
 

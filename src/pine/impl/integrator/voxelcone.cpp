@@ -35,7 +35,6 @@ void VoxelConeIntegrator::render(Scene& scene) {
 
   accel.build(&scene);
   auto& film = scene.camera.film();
-  film.clear();
   set_progress(0);
   Profiler _("[Integrator]Rendering");
   Atomic<int64_t> max_index = 0;

@@ -5,6 +5,7 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
+#include <pine/impl/integrator/diffuse_filtered_path.h>
 #include <pine/impl/integrator/filteredpath.h>
 #include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
@@ -73,9 +74,16 @@ Context get_default_context() {
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor(+[](int spp, int max_path_length) {
         return FilteredPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
-                                    max_path_length);
+                                      max_path_length);
       })
       .method("render", &FilteredPathIntegrator::render);
+  ctx.type<DiffuseFilteredPathIntegrator>("DiffuseFilteredPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return DiffuseFilteredPathIntegrator(EmbreeAccel(), HaltonSampler(spp),
+                                             UniformLightSampler(), max_path_length);
+      })
+      .method("render", &DiffuseFilteredPathIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor(+[](psl::string type) {
         return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);

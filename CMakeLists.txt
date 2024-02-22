@@ -56,6 +56,7 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
+src/pine/impl/integrator/diffuse_filtered_path.cpp
 src/pine/impl/integrator/filteredpath.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/visualizer.cpp
@@ -80,8 +81,9 @@ set(ASSIMP_INSTALL_PDB OFF)
 add_subdirectory(src/contrib/assimp)
 
 FIND_PACKAGE(embree 4 REQUIRED)
+FIND_PACKAGE(TBB REQUIRED)
 
-target_link_libraries(pinelib psl Threads::Threads assimp embree)
+target_link_libraries(pinelib psl Threads::Threads assimp embree tbb)
 
 #Pine CommandLine
 add_executable(pine src/cli/main.cpp)

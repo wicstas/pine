@@ -255,13 +255,13 @@ Context::TypeTrait& Context::get_type_trait(psl::string_view name) {
   if (auto it = types.find(name); it != types.end())
     return it->second;
   else
-    Fatal("Type `", name, "` not register");
+    Fatal("Type `", name, "` is not registered");
 }
 const Context::TypeTrait& Context::get_type_trait(psl::string_view name) const {
   if (auto it = types.find(name); it != types.end())
     return it->second;
   else
-    Fatal("Type `", name, "` is not register");
+    Fatal("Type `", name, "` is not registered");
 }
 
 static bool match_prefix(psl::string_view base, psl::string_view candidate) {

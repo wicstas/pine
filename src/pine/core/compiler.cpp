@@ -721,8 +721,9 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
       cptypes.push_back(ptype);
       args.push_back(capture);
     }
-    for (const auto& [type, name] : body->params) {
+    for (const auto& [name, type] : body->params) {
       auto ptype = type_tag_from_string(type.value);
+      //TODO: replace name by type and see what happens
       fbcodes.placehold_typed(ptype, name.value);
       ptypes.push_back(ptype);
     }
@@ -1084,7 +1085,7 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
     auto fbcodes = Bytecodes(bytecodes.sl);
     auto rtype = type_tag_from_string(return_type.value);
     auto ptypes = psl::vector<TypeTag>();
-    for (const auto& [type, name] : this->params) {
+    for (const auto& [name, type] : this->params) {
       auto ptype = type_tag_from_string(type.value);
       fbcodes.placehold_typed(ptype, name.value);
       ptypes.push_back(ptype);

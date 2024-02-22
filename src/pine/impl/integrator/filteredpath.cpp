@@ -69,7 +69,7 @@ struct IrradianceSample {
 };
 
 struct SpatialNode {
-  void add_sample(vec3 p, vec3 n, vec3 w, vec3 l) {
+  void add_sample(vec3 p, UnitVector n, UnitVector w, Vector3<unsigned_float16> l) {
     lock.lock();
     samples.emplace_back(p, n, w, l);
     lock.unlock();
@@ -84,8 +84,8 @@ struct SpatialTree {
   SpatialTree(AABB aabb, vec3i resolution) : aabb(aabb), resolution(resolution), nodes(resolution) {
     cube_size = aabb.diagonal() / resolution;
   }
-  void add_sample(vec3 p, vec3 n, vec3 w, vec3 li) {
-    node_at(p).add_sample(p, n, w, li);
+  void add_sample(vec3 p, UnitVector n, UnitVector w, Vector3<unsigned_float16> l) {
+    node_at(p).add_sample(p, n, w, l);
   }
   SpatialNode& node_at(vec3 p) {
     auto rp = aabb.relative_position(p);
@@ -99,16 +99,17 @@ struct SpatialTree {
     auto p1 = resolution * aabb.relative_position(p + vec3(radius));
     auto ip0 = max(vec3i(floor(p0)), vec3i(0));
     auto ip1 = min(vec3i(ceil(p1)), resolution);
-    auto rr2 = psl::sqr(radius + max_value(cube_size) / 2 * 1.73f);
-    for_3d(ip0, ip1, [&](vec3i ip) {
-      auto x = aabb.lower + (ip + vec3(0.5f)) * cube_size;
-      if (distance_squared(p, x) > rr2)
-        return;
-      for (const auto& s : nodes[ip].samples) {
-        if (distance_squared(p, s.p) < r2)
-          f(s);
-      }
-    });
+    // auto rr2 = psl::sqr(radius + max_value(cube_size) / 2 * 1.73f);
+    for_3d(
+        ip0, ip1, [&](vec3i ip) __attribute__((noinline)) {
+          // auto x = aabb.lower + (ip + vec3(0.5f)) * cube_size;
+          // if (distance_squared(p, x) > rr2)
+          //   return;
+          for (const auto& s : nodes[ip].samples) {
+            if (distance_squared(p, s.p) < r2)
+              f(s);
+          }
+        });
   };
 
 private:
@@ -135,79 +136,91 @@ void FilteredPathIntegrator::render(Scene& scene) {
   accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
-  film.clear();
   set_progress(0);
+  auto filter_overhead = 40;
+  auto total_samples = double(samples_per_pixel + filter_overhead) * area(film.size());
 
   Profiler _("[Integrator]Rendering");
-  auto sample_size = max(film.size() / 4, vec2i(1, 1));
-  for (int si = 0; si < samples_per_pixel; si++) {
-    parallel_for(sample_size, [&](vec2i p) {
-      Sampler& sampler = samplers[threadIdx].start_pixel(p, si);
-      auto p_film = vec2(p + sampler.get2d()) / sample_size;
-      auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-      radiance(scene, ray, sampler, Vertex::first_vertex());
-    });
-    set_progress(static_cast<float>(si) / samples_per_pixel);
-  }
+  parallel_for(film.size(), [&](vec2i p) {
+    auto p_film = vec2(p + vec2(0.5f)) / film.size();
+    auto ray = scene.camera.gen_ray(p_film, vec2(0.5f));
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
+    auto it = Interaction();
+    auto is_hit = intersect(ray, it);
+    for (int si = 0; si < samples_per_pixel; si++) {
+      radiance(scene, ray, it, is_hit, sampler, Vertex::first_vertex());
+      sampler.start_next_sample();
+      if (p.x == 0)
+        set_progress(samples_per_pixel * p.y * film.size().x / total_samples);
+    }
+  });
 
-  auto r0 = 10.0f * 2 / film.size()[0] * scene.camera.as<ThinLenCamera>().fov2d[0];
+  auto current_samples = size_t(samples_per_pixel) * area(film.size());
+  auto r0 = 20.0f * 2 / film.size()[0] * scene.camera.as<ThinLenCamera>().fov2d[0];
   r0 /= psl::pow(float(samples_per_pixel), 0.25f);
 
-  parallel_for(film.size(), [&](vec2i p) {
-    Sampler& sampler = samplers[threadIdx].start_pixel(p, samples_per_pixel);
-    auto p_film = vec2(p + sampler.get2d()) / film.size();
-    auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-    auto it = Interaction();
-    auto Lo = vec3(0);
-    auto beta = vec3(1);
-    auto t = 0.0f;
+  parallel_for(
+      film.size(), [&](vec2i p) __attribute__((noinline)) {
+        Sampler& sampler = samplers[threadIdx].start_pixel(p, samples_per_pixel);
+        auto p_film = vec2(p + vec2(0.5f)) / film.size();
+        auto ray = scene.camera.gen_ray(p_film, vec2(0.5f));
+        auto it = Interaction();
+        auto Lo = vec3(0);
+        auto beta = vec3(1);
+        auto t = 0.0f;
 
-    for (int i = 0; i < max_path_length; i++) {
-      if (intersect(ray, it)) {
-        t += ray.tmax;
-        if (!it.material()->is_delta()) {
-          auto total_weight = 0.0f;
-          auto mec = MaterialEvalCtx(it, -ray.d, vec3(0, 0, 1));
-          stree.for_each_sample_near(it.p, r0 * t, [&](IrradianceSample s) {
-            auto weight = 1.0f;
-            if (dot(s.n.decode(), it.n) < 0.95f)
-              weight = 0.0f;
-            if (weight == 0.0f)
-              return;
-            total_weight += weight;
-            auto wo = s.w.decode();
-            auto cosine = absdot(it.n, wo);
-            mec.wo = it.to_local(wo);
-            auto f = it.material()->f(mec);
-            Lo += s.l * cosine * f * weight;
-          });
-          if (total_weight > 0)
-            Lo /= total_weight;
-          break;
-        } else {
-          if (auto bs = it.material()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
-            beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
-            ray = it.spawn_ray(bs->wo);
+        for (int i = 0; i < max_path_length; i++) {
+          if (intersect(ray, it)) {
+            t += ray.tmax;
+            if (!it.material()->is_delta()) {
+              auto total_weight = 0.0f;
+              auto mec = MaterialEvalCtx(it, -ray.d, vec3(0, 0, 1));
+              stree.for_each_sample_near(
+                  it.p, r0 * t, [&](IrradianceSample s) __attribute__((noinline)) {
+                    auto weight = 1.0f;
+                    if (dot(s.n.decode(), it.n) < 0.95f)
+                      weight = 0.0f;
+                    if (weight == 0.0f)
+                      return;
+                    total_weight += weight;
+                    auto wo = s.w.decode();
+                    auto cosine = absdot(it.n, wo);
+                    mec.wo = it.to_local(wo);
+                    auto f = it.material()->f(mec);
+                    Lo += s.l * cosine * f * weight;
+                  });
+              if (total_weight > 0)
+                Lo /= total_weight;
+              break;
+            } else {
+              if (auto bs = it.material()->sample({it, -ray.d, sampler.get1d(), sampler.get2d()})) {
+                beta *= absdot(bs->wo, it.n) * bs->f / bs->pdf;
+                ray = it.spawn_ray(bs->wo);
+              }
+            }
+          } else {
+            break;
           }
         }
-      } else {
-        break;
-      }
-    }
-    scene.camera.film().add_sample(p, Lo * beta);
-  });
+        scene.camera.film().add_sample(p, Lo * beta);
+        if (p.x == 0)
+          set_progress((current_samples + filter_overhead * p.y * film.size().x) / total_samples);
+      });
 
   set_progress(1);
 }
 
 FilteredPathIntegrator::RadianceResult FilteredPathIntegrator::radiance(Scene& scene, Ray ray,
+                                                                        Interaction it, bool is_hit,
                                                                         Sampler& sampler,
                                                                         Vertex pv) const {
   auto Lo = vec3(0.0f);
   auto wi = -ray.d;
-  auto it = Interaction();
 
-  if (!intersect(ray, it)) {
+  if (pv.length != 0)
+    is_hit = intersect(ray, it);
+
+  if (!is_hit) {
     if (scene.env_light) {
       Lo += scene.env_light->color(ray.d);
       if (!pv.is_delta) {
@@ -239,21 +252,25 @@ FilteredPathIntegrator::RadianceResult FilteredPathIntegrator::radiance(Scene& s
         auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
         auto mis = ls->light->is_delta() ? 1.0f : balance_heuristic(ls->pdf, bsdf_pdf);
         Lo += ls->le * cosine * f / ls->pdf * mis;
-        stree.add_sample(it.p, it.n, ls->wo,
-                         2 * ls->le / ls->pdf * (ls->light->is_delta() ? 1.0f : mis * 2));
+        if (pv.non_delta_length == 0)
+          stree.add_sample(it.p, it.n, ls->wo,
+                           2 * ls->le / ls->pdf * (ls->light->is_delta() ? 1.0f : mis * 2));
       }
     }
 
   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-    auto nv = Vertex(pv.length + 1, it.n, it.p, bs->pdf, it.material()->is_delta());
-    auto [Li, mis_direct] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
+    auto nv = Vertex(pv.length + 1, pv.length + (it.material()->is_delta() ? 0 : 1), it.n, it.p,
+                     bs->pdf, it.material()->is_delta());
+    auto [Li, mis_direct] = radiance(scene, it.spawn_ray(bs->wo), it, {}, sampler, nv);
     auto cosine = absdot(bs->wo, it.n);
     if (mis_direct) {
       Lo += Li * cosine * bs->f / bs->pdf * (*mis_direct);
-      stree.add_sample(it.p, it.n, bs->wo, 2 * Li / bs->pdf * *mis_direct * 2);
+      if (pv.non_delta_length == 0)
+        stree.add_sample(it.p, it.n, bs->wo, 2 * Li / bs->pdf * *mis_direct * 2);
     } else {
       Lo += Li * cosine * bs->f / bs->pdf;
-      stree.add_sample(it.p, it.n, bs->wo, 2 * Li / bs->pdf);
+      if (pv.non_delta_length == 0)
+        stree.add_sample(it.p, it.n, bs->wo, 2 * Li / bs->pdf);
     }
   }
 

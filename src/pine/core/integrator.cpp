@@ -25,7 +25,6 @@ RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel
 void RayIntegrator::render(Scene& scene) {
   accel.build(&scene);
   auto& film = scene.camera.film();
-  film.clear();
   set_progress(0);
 
   auto primary_spp = psl::max(samples_per_pixel / primary_ratio, 1);
