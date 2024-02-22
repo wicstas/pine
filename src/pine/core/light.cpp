@@ -10,7 +10,6 @@ namespace pine {
 
 LightSample PointLight::sample(vec3 p, vec3, vec2) const {
   LightSample ls;
-  ls.distance = distance(position, p);
   ls.wo = normalize(position - p, ls.distance);
   ls.pdf = psl::sqr(ls.distance);
   ls.le = color;
@@ -34,19 +33,17 @@ SpotLight::SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_ra
   if (cutoff_radian < falloff_radian)
     Fatal("`SpotLight` cutoff angle should be no-less than falloff angle");
 };
-LightSample SpotLight::sample(vec3 p, vec3, vec2) const {
+psl::optional<LightSample> SpotLight::sample(vec3 p, vec3, vec2) const {
   LightSample ls;
-  ls.distance = distance(position, p);
   ls.wo = normalize(position - p, ls.distance);
-  ls.pdf = psl::sqr(ls.distance);
   auto cos = -dot(ls.wo, direction);
-  if (cos > falloff_cos) {
+  if (cos > falloff_cos)
     ls.le = color;
-  } else if (cos > cutoff_cos) {
+  else if (cos > cutoff_cos)
     ls.le = color * (cos - cutoff_cos) / (falloff_cos - cutoff_cos);
-  } else {
-    // TODO
-  }
+  else
+    return psl::nullopt;
+  ls.pdf = psl::sqr(ls.distance);
   return ls;
 }
 LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
@@ -57,7 +54,7 @@ LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
   ls.le = color;
   return ls;
 }
-LightSample AreaLight::sample(vec3 p, vec3, vec2 u) const {
+psl::optional<LightSample> AreaLight::sample(vec3 p, vec3, vec2 u) const {
   CHECK(geometry);
   LightSample ls;
   auto gs = geometry->sample(p, u);

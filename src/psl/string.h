@@ -180,6 +180,15 @@ public:
     return str + size();
   }
 
+  const char& front() const {
+    psl_check(size() != 0);
+    return str[0];
+  }
+  const char& back() const {
+    psl_check(size() != 0);
+    return str[size() - 1];
+  }
+
   const char* data() const {
     return str;
   }

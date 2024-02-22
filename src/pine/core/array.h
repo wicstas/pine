@@ -43,7 +43,17 @@ struct Array2d {
       x -= rhs;
     return *this;
   }
-
+  T &at_index(size_t i) {
+    DCHECK_LT(i, data_.size());
+    return data_[i];
+  }
+  const T &at_index(size_t i) const {
+    DCHECK_LT(i, data_.size());
+    return data_[i];
+  }
+  size_t index(vec2i p) const {
+    return p[0] + p[1] * size_[0];
+  }
   T *data() {
     return data_.data();
   }
@@ -90,7 +100,14 @@ struct Array3d {
     DCHECK_RANGE(p[2], 0, size_[2] - 1);
     return data()[p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1]];
   }
-
+  T &at_index(size_t i) {
+    DCHECK_LT(i, data_.size());
+    return data_[i];
+  }
+  const T &at_index(size_t i) const {
+    DCHECK_LT(i, data_.size());
+    return data_[i];
+  }
   size_t index(vec3i64 p) const {
     return p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1];
   }
@@ -129,18 +146,16 @@ using Array2d4f = Array2d<vec4>;
 
 template <typename F>
 void for_2d(vec2i lower, vec2i upper, F f) {
-  auto size = upper - lower;
-  for (int y = 0; y < size[1]; y++)
-    for (int x = 0; x < size[0]; x++)
-      f(lower + vec2i(x, y));
+  for (int y = lower[1]; y < upper[1]; y++)
+    for (int x = lower[0]; x < upper[0]; x++)
+      f(vec2i(x, y));
 }
 template <typename F>
 void for_3d(vec3i lower, vec3i upper, F f) {
-  auto size = upper - lower;
-  for (int z = 0; z < size[2]; z++)
-    for (int y = 0; y < size[1]; y++)
-      for (int x = 0; x < size[0]; x++)
-        f(lower + vec3i(x, y, z));
+  for (int z = lower[2]; z < upper[2]; z++)
+    for (int y = lower[1]; y < upper[1]; y++)
+      for (int x = lower[0]; x < upper[0]; x++)
+        f(vec3i(x, y, z));
 }
 
 template <typename F>

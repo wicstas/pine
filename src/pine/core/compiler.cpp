@@ -224,6 +224,13 @@ psl::string Bytecodes::to_string(const Context& context) const {
   return result;
 }
 
+static TypeTag type_tag_from_string(psl::string_view name) {
+  if (name.size() && name.back() == '&')
+    return TypeTag(psl::string(name.substr(0, name.size() - 1)), true);
+  else
+    return TypeTag(psl::string(name), false);
+}
+
 struct Expr {
   enum Op {
     // clang-format off
@@ -696,7 +703,7 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto name = psl::string("__lambda") + psl::to_string(context.new_internal_class());
     auto fbcodes = Bytecodes(bytecodes.sl);
-    auto rtype = TypeTag(body->return_type.value, false);
+    auto rtype = type_tag_from_string(body->return_type.value);
     auto ptypes = psl::vector<TypeTag>();
     auto cptypes = psl::vector<TypeTag>();
     auto args = psl::vector<Expr>();
@@ -714,37 +721,31 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
       cptypes.push_back(ptype);
       args.push_back(capture);
     }
-    for (const auto& param : body->params) {
-      auto ptype = [&]() {
-        if (param.type.value.size() && param.type.value.back() == '&')
-          return TypeTag(param.type.value.substr(0, param.type.value.size() - 1), true);
-        else
-          return TypeTag(param.type.value, false);
-      }();
-      fbcodes.placehold_typed(ptype, param.name.value);
+    for (const auto& [name, type] : body->params) {
+      auto ptype = type_tag_from_string(type.value);
+      //TODO: replace name by type and see what happens
+      fbcodes.placehold_typed(ptype, name.value);
       ptypes.push_back(ptype);
     }
-    // TODO: rtype could be ref
     context.function_rtype = rtype;
     body->block.emit(context, fbcodes);
     context.function_rtype = psl::nullopt;
-    // TODO: copy variable should keep reference
 
     context(name) = Function(
         lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype, cptypes,
                                             ptypes](psl::span<const Variable*> args) mutable {
           auto cargs = psl::vector<Variable>();
           for (size_t i = 0; i < args.size(); i++)
-            cargs.push_back(cptypes[i].is_ref ? args[i]->create_ref() : *args[i]);
+            cargs.push_back(cptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
           return Function(
               lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
                                                   cargs = psl::move(cargs), cptypes,
                                                   ptypes](psl::span<const Variable*> args) mutable {
                 auto vm = VirtualMachine();
                 for (size_t i = 0; i < cargs.size(); i++)
-                  vm.stack.push(cptypes[i].is_ref ? cargs[i].create_ref() : cargs[i]);
+                  vm.stack.push(cptypes[i].is_ref ? cargs[i].create_ref() : cargs[i].copy());
                 for (size_t i = 0; i < args.size(); i++)
-                  vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : *args[i]);
+                  vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
                 return execute(context, fbcodes, vm);
               }),
               rtype, ptypes);
@@ -1082,17 +1083,11 @@ void IfElseChain::emit(Context& context, Bytecodes& bytecodes) const {
 void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   try {
     auto fbcodes = Bytecodes(bytecodes.sl);
-    auto rtype = TypeTag(return_type.value, false);
+    auto rtype = type_tag_from_string(return_type.value);
     auto ptypes = psl::vector<TypeTag>();
-    auto params = this->params;
-    for (const auto& param : params) {
-      auto ptype = [&]() {
-        if (param.type.value.size() && param.type.value.back() == '&')
-          return TypeTag(param.type.value.substr(0, param.type.value.size() - 1), true);
-        else
-          return TypeTag(param.type.value, false);
-      }();
-      fbcodes.placehold_typed(ptype, param.name.value);
+    for (const auto& [name, type] : this->params) {
+      auto ptype = type_tag_from_string(type.value);
+      fbcodes.placehold_typed(ptype, name.value);
       ptypes.push_back(ptype);
     }
     context.function_rtype = rtype;
@@ -1107,10 +1102,7 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
       auto vm = VirtualMachine();
       vm.stack.reserve(args.size() * 2);
       for (size_t i = 0; i < args.size(); i++) {
-        if(ptypes[i].is_ref)
-          vm.stack.push(args[i]->create_ref());
-        else
-          vm.stack.push(*args[i]);
+          vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy()) ;
       }
       return execute(context, fbcodes, vm);
     }), rtype, ptypes);
@@ -1940,7 +1932,7 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
           break;
         case Bytecode::LoadGlobalVar: vm.stack.push(context.variables[code.value].second); break;
         case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
-        case Bytecode::Copy: push(vm.stack[code.value].clone()); break;
+        case Bytecode::Copy: push(vm.stack[code.value].copy()); break;
         case Bytecode::MakeRef: push(vm.stack[code.value].create_ref()); break;
         case Bytecode::LoadFloatConstant:
           push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));

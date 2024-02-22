@@ -224,7 +224,7 @@ struct SpatialNode {
 
   void refine(int k, AABB aabb) {
     if (is_leaf()) {
-      const auto c = 1000;
+      const auto c = 2000;
       const auto threshold = size_t(c * psl::sqrt<float>(1 << k));
       if (n_samples > threshold) {
         auto [laabb, raabb] = aabb.split_half(axis);

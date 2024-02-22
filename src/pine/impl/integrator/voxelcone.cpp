@@ -35,14 +35,13 @@ void VoxelConeIntegrator::render(Scene& scene) {
 
   accel.build(&scene);
   auto& film = scene.camera.film();
-  film.clear();
   set_progress(0);
   Profiler _("[Integrator]Rendering");
   Atomic<int64_t> max_index = 0;
   parallel_for(film.size(), [&](vec2i p) {
     Sampler& sampler = samplers[threadIdx];
     sampler.start_pixel(p, 0);
-    auto p_film = vec2(p) / scene.camera.film().size();
+    auto p_film = vec2(p) / film.size();
     auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
     auto it = Interaction();
     auto is_hit = intersect(ray, it);

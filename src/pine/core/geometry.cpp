@@ -54,15 +54,16 @@ Sphere::Sphere(vec3 position, float radius) : c(position), r(radius) {
     Fatal("`Sphere` shouldn't have negative radius ", radius);
 }
 float Sphere::compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
-  float b = 2 * dot(ro - p, rd);
-  float c = dot(ro, ro) + dot(p, p) - 2 * dot(ro, p) - r * r;
-  float d = b * b - 4 * c;
+  auto ro_p = ro - p;
+  float b = dot(ro_p, rd);
+  float c = dot(ro_p, ro_p) - r * r;
+  float d = b * b - c;
   if (d <= 0.0f)
     return -1.0f;
   d = psl::sqrt(d);
-  float t = (-b - d) / 2;
+  float t = -b - d;
   if (t < tmin)
-    t = (-b + d) / 2;
+    t = -b + d;
   return t;
 }
 bool Sphere::hit(const Ray& ray) const {
@@ -71,13 +72,11 @@ bool Sphere::hit(const Ray& ray) const {
 }
 bool Sphere::intersect(Ray& ray, Interaction& it) const {
   float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
-  if (t < ray.tmin)
-    return false;
-  if (t > ray.tmax)
+  if (t < ray.tmin || t > ray.tmax)
     return false;
   ray.tmax = t;
   it.n = normalize(ray(t) - this->c);
-  it.p = this->c + it.n * r;
+  it.p = c + it.n * r;
   auto [phi, theta] = cartesian_to_spherical(it.n);
   it.uv = vec2(phi, theta);
   return true;

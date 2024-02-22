@@ -5,9 +5,9 @@
 
 namespace pine {
 
-struct FilteredPathIntegrator : public RTIntegrator {
-  FilteredPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
-                         int max_path_length)
+struct DiffuseFilteredPathIntegrator : public RTIntegrator {
+  DiffuseFilteredPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+                                int max_path_length)
       : RTIntegrator{psl::move(accel), psl::move(sampler)},
         light_sampler{psl::move(light_sampler)},
         max_path_length{max_path_length} {
@@ -16,14 +16,13 @@ struct FilteredPathIntegrator : public RTIntegrator {
   void render(Scene& scene) override;
 
   struct Vertex {
-    Vertex(int length, int non_delta_length, vec3 n, vec3 p, float pdf, bool is_delta = false)
-        : length(length), non_delta_length(non_delta_length),n(n), p(p), pdf(pdf), is_delta(is_delta) {
+    Vertex(int length, vec3 n, vec3 p, float pdf, bool is_delta = false)
+        : length(length), n(n), p(p), pdf(pdf), is_delta(is_delta) {
     }
     static Vertex first_vertex() {
-      return Vertex(0, 0,vec3(0), vec3(0), 0.0f, true);
+      return Vertex(0, vec3(0), vec3(0), 0.0f, true);
     }
     int length;
-    int non_delta_length;
     vec3 n;
     vec3 p;
     float pdf;
