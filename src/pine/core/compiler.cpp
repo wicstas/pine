@@ -467,6 +467,7 @@ struct IfElseChain {
   psl::optional<Else> else_;
 };
 struct ParameterDeclaration {
+  ParameterDeclaration(Id name, Id type): name(name), type(type){}
   Id name;
   Id type;
 };
