@@ -180,9 +180,19 @@ void vecmath_context(Context& ctx) {
   ctx.type<mat3>().ctor<vec3, vec3, vec3>().ctor<mat4>().method("[]",
                                                                 overloaded<int>(&mat3::operator[]));
   ctx.type<mat4>().ctor<vec4, vec4, vec4, vec4>().method("[]", overloaded<int>(&mat4::operator[]));
+  ctx.type<psl::string>().converter<vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4>(
+      [](const auto& x) { return to_string(x); });
+  ctx("+") = +[](const mat2& a, const mat2& b) { return a + b; };
+  ctx("+") = +[](const mat3& a, const mat3& b) { return a + b; };
+  ctx("+") = +[](const mat4& a, const mat4& b) { return a + b; };
+  ctx("+=") = +[](mat2& a, const mat2& b) -> decltype(auto) { return a += b; };
+  ctx("+=") = +[](mat3& a, const mat3& b) -> decltype(auto) { return a += b; };
+  ctx("+=") = +[](mat4& a, const mat4& b) -> decltype(auto) { return a += b; };
+  ctx("*") = +[](const mat2& a, vec2 b) { return a * b; };
   ctx("*") = +[](const mat3& a, vec3 b) { return a * b; };
-  ctx("*") = +[](const mat3& a, const mat3& b) { return a * b; };
   ctx("*") = +[](const mat4& a, vec4 b) { return a * b; };
+  ctx("*") = +[](const mat2& a, const mat2& b) { return a * b; };
+  ctx("*") = +[](const mat3& a, const mat3& b) { return a * b; };
   ctx("*") = +[](const mat4& a, const mat4& b) { return a * b; };
   ctx("*") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mul_);
   ctx("/") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::div_);
@@ -204,6 +214,9 @@ void vecmath_context(Context& ctx) {
   ctx("distance") = distance<vec3>;
   ctx("dot") = overloaded<vec2, vec2>(dot<float>);
   ctx("dot") = overloaded<vec3, vec3>(dot<float>);
+  ctx("sum") = overloaded<vec2>(sum<float>);
+  ctx("sum") = overloaded<vec3>(sum<float>);
+  ctx("sum") = overloaded<vec4>(sum<float>);
   ctx("cross") = overloaded<vec3, vec3>(dot<float>);
   ctx("fract") = overloaded<vec2>(fract<float>);
   ctx("fract") = overloaded<vec3>(fract<float>);
@@ -248,6 +261,7 @@ void vecmath_context(Context& ctx) {
   ctx("inverse") = overloaded<const mat2&>(inverse);
   ctx("inverse") = overloaded<const mat3&>(inverse);
   ctx("inverse") = overloaded<const mat4&>(inverse);
+  ctx("solve") = solve;
   ctx("max_axis") = overloaded<vec3i>(max_axis<int>);
   ctx("max_axis") = overloaded<vec3>(max_axis<float>);
   ctx("min_axis") = overloaded<vec3i>(min_axis<int>);

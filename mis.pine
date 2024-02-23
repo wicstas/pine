@@ -1,0 +1,72 @@
+fn product(a: vec2, b: vec2): mat2{
+  return mat2(a * b[0], a * b[1]);
+}
+
+fn f(x: f32): f32 {
+  return 2 * x / (x + 1);
+}
+
+fn pdf_g(x: f32): f32 {
+  return (1 - x) * 2;
+}
+fn pdf_h(x: f32): f32 {
+  return 1.5 * sqrt(x);
+}
+
+fn inverse_cdf_g(y: f32): f32 {
+  return 1 - sqrt(1 - y);
+}
+fn inverse_cdf_h(y: f32): f32 {
+  return pow(y, 2.0/3);
+}
+
+fn sample_g(): f32 {
+  return inverse_cdf_g(haltonf());
+}
+fn sample_h(): f32 {
+  return inverse_cdf_h(haltonf());
+}
+
+fn balance_heuristic(pdf_g: f32, pdf_h: f32): f32 {
+  return pdf_g / (pdf_g + pdf_h);
+}
+
+niter := 10;
+trueI := 0.6137056388801094;
+
+I := 0.0;
+for iter in 0..niter {
+  x := haltonf();
+  I += f(x);
+}
+I /= niter;
+println(I + " " + abs(I -trueI) / trueI);
+
+reset_halton();
+I := 0.0;
+for iter in 0..niter {
+  x := sample_g();
+  I += f(x) / pdf_g(x) * balance_heuristic(pdf_g(x), pdf_h(x));
+  x := sample_h();
+  I += f(x) / pdf_h(x) * balance_heuristic(pdf_h(x), pdf_g(x));
+}
+I /= niter;
+println(I + " " + abs(I -trueI) / trueI);
+
+reset_halton();
+I := 0.0;
+A := mat2([0, 0], [0, 0]);
+b := [0.0, 0.0];
+for iter in 0..niter {
+  xg := sample_g();
+  xh := sample_h();
+  Sg := 1.0 / (pdf_g(xg) + pdf_h(xg));
+  Sh := 1.0 / (pdf_g(xh) + pdf_h(xh));
+  Wg := Sg * [pdf_g(xg), pdf_h(xg)];
+  Wh := Sh * [pdf_g(xh), pdf_h(xh)];
+  A += product(Wg, Wg) + product(Wh, Wh);
+  b += f(xg) * Sg  * Wg + f(xh) * Sh  * Wh;
+}
+a := inverse(A) * b;
+I := sum(a);
+println(I + " " + abs(I -trueI) / trueI);

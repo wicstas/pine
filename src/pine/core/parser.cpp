@@ -96,12 +96,6 @@ Context get_default_context() {
         return CustomRayIntegrator(EmbreeAccel(), HaltonSampler(spp), psl::move(f));
       })
       .method("render", &CustomRayIntegrator::render);
-  ctx.type<psl::string>()
-      .converter<bool, int, float, size_t, vec2i, vec3i, vec2, vec3, vec4, mat2, mat3, mat4,
-                 psl::string>([](const auto& x) {
-        using psl::to_string;
-        return to_string(x);
-      });
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
 

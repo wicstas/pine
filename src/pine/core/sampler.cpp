@@ -116,6 +116,10 @@ void sampler_context(Context& ctx) {
   ctx.type<Sampler>("Sampler").ctor_variant<UniformSampler, StratifiedSampler, HaltonSampler>();
 
   ctx("radical_inverse") = radical_inverse;
+  static int64_t i = 0;
+  ctx("reset_halton") = tag<void>([&]() { i = 0; });
+  ctx("haltonf") =
+      tag<float>([&]() { return psl::clamp(radical_inverse(2, i++), epsilon, one_minus_epsilon); });
 }
 
 }  // namespace pine

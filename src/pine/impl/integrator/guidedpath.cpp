@@ -8,7 +8,7 @@
 
 namespace pine {
 
-static SpatialTree guide;
+static SpatialNodeRoot guide;
 
 GuidedPathIntegrator::GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                                            int max_path_length)
@@ -34,13 +34,15 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto total_samples = double(total_pixels * samples_per_pixel);
   auto initial_samples = size_t(1024 * 16);
 
-  guide = SpatialTree(scene.get_aabb(), QuadTree());
-  guide.initial_refinement(initial_samples * 4);
+  guide = SpatialNodeRoot(scene.get_aabb(), QuadTree());
+  // guide = SpatialGrid(scene.get_aabb(), vec3i(16));
+  guide.initial_refinement(initial_samples * 128);
 
   auto current_sample_index = 0;
   auto current_samples = size_t(0);
-  auto weights = psl::vector<float>();
-  auto images = psl::vector<Array2d3f>();
+
+  auto accumulated_image = Array2d3f(film.size());
+  auto accumulated_weight = 0.0;
   auto image = Array2d3f(film.size());
   auto squared_image = Array2d3f(film.size());
   auto on_final_rendering = false;
@@ -50,9 +52,9 @@ void GuidedPathIntegrator::render(Scene& scene) {
   use_learned_ratio = 0.0f;
 
   for (int iteration = 0; current_samples < total_samples; iteration++) {
-    Debug("iter: ", iteration, ", max_tree_depth: ", guide.max_tree_depth(),
-          ", max_sample_count: ", guide.max_sample_count(), ", node_count: ", guide.node_count(),
-          ", max_quad_node_count: ", guide.max_quad_node_count());
+    // Debug("iter: ", iteration, ", max_tree_depth: ", guide.max_tree_depth(),
+    //       ", max_sample_count: ", guide.max_sample_count(), ", node_count: ", guide.node_count(),
+    //       ", max_quad_node_count: ", guide.max_quad_node_count());
     auto iter_samples = initial_samples * (1 << iteration);
     auto downscale = psl::min(psl::sqrt(float(iter_samples) / total_pixels), 1.0f);
     auto iter_image_size = vec2i(film.size() * downscale);
@@ -105,10 +107,12 @@ void GuidedPathIntegrator::render(Scene& scene) {
       } else {
         variance = 1.0f;
       }
-      weights.push_back(1.0f / variance);
-      images.push_back(image);
+      auto weight = 1.0 / variance;
+      accumulated_image = combine(accumulated_image, image, accumulated_weight, weight);
+      accumulated_weight += weight;
       Debug("Variance: ", float(variance));
     }
+
     if (!on_final_rendering)
       guide.refine(iteration);
     for (auto& pixel : image)
@@ -117,15 +121,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       pixel = vec3(0);
   }
 
-  auto total_weight = psl::sum(weights);
-  for (auto& w : weights)
-    w /= total_weight;
-  Debug(weights);
-  for_2d(film.size(), [&](vec2i p) {
-    for (size_t i = 0; i < images.size(); i++)
-      film.add_sample_no_acc(p, images[i][p] * weights[i]);
-  });
-
+  for_2d(film.size(), [&](vec2i p) { film.add_sample_no_acc(p, accumulated_image[p]); });
   set_progress(1.0f);
 }
 
@@ -163,7 +159,11 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
   auto& leaf = guide.traverse(it.p);
 
   auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
+  // if (prob_a > 0.2f) {
+  //   prob_a = leaf.strategy_a_selection_prob();
+  // }
   auto select_guide = prob_a > 0.0f && sampler.get1d() < prob_a;
+
   if (!it.material()->is_delta())
     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
       if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
@@ -185,8 +185,6 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       }
     }
 
-  // TODO Add irradiance in one call?
-  // accumulate film sample with only 2 films
   if (select_guide) {
     if (auto gs = leaf.sample(sampler.get2d())) {
       auto nv = Vertex(pv.length + 1, it.n, it.p, gs->pdf);
@@ -200,7 +198,9 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
         auto mis_indirect = prob_a == 1.0f ? 1.0f : balance_heuristic(gs->pdf, bsdf_pdf);
         Lo += Li * cosine * f / gs->pdf * mis_indirect / prob_a;
         if (collect_radiance_sample)
-          guide.add_sample(leaf, it.p, RadianceSample(gs->wo, Li / gs->pdf * mis_indirect / prob_a),
+          guide.add_sample(leaf, it.p,
+                           RadianceSample(gs->wo, Li / gs->pdf * mis_indirect / prob_a,
+                                          luminance(Li) * mis_indirect, psl::nullopt),
                            sampler.get3d(), sampler.get2d());
       }
     }
@@ -217,7 +217,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
         Lo += Li * cosine * bs->f / bs->pdf * mis_indirect / (1 - prob_a);
         if (collect_radiance_sample && !it.material()->is_delta())
           guide.add_sample(leaf, it.p,
-                           RadianceSample(bs->wo, Li / bs->pdf * mis_indirect / (1 - prob_a)),
+                           RadianceSample(bs->wo, Li / bs->pdf * mis_indirect / (1 - prob_a),
+                                          psl::nullopt, luminance(Li) * mis_indirect),
                            sampler.get3d(), sampler.get2d());
       }
     }

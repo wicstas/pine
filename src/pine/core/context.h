@@ -639,7 +639,7 @@ private:
   }
   template <typename T, typename R, typename... Args>
   Function wrap(Lambda<T, R, Args...> f) const {
-    return Function(psl::move(f), tag<R>(), psl::vector_of(tag<Args>()...));
+    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
   }
 };
 

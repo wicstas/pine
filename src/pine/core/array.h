@@ -173,6 +173,19 @@ inline Array2d2f grid(vec2 a, vec2 b, vec2i size) {
   return arr;
 }
 
+template <typename T>
+Array2d<T> combine(Array2d<T> a, const Array2d<T> &b, float weight_a, float weight_b) {
+  auto index = size_t{0};
+  CHECK_EQ(a.size(), b.size());
+  CHECK(weight_a + weight_b != 0.0f);
+  auto inv_weight_sum = 1.0f / (weight_a + weight_b);
+  for (auto &ea : a) {
+    ea = (weight_a * ea + weight_b * b.data()[index]) * inv_weight_sum;
+    index++;
+  }
+  return a;
+}
+
 void array2d_context(Context &context);
 
 }  // namespace pine

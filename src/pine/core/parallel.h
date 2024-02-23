@@ -20,6 +20,7 @@ void parallel_for_impl(int64_t nItems, F&& f) {
   psl::vector<std::thread> threads{static_cast<size_t>(n_threads())};
   std::atomic<int64_t> i{0};
   int tid = 0;
+  std::mutex mutex;
   std::exception_ptr eptr = nullptr;
 
   for (auto& thread : threads)
@@ -36,7 +37,9 @@ void parallel_for_impl(int64_t nItems, F&& f) {
             return;
         }
       } catch (...) {
+        mutex.lock();
         eptr = std::current_exception();
+        mutex.unlock();
       }
     });
 

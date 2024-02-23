@@ -85,6 +85,11 @@ Context::Context() {
                                args[0]->type_id()};
                }),
                context.tag<Type>(), context.tags<Any>());
+
+  context.type<psl::string>().converter<bool, int, float, size_t, psl::string>([](const auto& x) {
+    using psl::to_string;
+    return to_string(x);
+  });
 }
 
 static int common_prefix_length(psl::string_view a, psl::string_view b) {
@@ -198,8 +203,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       candidates += name + function_signature(functions[fi]) + "\n";
     if (candidates.size())
       candidates.pop_back();
-    Fatal("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n",
-              candidates);
+    Fatal("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n", candidates);
   } else {
     if (first != last) {
       auto candidates = psl::string();
@@ -207,8 +211,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
         candidates += name + function_signature(functions[fi]) + "\n";
       if (candidates.size())
         candidates.pop_back();
-      Fatal("Function `", name, "(", arg_signature, ")` is not found, candidates:\n",
-                candidates);
+      Fatal("Function `", name, "(", arg_signature, ")` is not found, candidates:\n", candidates);
     } else {
       auto likely_func_name = psl::string();
       auto max_common_part_length = 0;
@@ -221,7 +224,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
 
       if (likely_func_name != "")
         Fatal("Function `", name, "(", arg_signature, ")` is not found, did you mean `",
-                  likely_func_name, "`?");
+              likely_func_name, "`?");
       else
         Fatal("Function `", name, "(", arg_signature, ")` is not found");
     }

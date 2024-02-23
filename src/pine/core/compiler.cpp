@@ -1562,11 +1562,20 @@ struct Parser {
     return pexpr_;
   }
   PExpr pexpr_base() {
-    if (accept("false"))
-      return PExpr{BooleanLiteral{false}};
-    else if (accept("true"))
-      return PExpr{BooleanLiteral{true}};
-    else if (expect("\""))
+    backup();
+    if (accept("false")) {
+      if (auto n = next(); !n || (!psl::isalpha(*n) && *n != '_')) {
+        undo();
+        return PExpr{BooleanLiteral{false}};
+      }
+    } else if (accept("true")) {
+      if (auto n = next(); !n || (!psl::isalpha(*n) && *n != '_')) {
+        undo();
+        return PExpr{BooleanLiteral{true}};
+      }
+    }
+    undo();
+    if (expect("\""))
       return PExpr{string_literal()};
     else if (expect("[")) {
       backup();

@@ -541,6 +541,12 @@ struct Matrix2 {
   friend Matrix2 operator/(Matrix2 lhs, T rhs) {
     return lhs /= rhs;
   }
+  friend Matrix2 operator+(Matrix2 lhs, const Matrix2 &rhs) {
+    return lhs += rhs;
+  }
+  friend Matrix2 operator-(Matrix2 lhs, const Matrix2 &rhs) {
+    return lhs -= rhs;
+  }
 
   friend Matrix2 operator*(const Matrix2 &lhs, const Matrix2 &rhs) {
     Matrix2 ret = zeros();
@@ -628,6 +634,12 @@ struct Matrix3 {
   }
   friend Matrix3 operator/(Matrix3 lhs, T rhs) {
     return lhs /= rhs;
+  }
+  friend Matrix3 operator+(Matrix3 lhs, const Matrix3 &rhs) {
+    return lhs += rhs;
+  }
+  friend Matrix3 operator-(Matrix3 lhs, const Matrix3 &rhs) {
+    return lhs -= rhs;
   }
 
   friend Matrix3 operator*(const Matrix3 &lhs, const Matrix3 &rhs) {
@@ -721,6 +733,12 @@ struct Matrix4 {
   }
   friend Matrix4 operator/(Matrix4 lhs, T rhs) {
     return lhs /= rhs;
+  }
+  friend Matrix4 operator+(Matrix4 lhs, const Matrix4 &rhs) {
+    return lhs += rhs;
+  }
+  friend Matrix4 operator-(Matrix4 lhs, const Matrix4 &rhs) {
+    return lhs -= rhs;
   }
 
   friend Matrix4 operator*(const Matrix4 &lhs, const Matrix4 &rhs) {
@@ -1261,7 +1279,6 @@ inline vec3 spherical_to_cartesian(float phi, float theta) {
 inline vec3 unit_square_to_cartesian(vec2 sc) {
   return spherical_to_cartesian(sc[0] * Pi * 2, sc[1] * Pi);
 }
-
 
 float atan2_approx(float y, float x);
 inline float phi2pi(float x, float y) {

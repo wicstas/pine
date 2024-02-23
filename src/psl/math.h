@@ -198,6 +198,7 @@ inline constexpr T powi(T x, int e) {
 
 template <typename T>
 inline constexpr T pow(T x, T e) {
+  return std::pow(x, e);
   int ei = psl::floor(e);
   e -= ei;
   T y = ei > 0 ? psl::powi(x, ei) : 1 / psl::powi(x, -ei);
