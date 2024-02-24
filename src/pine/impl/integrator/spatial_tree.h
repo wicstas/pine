@@ -11,13 +11,11 @@ namespace pine {
 
 struct RadianceSample {
   RadianceSample() = default;
-  RadianceSample(vec3 w, vec3 flux, psl::optional<float> weight_a, psl::optional<float> weight_b)
-      : w{w}, flux{flux}, weight_a(weight_a), weight_b(weight_b) {
+  RadianceSample(vec3 w, vec3 flux)
+      : w{w}, flux{flux} {
   }
   vec3 w;
   vec3 flux;
-  psl::optional<float> weight_a;
-  psl::optional<float> weight_b;
 };
 
 struct PgSample {
@@ -266,23 +264,23 @@ struct SpatialNode {
       child(1).refine(k, raabb);
     }
     n_samples = 0;
-    prob_a = 0.5f;
-    auto weight_a = float(this->weight_a);
-    auto weight_b = float(this->weight_b);
-    auto alpha_a = int(this->alpha_a);
-    auto alpha_b = int(this->alpha_b);
-    if (alpha_a != 0 && alpha_b != 0) {
-      auto w_a = weight_a / alpha_a;
-      auto w_b = weight_b / alpha_b;
-      auto w_sum = w_a + w_b;
-      if (w_sum != 0.0f)
-        prob_a = w_a / w_sum;
-      Logs(weight_a, weight_b, alpha_a, alpha_b, prob_a);
-    }
-    this->weight_a = 0;
-    this->weight_b = 0;
-    this->alpha_a = 0;
-    this->alpha_b = 0;
+    // prob_a = 0.5f;
+    // auto weight_a = float(this->weight_a);
+    // auto weight_b = float(this->weight_b);
+    // auto alpha_a = int(this->alpha_a);
+    // auto alpha_b = int(this->alpha_b);
+    // if (alpha_a != 0 && alpha_b != 0) {
+    //   auto w_a = weight_a / alpha_a;
+    //   auto w_b = weight_b / alpha_b;
+    //   auto w_sum = w_a + w_b;
+    //   if (w_sum != 0.0f)
+    //     prob_a = w_a / w_sum;
+    //   Logs(weight_a, weight_b, alpha_a, alpha_b, prob_a);
+    // }
+    // this->weight_a = 0;
+    // this->weight_b = 0;
+    // this->alpha_a = 0;
+    // this->alpha_b = 0;
   }
   void initial_refinement(int64_t n_samples_, AABB aabb) {
     CHECK(is_leaf());
@@ -318,9 +316,9 @@ struct SpatialNode {
     else
       return psl::max(child(0).node_count(), child(1).node_count());
   }
-  float strategy_a_selection_prob() const {
-    return prob_a;
-  }
+  // float strategy_a_selection_prob() const {
+  //   return prob_a;
+  // }
 
 private:
   friend struct SpatialNodeRoot;
@@ -352,9 +350,9 @@ private:
   psl::Box<psl::Array<SpatialNode, 2>> children;
   psl::optional<QuadTree> guide;
   psl::optional<QuadTree> collector;
-  Atomic<float> weight_a{0}, weight_b{0};
-  Atomic<int> alpha_a{0}, alpha_b{0};
-  float prob_a = 0.0f;
+  // Atomic<float> weight_a{0}, weight_b{0};
+  // Atomic<int> alpha_a{0}, alpha_b{0};
+  // float prob_a = 0.0f;
 };
 struct SpatialNodeRoot {
   SpatialNodeRoot() = default;
@@ -366,13 +364,13 @@ struct SpatialNodeRoot {
     p = clamp(p, aabb.lower, aabb.upper);
     auto& chosen_leaf = traverse(p);
     chosen_leaf.n_samples += 1;
-    if (s.weight_a) {
-      chosen_leaf.weight_a += *s.weight_a;
-      chosen_leaf.alpha_a += 1;
-    } else {
-      chosen_leaf.weight_b += *s.weight_b;
-      chosen_leaf.alpha_b += 1;
-    }
+    // if (s.weight_a) {
+    //   chosen_leaf.weight_a += *s.weight_a;
+    //   chosen_leaf.alpha_a += 1;
+    // } else {
+    //   chosen_leaf.weight_b += *s.weight_b;
+    //   chosen_leaf.alpha_b += 1;
+    // }
     chosen_leaf.collector->add_sample(s.w, s.flux, length(s.flux), ud);
   }
   SpatialNode& traverse(vec3 p) {

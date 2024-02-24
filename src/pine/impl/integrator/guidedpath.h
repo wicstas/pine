@@ -29,13 +29,15 @@ public:
     vec3 Lo;
     psl::optional<float> mis_term;
   };
-  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
+  RadianceResult radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler,
+                          Vertex prev_vertex);
 
 private:
   LightSampler light_sampler;
   int max_path_length;
   bool collect_radiance_sample;
   float use_learned_ratio;
+  int primary_ratio = 8;
 };
 
 }  // namespace pine

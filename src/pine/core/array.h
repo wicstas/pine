@@ -76,6 +76,10 @@ struct Array2d {
   auto end() const {
     return data_.end();
   }
+  void set_to_zero() {
+    for (auto &val : data_)
+      val = T();
+  }
 
 private:
   vec2i size_;
@@ -132,6 +136,10 @@ struct Array3d {
   }
   auto end() const {
     return data_.end();
+  }
+  void set_to_zero() {
+    for (auto &val : data_)
+      val = T();
   }
 
 private:
