@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/log.h>
 
 #include <psl/unordered_map.h>
@@ -124,13 +123,13 @@ struct Variable {
 
   Variable() : Variable(psl::Empty()) {
   }
-  Variable(psl::unique_ptr<VariableConcept> model) : model(psl::move(model)) {
-  }
   template <typename T>
   Variable(T x) : model(psl::make_unique<VariableModel<T, T>>(psl::move(x))) {
   }
   template <typename T>
   Variable(psl::Ref<T> x) : model(psl::make_unique<VariableModel<T, psl::Ref<T>>>(psl::move(x))) {
+  }
+  Variable(psl::unique_ptr<VariableConcept> model) : model(psl::move(model)) {
   }
   Variable(const Variable& rhs) : model(rhs.model->clone()) {
   }
@@ -140,6 +139,10 @@ struct Variable {
   }
   Variable(Variable&& rhs) = default;
   Variable& operator=(Variable&& rhs) = default;
+  Variable(Variable*) = delete;
+  Variable(const Variable*) = delete;
+  Variable& operator=(Variable*) = delete;
+  Variable& operator=(const Variable*) = delete;
 
   Variable copy() const {
     return Variable(model->copy());
@@ -161,8 +164,8 @@ struct Variable {
   T as() const {
     using Base = psl::Decay<T>;
     // #ifndef NDEBUG
-    //     if (!is<Base>())
-    //       Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
+    if (!is<Base>())
+      Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
     // #endif
     return *reinterpret_cast<Base*>(model->ptr());
   }
@@ -205,7 +208,6 @@ struct Function {
     }
 
     Variable call(psl::span<const Variable*> args) override {
-      DCHECK_EQ(sizeof...(Args), args.size());
       if constexpr (sizeof...(Args) == 1 &&
                     psl::same_as<psl::FirstType<Args..., void>, psl::span<const Variable*>>) {
         if constexpr (psl::SameAs<R, void>)
@@ -213,6 +215,7 @@ struct Function {
         else
           return f(args);
       }
+      DCHECK_EQ(sizeof...(Args), args.size());
       return [&, this]<typename... Ps>(psl::IndexedTypeSequence<Ps...>) {
         const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
           if constexpr (psl::is_psl_function<typename P::Type>)
@@ -252,8 +255,8 @@ struct Function {
   template <typename R, typename... Args>
   Function(R& (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes) {
     auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args>(args)...)); };
-    model = psl::make_shared<FunctionModel<decltype(lambda), R&(Args...)>>(lambda, psl::move(rtype),
-                                                                           psl::move(ptypes));
+    model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
+        lambda, psl::move(rtype), psl::move(ptypes));
   }
   template <typename T, typename R, typename... Args>
   Function(Lambda<T, R, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes)
@@ -265,8 +268,8 @@ struct Function {
     auto lambda = [f = psl::move(f.lambda)](Args... args) {
       return psl::ref(f(static_cast<Args>(args)...));
     };
-    model = psl::make_shared<FunctionModel<decltype(lambda), R&(Args...)>>(lambda, psl::move(rtype),
-                                                                           psl::move(ptypes));
+    model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
+        lambda, psl::move(rtype), psl::move(ptypes));
   }
 
   Variable call(psl::span<const Variable*> args) const {

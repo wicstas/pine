@@ -61,9 +61,8 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
           auto cosine = absdot(ls->wo, it.n);
           auto [f, pdf] = it.material()->f_pdf({it, -ray.d, ls->wo});
           auto mis = 1.0f;
-          // TODO guide
           if (!ls->light->is_delta())
-            mis = balance_heuristic(ls->pdf, pdf);
+            mis = balance_heuristic(ls->pdf, pdf) / 0.2f;
           L += beta * cosine * ls->le / ls->pdf * f * mis;
         }
       }

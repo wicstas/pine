@@ -619,6 +619,48 @@ inline auto reverse_() {
   return [](Range auto&& range) { return reverse_adapter(FWD(range)); };
 }
 
+template <Range ARange>
+auto indirection(ARange&& range) {
+  struct Ranger {
+    struct Iterator {
+      decltype(auto) operator*() const {
+        return *(*it);
+      }
+      Iterator& operator++() {
+        ++it;
+        return *this;
+      }
+      Iterator operator++(int) {
+        auto old = *this;
+        ++it;
+        return old;
+      }
+      auto operator->() {
+        return it;
+      }
+      bool operator==(const Iterator& b) const {
+        return it == b.it;
+      }
+      bool operator!=(const Iterator& b) const {
+        return !(*this == b);
+      }
+
+      IteratorTypeT<ARange> it;
+    };
+    Iterator begin() {
+      return {psl::begin(range)};
+    }
+    Iterator end() {
+      return {psl::end(range)};
+    }
+    size_t size() {
+      return psl::size(range);
+    }
+    ARange range;
+  };
+  return Ranger{psl::forward<ARange>(range)};
+}
+
 template <typename T, Range ARange>
 T to(ARange&& range) {
   return T(psl::forward<ARange>(range));

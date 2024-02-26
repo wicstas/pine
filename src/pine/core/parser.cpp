@@ -65,7 +65,7 @@ Context get_default_context() {
   ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor(+[](int spp, int max_path_length) {
-        return GuidedPathIntegrator(EmbreeAccel(), UniformSampler(spp), UniformLightSampler(),
+        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
                                     max_path_length);
       })
       .method("render", &GuidedPathIntegrator::render);

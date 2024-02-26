@@ -25,6 +25,10 @@ Context::Context() {
   add_f(
       "==", +[](bool a, bool b) -> bool { return a == b; });
   add_f(
+      "&&", +[](bool a, bool b) -> bool { return a && b; });
+  add_f(
+      "||", +[](bool a, bool b) -> bool { return a || b; });
+  add_f(
       "!=", +[](bool a, bool b) -> bool { return a != b; });
   add_f(
       "=", +[](bool& a, bool b) -> bool& { return a = b; });

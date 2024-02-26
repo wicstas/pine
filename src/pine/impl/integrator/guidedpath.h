@@ -25,12 +25,8 @@ public:
     float pdf;
     bool is_delta;
   };
-  struct RadianceResult {
-    vec3 Lo;
-    psl::optional<float> mis_term;
-  };
-  RadianceResult radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler,
-                          Vertex prev_vertex);
+  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler,
+                Vertex prev_vertex);
 
 private:
   LightSampler light_sampler;

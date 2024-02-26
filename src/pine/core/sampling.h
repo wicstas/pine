@@ -57,19 +57,11 @@ inline vec2 inverse_uniform_hemisphere(vec3 d) {
   return vec2(phi2pi(d.x, d.y) / Pi2, psl::acos(d.z));
 }
 
-inline float balance_heuristic(int nF, float pF, int nG, float pG) {
-  return nF * pF / (nF * pF + nG * pG);
-}
-inline float power_heuristic(int nF, float pF, int nG, float pG) {
-  float f = nF * pF;
-  float g = nG * pG;
-  return psl::sqr(f) / (psl::sqr(f) + psl::sqr(g));
+inline float balance_heuristic(float aF, float pF, float aG, float pG) {
+  return aF * pF / (aF * pF + aG * pG);
 }
 inline float balance_heuristic(float pF, float pG) {
   return pF / (pF + pG);
-}
-inline float power_heuristic(float pF, float pG) {
-  return psl::sqr(pF) / (psl::sqr(pF) + psl::sqr(pG));
 }
 
 }  // namespace pine

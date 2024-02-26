@@ -734,16 +734,16 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
     context.function_rtype = psl::nullopt;
 
     context(name) = Function(
-        lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype, cptypes,
-                                            ptypes](psl::span<const Variable*> args) mutable {
-          auto cargs = psl::vector<Variable>();
-          for (size_t i = 0; i < args.size(); i++)
-            cargs.push_back(cptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
+        tag<Function, psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
+                                                   cptypes, ptypes](
+                                                      psl::span<const Variable*> args) mutable {
+          auto cargs = psl::vector<Variable>(psl::indirection(args));
           return Function(
               lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
                                                   cargs = psl::move(cargs), cptypes,
                                                   ptypes](psl::span<const Variable*> args) mutable {
                 auto vm = VirtualMachine();
+                vm.stack.reserve(cargs.size() + args.size());
                 for (size_t i = 0; i < cargs.size(); i++)
                   vm.stack.push(cptypes[i].is_ref ? cargs[i].create_ref() : cargs[i].copy());
                 for (size_t i = 0; i < args.size(); i++)
@@ -1565,12 +1565,12 @@ struct Parser {
     backup();
     if (accept("false")) {
       if (auto n = next(); !n || (!psl::isalpha(*n) && *n != '_')) {
-        undo();
+        commit();
         return PExpr{BooleanLiteral{false}};
       }
     } else if (accept("true")) {
       if (auto n = next(); !n || (!psl::isalpha(*n) && *n != '_')) {
-        undo();
+        commit();
         return PExpr{BooleanLiteral{true}};
       }
     }
@@ -1939,7 +1939,7 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
         case Bytecode::Break: break;
         case Bytecode::Continue: break;
         case Bytecode::Return:
-          return code.value == size_t(-1) ? Variable() : vm.stack[code.value];
+          return code.value == size_t(-1) ? Variable() : vm.stack[code.value].copy();
           break;
         case Bytecode::LoadGlobalVar: vm.stack.push(context.variables[code.value].second); break;
         case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
