@@ -332,6 +332,9 @@ constexpr bool is_psl_ref = _is_psl_ref<T>::value;
 
 template <typename T>
 struct Box {
+  static Box default_value() {
+    return Box(T());
+  }
   Box() = default;
   Box(T x) : ptr(psl::make_unique<T>(psl::move(x))) {
   }

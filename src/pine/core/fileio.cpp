@@ -188,7 +188,7 @@ void load_scene(Scene &scene_, psl::string_view filename) {
   else
     p0 = psl::next(p0);
   auto working_directory = psl::string_view(filename.begin(), p0);
-  Debug("Working directory ", working_directory);
+  ;  // Debug("Working directory ", working_directory);
 
   Assimp::Importer importer;
   const aiScene *scene = importer.ReadFile(
@@ -234,19 +234,19 @@ void load_scene(Scene &scene_, psl::string_view filename) {
     auto material = scene->mMaterials[mesh->mMaterialIndex];
     auto dc = aiColor3D(1.0, 1.0, 1.0);
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
+      ;  // Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
     auto diffuse_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_DIFFUSE, 0), diffuse_texture) ==
         aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
+      ;  // Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
     auto base_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_BASE_COLOR, 0), base_texture) ==
         aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
+      ;  // Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
     auto alpha_texture = aiString();
     if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_OPACITY, 0), alpha_texture) ==
         aiReturn_SUCCESS)
-      Debug(mesh->mName.C_Str(), " has alpha texture ", alpha_texture.C_Str());
+      ;  // Debug(mesh->mName.C_Str(), " has alpha texture ", alpha_texture.C_Str());
 
     auto material_ = Material();
     if (diffuse_texture.length != 0) {

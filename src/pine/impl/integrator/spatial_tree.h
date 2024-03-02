@@ -99,7 +99,7 @@ struct QuadNode {
   }
 
   void refine(float total_flux) {
-    if (flux > total_flux * 0.01f && depth < 20) {
+    if (flux > total_flux * 0.02f && depth < 16) {
       if (is_leaf()) {
         children = psl::array_of(QuadNode(depth + 1), QuadNode(depth + 1), QuadNode(depth + 1),
                                  QuadNode(depth + 1));
@@ -203,11 +203,8 @@ struct QuadTree {
 
 struct SpatialNode {
   SpatialNode() = default;
-  SpatialNode(AABB aabb, QuadTree quad)
-      : axis(max_axis(aabb.diagonal())),
-        footprint_(aabb.diagonal()[axis] / 2),
-        guide(quad),
-        collector(psl::move(quad)) {
+  SpatialNode(float footprint, QuadTree quad)
+      : footprint_(footprint), guide(quad), collector(psl::move(quad)) {
   }
   psl::optional<PgSample> sample(vec2 u) const {
     return guide->sample(u);
@@ -228,37 +225,30 @@ struct SpatialNode {
       return child(p).traverse(p);
   }
 
-  void refine(int k, AABB aabb) {
+  void refine(size_t threshold) {
     if (is_leaf()) {
-      const auto c = 1000;
-      const auto threshold = size_t(c * psl::sqrt<float>(1 << k));
       if (n_samples > threshold) {
-        auto [laabb, raabb] = aabb.split_half(axis);
-        auto child0 = SpatialNode(laabb, *collector);
-        auto child1 = SpatialNode(raabb, psl::move(*collector));
-        children = psl::array_of(psl::move(child0), psl::move(child1));
+        children = children.default_value();
+        for (int i = 0; i < 8; i++) {
+          // no need to assign guide
+          child(i).collector = collector;
+          child(i).footprint_ = footprint_ / 2;
+          child(i).n_samples = n_samples / 8;
+          child(i).weight_a = weight_a / 8;
+          child(i).weight_b = weight_b / 8;
+          child(i).alpha_a = alpha_a / 8;
+          child(i).alpha_b = alpha_b / 8;
+          child(i).refine(threshold);
+        }
         guide = collector = psl::nullopt;
-        child(0).n_samples = n_samples / 2;
-        child(0).weight_a = weight_a / 2;
-        child(0).weight_b = weight_b / 2;
-        child(0).alpha_a = alpha_a / 2;
-        child(0).alpha_b = alpha_b / 2;
-        child(0).refine(k, laabb);
-        child(1).n_samples = n_samples / 2;
-        child(1).weight_a = weight_a / 2;
-        child(1).weight_b = weight_b / 2;
-        child(1).alpha_a = alpha_a / 2;
-        child(1).alpha_b = alpha_b / 2;
-        child(1).refine(k, raabb);
       } else {
         collector->refine();
         guide = collector;
         collector->clear();
       }
     } else {
-      auto [laabb, raabb] = aabb.split_half(axis);
-      child(0).refine(k, laabb);
-      child(1).refine(k, raabb);
+      for (int i = 0; i < 8; i++)
+        child(i).refine(threshold);
     }
     n_samples = 0;
     prob_a = 0.5f;
@@ -278,11 +268,12 @@ struct SpatialNode {
     // alpha_a = 0;
     // alpha_b = 0;
   }
-  void initial_refinement(int64_t n_samples_, AABB aabb) {
+  void initial_refinement(int64_t initial_samples, size_t threshold) {
     CHECK(is_leaf());
-    n_samples = n_samples_;
+    n_samples = initial_samples;
     collector->initial_refinement();
-    refine(0, aabb);
+    refine(threshold);
+    n_samples = 0;
   }
 
   float footprint() const {
@@ -328,31 +319,36 @@ private:
     return (*children)[index];
   }
   SpatialNode& child(vec3& p) {
-    if (p[axis] < 0.5f) {
-      p[axis] = p[axis] * 2;
-      return child(0);
-    } else {
-      p[axis] = (p[axis] - 0.5f) * 2;
-      return child(1);
+    auto index = 0;
+#pragma unroll
+    for (int i = 0; i < 3; i++) {
+      if (p[i] < 0.5f) {
+        p[i] = p[i] * 2;
+      } else {
+        p[i] = (p[i] - 0.5f) * 2;
+        index += 1 << i;
+      }
     }
+    return child(index);
   }
   const SpatialNode& child(vec3& p) const {
     return const_cast<SpatialNode*>(this)->child(p);
   }
 
-  int axis = -1;
   float footprint_ = 0.0f;
   Atomic<size_t> n_samples{0};
   Atomic<float> weight_a{0}, weight_b{0};
   Atomic<int> alpha_a{0}, alpha_b{0};
   float prob_a = 0.5f;
-  psl::Box<psl::Array<SpatialNode, 2>> children;
+  psl::Box<psl::Array<SpatialNode, 8>> children;
   psl::optional<QuadTree> guide;
   psl::optional<QuadTree> collector;
 };
 struct SpatialTree {
   SpatialTree() = default;
-  SpatialTree(AABB aabb, QuadTree quad) : aabb(aabb), root(aabb, quad) {
+  SpatialTree(AABB aabb, int64_t initial_samples, size_t threshold)
+      : aabb(aabb), root(min_value(aabb.diagonal()), QuadTree()) {
+    root.initial_refinement(initial_samples, threshold);
   }
 
   void add_sample(SpatialNode& leaf, vec3 p, RadianceSample s, vec3 u, vec2 ud) {
@@ -375,11 +371,8 @@ struct SpatialTree {
   const SpatialNode& traverse(vec3 p) const {
     return root.traverse(aabb.relative_position(p));
   }
-  void refine(int k) {
-    return root.refine(k, aabb);
-  }
-  void initial_refinement(int64_t n_samples_) {
-    return root.initial_refinement(n_samples_, aabb);
+  void refine(size_t threshold) {
+    return root.refine(threshold);
   }
   int max_tree_depth() const {
     return root.max_tree_depth();
@@ -397,50 +390,6 @@ struct SpatialTree {
 private:
   AABB aabb;
   SpatialNode root;
-};
-
-struct SpatialGrid {
-  struct Unit {
-    psl::optional<PgSample> sample(vec2 u) const {
-      return guide.sample(u);
-    }
-    float pdf(vec3 w) const {
-      return guide.pdf(w);
-    }
-    QuadTree guide, collector;
-  };
-  SpatialGrid() = default;
-  SpatialGrid(AABB aabb, vec3i resolution) : aabb(aabb), grid(resolution) {
-    this->aabb.extend_by(1e-4f);
-  }
-
-  void add_sample(Unit&, vec3 p, RadianceSample s, vec3, vec2 ud) {
-    auto& chosen_leaf = traverse(p);
-    chosen_leaf.collector.add_sample(s.w, s.flux, ud);
-  }
-
-  void refine(int) {
-    for (auto& unit : grid) {
-      unit.collector.refine();
-      unit.guide = unit.collector;
-      unit.collector.clear();
-    }
-  }
-  void initial_refinement(int64_t) {
-  }
-
-  float footprint() const {
-    return max_value(aabb.diagonal() / grid.size());
-  }
-  Unit& traverse(vec3 p) {
-    return grid[vec3i(aabb.relative_position(p) * grid.size())];
-  }
-  const Unit& traverse(vec3 p) const {
-    return grid[vec3i(aabb.relative_position(p) * grid.size())];
-  }
-
-  AABB aabb;
-  Array3d<Unit> grid;
 };
 
 }  // namespace

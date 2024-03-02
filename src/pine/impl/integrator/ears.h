@@ -12,20 +12,12 @@ public:
   void render(Scene& scene) override;
 
   struct Vertex {
-    Vertex(int iteration, int length, vec3 throughput, vec3 n, vec3 p, float pdf,
-           bool is_delta = false)
-        : iteration(iteration),
-          length(length),
-          throughput(throughput),
-          n(n),
-          p(p),
-          pdf(pdf),
-          is_delta(is_delta) {
+    Vertex(int length, vec3 throughput, vec3 n, vec3 p, float pdf, bool is_delta = false)
+        : length(length), throughput(throughput), n(n), p(p), pdf(pdf), is_delta(is_delta) {
     }
-    static Vertex first_vertex(int iteration, vec3 I) {
-      return Vertex(iteration, 0, vec3(1.0f) / I, vec3(0), vec3(0), 0.0f, true);
+    static Vertex first_vertex(vec3 I) {
+      return Vertex(0, vec3(1.0f) / I, vec3(0), vec3(0), 0.0f, true);
     }
-    int iteration;
     int length;
     vec3 throughput;
     vec3 n;
@@ -43,6 +35,7 @@ public:
 private:
   LightSampler light_sampler;
   int max_path_length;
+  bool estimate_ready;
 };
 
 }  // namespace pine

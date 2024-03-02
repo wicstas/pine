@@ -8,7 +8,6 @@ struct Film {
   Film() = default;
   Film(vec2i size) : pixels(size){};
 
-  void add_sample_no_acc(vec2i p_film, vec3 color);
   void add_sample(vec2i p_film, vec3 color);
   void add_sample_thread_safe(vec2i p_film, vec3 color);
   float aspect() const {
@@ -16,6 +15,13 @@ struct Film {
   }
   void clear();
   void finalize(float scale = 1.0f);
+
+  vec4& operator[](vec2i p) {
+    return pixels[p];
+  }
+  const vec4& operator[](vec2i p) const {
+    return pixels[p];
+  }
 
   vec2i size() const {
     return pixels.size();

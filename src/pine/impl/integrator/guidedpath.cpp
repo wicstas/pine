@@ -26,7 +26,8 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
   accel.build(&scene);
   light_sampler.build(&scene);
-  auto& film = scene.camera.film(); film.clear();
+  auto& film = scene.camera.film();
+  film.clear();
 
   Profiler _("[Integrator]Rendering");
 
@@ -39,12 +40,12 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto accumulated_weight = 0.0;
   auto image = Array2d3f(film.size());
   auto squared_image = Array2d3f(film.size());
-  guide = SpatialTree(scene.get_aabb(), QuadTree());
-  guide.initial_refinement(initial_samples);
+  auto spatial_k = 1000;
+  guide = SpatialTree(scene.get_aabb(), initial_samples, spatial_k);
 
   auto iter_samples = size_t(0);
-  for (int iteration = 0; current_samples < total_samples; iteration++) {
-    iter_samples = initial_samples * (1 << iteration);
+  for (int iter = 0; current_samples < total_samples; iter++) {
+    iter_samples = initial_samples * (1 << iter);
     auto downscale = psl::max(psl::sqrt(float(total_pixels) / iter_samples), 1.0f);
     auto iter_image_size = vec2i(film.size() / downscale);
     auto iter_spp = psl::max<int>(iter_samples / area(iter_image_size), 1);
@@ -60,8 +61,8 @@ void GuidedPathIntegrator::render(Scene& scene) {
   collect_radiance_sample = true;
   use_learned_ratio = 0.0f;
   set_progress(0);
-  for (int iteration = 0; current_samples < total_samples; iteration++) {
-    auto iter_samples = initial_samples * (1 << iteration);
+  for (int iter = 0; current_samples < total_samples; iter++) {
+    auto iter_samples = initial_samples * (1 << iter);
     auto downscale = psl::max(psl::sqrt(float(total_pixels) / iter_samples), 1.0f);
     auto iter_image_size = vec2i(film.size() / downscale);
     auto iter_spp = psl::max<int>(iter_samples / area(iter_image_size), 1);
@@ -116,12 +117,12 @@ void GuidedPathIntegrator::render(Scene& scene) {
     }
 
     if (!on_final_rendering)
-      guide.refine(iteration);
+      guide.refine(spatial_k * psl::sqrt<float>(1 << iter));
     image.set_to_zero();
     squared_image.set_to_zero();
   }
 
-  for_2d(film.size(), [&](vec2i p) { film.add_sample_no_acc(p, accumulated_image[p]); });
+  for_2d(film.size(), [&](vec2i p) { film[p] = vec4(accumulated_image[p], 1.0f); });
   set_progress(1.0f);
 }
 

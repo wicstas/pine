@@ -102,9 +102,8 @@ Context get_default_context() {
         return CustomRayIntegrator(EmbreeAccel(), HaltonSampler(spp), psl::move(f));
       })
       .method("render", &CustomRayIntegrator::render);
-  ctx.type<DenoiseIntegrator>("DenoiseIntegrator")
-      .ctor(+[]() { return DenoiseIntegrator(EmbreeAccel(), HaltonSampler(1)); })
-      .method("render", &DenoiseIntegrator::render);
+  ctx("denoise") =
+      +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), HaltonSampler(1)).render(scene); };
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
 
