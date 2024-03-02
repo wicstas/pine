@@ -12,7 +12,7 @@ public:
     radius = min_value(scene.get_aabb().diagonal()) / 2;
     RayIntegrator::render(scene);
   }
-  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override;
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override;
 
 private:
   float radius;

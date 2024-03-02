@@ -12,8 +12,14 @@ PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_
     Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 
-vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
-                              Sampler& sampler) {
+static auto counter = Atomic<size_t>(0);
+
+void PathIntegrator::render(Scene& scene) {
+  light_sampler.build(&scene);
+  RayIntegrator::render(scene);
+  Log("[Path] counter: ", size_t(counter));
+}
+vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
   auto L = vec3{0.0f};
   auto beta = vec3{1.0f};
   auto prev_n = vec3{};
@@ -21,10 +27,9 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
   auto bsdf_pdf = 0.0f;
 
   for (int depth = 0; depth < max_path_length; depth++) {
-    if (depth != 0)
-      is_hit = intersect(ray, it);
-
-    if (!is_hit) {
+    auto it = Interaction();
+    counter++;
+    if (!intersect(ray, it)) {
       if (scene.env_light) {
         auto le = scene.env_light->color(ray.d);
         if (depth == 0 || prev_is_delta) {
@@ -55,17 +60,18 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit
     if (depth + 1 == max_path_length)
       break;
 
-    if (!it.material()->is_delta())
+    if (!it.material()->is_delta()) {
       if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
           auto [f, pdf] = it.material()->f_pdf({it, -ray.d, ls->wo});
           auto mis = 1.0f;
           if (!ls->light->is_delta())
-            mis = balance_heuristic(ls->pdf, pdf) / 0.2f;
+            mis = balance_heuristic(ls->pdf, pdf);
           L += beta * cosine * ls->le / ls->pdf * f * mis;
         }
       }
+    }
 
     auto msc = MaterialSampleCtx(it, -ray.d, sampler.get1d(), sampler.get2d());
 

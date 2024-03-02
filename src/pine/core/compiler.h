@@ -34,7 +34,7 @@ struct SourceLines {
 private:
   psl::vector<psl::string> lines;
   size_t paddings = invalid;
-  static constexpr size_t invalid = static_cast<size_t>(-1);
+  static constexpr size_t invalid = size_t(-1);
 };
 
 struct Bytecode {
@@ -188,9 +188,11 @@ private:
 
 public:
   SourceLines sl;
+  size_t starting_position = 0;
 };
 
 Bytecodes compile(Context& context, psl::string source);
+void compile(Context& context, psl::string source, Bytecodes& bytecodes);
 
 template <typename T, typename Allocator = psl::default_allocator<T>>
 struct Stack {

@@ -34,7 +34,7 @@ void material_context(Context& ctx) {
   ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>();
   ctx.type<GlossyMaterial>("Glossy").ctor<Node3f, Node3f, Nodef>();
   ctx.type<MirrorMaterial>("Mirror").ctor<Node3f>();
-  ctx.type<WaterMaterial>("Water").ctor<Node3f, Nodef>();
+  ctx.type<WaterMaterial>("Transparent").ctor<Node3f, Nodef>();
   ctx.type<EmissiveMaterial>("Emissive").ctor<Node3f>();
   ctx.type<Material>("Material")
       .ctor_variant<DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial, MirrorMaterial,

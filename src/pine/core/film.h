@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/atomic.h>
 #include <pine/core/array.h>
 
@@ -17,8 +16,6 @@ struct Film {
   }
   void clear();
   void finalize(float scale = 1.0f);
-  void scale(float factor);
-  void offset(vec3 factor);
 
   vec2i size() const {
     return pixels.size();

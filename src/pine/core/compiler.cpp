@@ -1497,7 +1497,7 @@ struct Parser {
       exprs.erase(exprs.begin() + index);
       exprs.erase(exprs.begin() + index);
       exprs.insert(exprs.begin() + index,
-                   Expr{psl::move(a), psl::move(b), static_cast<Expr::Op>(max_precedence)});
+                   Expr{psl::move(a), psl::move(b), Expr::Op(max_precedence)});
     }
 
     return exprs[0];
@@ -1575,7 +1575,7 @@ struct Parser {
       }
     }
     undo();
-    if (expect("\""))
+    if (expect("\"") || expect("'"))
       return PExpr{string_literal()};
     else if (expect("[")) {
       backup();
@@ -1732,7 +1732,12 @@ struct Parser {
   }
   StringLiteral string_literal() {
     auto str = psl::string();
-    consume("\"", ExplicitParameter(false));
+    auto single_quote = false;
+    if (!accept("'", ExplicitParameter(false))) {
+      consume("\"", ExplicitParameter(false));
+    } else {
+      single_quote = true;
+    }
     auto escape = false;
     while (auto n = next()) {
       if (escape) {
@@ -1748,13 +1753,16 @@ struct Parser {
         proceed();
         continue;
       }
-      if (*n == '"')
+      if (*n == (single_quote ? '\'' : '"'))
         break;
       proceed();
       str.push_back(*n);
       escape = *n == '\\';
     }
-    consume("\"", "to end string literal");
+    if (single_quote)
+      consume("'", "to end string literal");
+    else
+      consume("\"", "to end string literal");
     return StringLiteral(str);
   }
 
@@ -1810,10 +1818,12 @@ private:
 
     return true;
   }
-  bool accept(psl::string_view str) {
+  bool accept(psl::string_view str,
+              ExplicitParameter<bool> remove_tail_spaces = ExplicitParameter<bool>(true)) {
     if (expect(str)) {
       proceed(str.size());
-      consume_spaces();
+      if (remove_tail_spaces)
+        consume_spaces();
       return true;
     } else {
       return false;
@@ -1908,7 +1918,7 @@ private:
   size_t column = 0;
   psl::vector<psl::pair<size_t, size_t>> backup_stack;
   static constexpr size_t row_padding = 1;
-  static constexpr size_t invalid = static_cast<size_t>(-1);
+  static constexpr size_t invalid = size_t(-1);
 };
 
 psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
@@ -1922,11 +1932,18 @@ Bytecodes compile(Context& context, psl::string source) {
   block.emit(context, bytecodes);
   return bytecodes;
 }
+void compile(Context& context, psl::string source, Bytecodes& bytecodes) {
+  auto [block, sl] = parse_as_block(psl::move(source));
+  bytecodes.starting_position = bytecodes.length();
+  bytecodes.sl = psl::move(sl);
+  for (const auto& elem : block.elems)
+    elem.emit(context, bytecodes);
+}
 
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm) {
   auto source_loc = SourceLoc();
   try {
-    for (size_t p = 0; p < bytecodes.length();) {
+    for (size_t p = bytecodes.starting_position; p < bytecodes.length();) {
       const auto& code = bytecodes[p];
       source_loc = code.sl;
       auto inc_p = true;
@@ -1945,13 +1962,9 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
         case Bytecode::LoadFunction: vm.stack.push(context.functions[code.value]); break;
         case Bytecode::Copy: push(vm.stack[code.value].copy()); break;
         case Bytecode::MakeRef: push(vm.stack[code.value].create_ref()); break;
-        case Bytecode::LoadFloatConstant:
-          push(psl::bitcast<float>(static_cast<uint32_t>(code.value)));
-          break;
-        case Bytecode::LoadIntConstant:
-          push(psl::bitcast<int>(static_cast<uint32_t>(code.value)));
-          break;
-        case Bytecode::LoadBoolConstant: push(static_cast<bool>(code.value)); break;
+        case Bytecode::LoadFloatConstant: push(psl::bitcast<float>(uint32_t(code.value))); break;
+        case Bytecode::LoadIntConstant: push(psl::bitcast<int>(uint32_t(code.value))); break;
+        case Bytecode::LoadBoolConstant: push(bool(code.value)); break;
         case Bytecode::LoadStringConstant: push(bytecodes.get_string(code.value)); break;
         case Bytecode::IntPreInc: push(++vm.stack[code.args[0]].as<int&>()); break;
         case Bytecode::IntPreDec: push(--vm.stack[code.args[0]].as<int&>()); break;

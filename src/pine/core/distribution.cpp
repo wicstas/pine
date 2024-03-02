@@ -20,7 +20,7 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
   auto size = upper - lower;
 
   if (depth >= max_depth || size.x == 0 || size.y == 0 || size == vec2i{1})
-    return new Node{static_cast<float>(weight), true, lower, upper, {}, {}};
+    return new Node{float(weight), true, lower, upper, {}, {}};
 
   auto partial_weight = 0.0;
   auto split_x = size.x >= size.y;
@@ -56,7 +56,7 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
     p = split_x ? upper.x - 1 : upper.y - 1;
 
   return new Node{
-      static_cast<float>(weight),
+      float(weight),
       split_x,
       lower,
       upper,

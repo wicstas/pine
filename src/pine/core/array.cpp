@@ -1,9 +1,15 @@
 #include <pine/core/context.h>
 #include <pine/core/array.h>
 
+#include <psl/vector.h>
+
 namespace pine {
 
-void array2d_context(Context &context) {
+void array2d_context(Context& context) {
+  context.type<psl::vector<int>>("list_i").ctor<int>().method(
+      "[]", +[](psl::vector<int>& list, int i) -> int& { return list[i]; });
+  context.type<psl::vector<float>>("list_f").ctor<int>().method(
+      "[]", +[](psl::vector<float>& list, int i) -> float& { return list[i]; });
   context.type<Array2df>("Array2df")
       .ctor<vec2i>()
       .method("size", &Array2df::size)
@@ -12,6 +18,10 @@ void array2d_context(Context &context) {
       .ctor<vec2i>()
       .method("size", &Array2d2f::size)
       .method("[]", overloaded(&Array2d2f::operator[]));
+  context.type<Array2d<vec3u8>>("Array2d3u8")
+      .ctor<vec2i>()
+      .method("size", &Array2d<vec3u8>::size)
+      .method("[]", overloaded(&Array2d<vec3u8>::operator[]));
   context.type<Array2d3f>("Array2d3f")
       .ctor<vec2i>()
       .method("size", &Array2d3f::size)

@@ -10,6 +10,8 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/voxelcone.h>
+#include <pine/impl/integrator/denoiser.h>
+#include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
@@ -76,6 +78,13 @@ Context get_default_context() {
                                     max_path_length, max_axis_resolution, starting_depth);
       })
       .method("render", &CachedPathIntegrator::render);
+  ctx.type<EARSIntegrator>("EARSIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](int spp, int max_path_length) {
+        return EARSIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+                              max_path_length);
+      })
+      .method("render", &EARSIntegrator::render);
   ctx.type<VisualizerIntegrator>("VisIntegrator")
       .ctor(+[](psl::string type) {
         return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);
@@ -88,14 +97,14 @@ Context get_default_context() {
       })
       .method("render", &VoxelConeIntegrator::render);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
-      .ctor<Accel, Sampler,
-            psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>>()
-      .ctor(+[](int spp,
-                psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)>
-                    f) {
+      .ctor<Accel, Sampler, psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)>>()
+      .ctor(+[](int spp, psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> f) {
         return CustomRayIntegrator(EmbreeAccel(), HaltonSampler(spp), psl::move(f));
       })
       .method("render", &CustomRayIntegrator::render);
+  ctx.type<DenoiseIntegrator>("DenoiseIntegrator")
+      .ctor(+[]() { return DenoiseIntegrator(EmbreeAccel(), HaltonSampler(1)); })
+      .method("render", &DenoiseIntegrator::render);
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
 

@@ -59,6 +59,9 @@ struct DiffuseMaterial {
   float roughness_amount(const NodeEvalCtx& nc) const {
     return bsdf.roughness_amount(nc);
   }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bsdf.albedo(nc);
+  }
   bool is_delta() const {
     return false;
   }
@@ -84,6 +87,9 @@ struct MetalMaterial {
   }
   float roughness_amount(const NodeEvalCtx& nc) const {
     return bsdf.roughness_amount(nc);
+  }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bsdf.albedo(nc);
   }
   bool is_delta() const {
     return false;
@@ -112,6 +118,9 @@ struct GlassMaterial {
   }
   float roughness_amount(const NodeEvalCtx& nc) const {
     return bsdf.roughness_amount(nc);
+  }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bsdf.albedo(nc);
   }
   bool is_delta() const {
     return false;
@@ -144,6 +153,9 @@ struct GlossyMaterial {
   float roughness_amount(const NodeEvalCtx& nc) const {
     return top.roughness_amount(nc);
   }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bottom.albedo(nc);
+  }
   bool is_delta() const {
     return false;
   }
@@ -172,6 +184,9 @@ struct MirrorMaterial {
   float roughness_amount(const NodeEvalCtx& nc) const {
     return bsdf.roughness_amount(nc);
   }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bsdf.albedo(nc);
+  }
   bool is_delta() const {
     return true;
   }
@@ -199,6 +214,9 @@ struct WaterMaterial {
   float roughness_amount(const NodeEvalCtx& nc) const {
     return bsdf.roughness_amount(nc);
   }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return bsdf.albedo(nc);
+  }
   bool is_delta() const {
     return true;
   }
@@ -225,6 +243,9 @@ struct EmissiveMaterial {
   }
   float roughness_amount(const NodeEvalCtx&) const {
     return 1.0f;
+  }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return color(nc);
   }
   bool is_delta() const {
     return false;
@@ -260,6 +281,9 @@ public:
   }
   float roughness_amount(const NodeEvalCtx& nc) const {
     return dispatch([&](auto&& x) { return x.roughness_amount(nc); });
+  }
+  vec3 albedo(const NodeEvalCtx& nc) const {
+    return dispatch([&](auto&& x) { return x.albedo(nc); });
   }
   bool is_delta() const {
     return dispatch([&](auto&& x) { return x.is_delta(); });

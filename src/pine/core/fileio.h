@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/geometry.h>
 #include <pine/core/image.h>
 
@@ -20,13 +19,23 @@ psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data)
 
 void save_image(psl::string filename, vec2i size, int nchannel, const float* data);
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t* data);
-inline void save_image(psl::string filename, const Array2d<vec2>& pixels) {
+
+template <typename T>
+Array2d<T> invert_y(const Array2d<T>& input) {
+  auto output = Array2d<T>(input.size());
+  for_2d(input.size(), [&](vec2i p) { output[p] = input[vec2i(p.x, input.size().y - 1 - p.y)]; });
+  return output;
+}
+inline void save_image(psl::string filename, Array2d<vec2> pixels) {
+  pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 2, &pixels.data()[0][0]);
 }
-inline void save_image(psl::string filename, const Array2d<vec3>& pixels) {
+inline void save_image(psl::string filename, Array2d<vec3> pixels) {
+  pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 3, &pixels.data()[0][0]);
 }
-inline void save_image(psl::string filename, const Array2d<vec4>& pixels) {
+inline void save_image(psl::string filename, Array2d<vec4> pixels) {
+  pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
 }
 
@@ -36,7 +45,7 @@ psl::optional<Image> load_image(void* data, size_t size);
 psl::optional<TriangleMesh> load_mesh(void* data, size_t size);
 TriangleMesh load_mesh(psl::string_view filename);
 
-void load_scene(Scene &scene_, psl::string_view filename);
+void load_scene(Scene& scene_, psl::string_view filename);
 
 void interpret_file(Context& context, psl::string_view filename);
 

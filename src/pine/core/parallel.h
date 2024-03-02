@@ -17,7 +17,7 @@ thread_local inline int threadIdx;
 
 template <typename F, typename... Args>
 void parallel_for_impl(int64_t nItems, F&& f) {
-  psl::vector<std::thread> threads{static_cast<size_t>(n_threads())};
+  psl::vector<std::thread> threads{size_t(n_threads())};
   std::atomic<int64_t> i{0};
   int tid = 0;
   std::mutex mutex;

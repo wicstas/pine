@@ -220,10 +220,10 @@ struct Function {
         const auto cast = []<typename P>(const Variable& var) -> decltype(auto) {
           if constexpr (psl::is_psl_function<typename P::Type>)
             return (typename P::Type)([f = var.template as<Function>()](auto&&... args) {
-              if constexpr (psl::is_void<psl::PslFunctionReturnType<typename P::Type>>)
+              if constexpr (psl::is_void<typename P::Type::ReturnType>)
                 f(FWD(args)...);
               else
-                return f(FWD(args)...).template as<psl::PslFunctionReturnType<typename P::Type>>();
+                return f(FWD(args)...).template as<typename P::Type::ReturnType>();
             });
           else
             return var.template as<typename P::Type>();
@@ -254,7 +254,7 @@ struct Function {
   }
   template <typename R, typename... Args>
   Function(R& (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes) {
-    auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args>(args)...)); };
+    auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args&&>(args)...)); };
     model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
         lambda, psl::move(rtype), psl::move(ptypes));
   }
@@ -266,7 +266,7 @@ struct Function {
   template <typename T, typename R, typename... Args>
   Function(Lambda<T, R&, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes) {
     auto lambda = [f = psl::move(f.lambda)](Args... args) {
-      return psl::ref(f(static_cast<Args>(args)...));
+      return psl::ref(f(static_cast<Args&&>(args)...));
     };
     model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
         lambda, psl::move(rtype), psl::move(ptypes));
@@ -427,7 +427,7 @@ struct Context {
     template <typename... Args>
     TypeProxy& ctor_variant_explicit() {
       (ctx.add_f(
-           trait.type_name(), +[](Args arg) { return T(static_cast<Args>(arg)); }),
+           trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }),
        ...);
       return *this;
     }
@@ -439,7 +439,7 @@ struct Context {
          ...);
         (ctx.add_f(
              trait.type_name(),
-             +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type>(arg)); }),
+             +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type&&>(arg)); }),
          ...);
       }(psl::make_indexed_type_sequence<Args...>());
 
@@ -469,7 +469,7 @@ struct Context {
     template <typename... Args>
     TypeProxy& ctor_variant_explicit() {
       (ctx.add_f(
-           trait.type_name(), +[](Args arg) { return T(static_cast<Args>(arg)); }),
+           trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }),
        ...);
       return *this;
     }
@@ -481,7 +481,7 @@ struct Context {
          ...);
         (ctx.add_f(
              trait.type_name(),
-             +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type>(arg)); }),
+             +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type&&>(arg)); }),
          ...);
       }(psl::make_indexed_type_sequence<Args...>());
 
@@ -631,13 +631,13 @@ private:
   template <typename T, typename R, typename... Args>
   Function wrap(R (T::*f)(Args...)) const {
     auto lambda = pine::tag<R, T&, Args...>(
-        [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
+        [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args&&>(args)...); });
     return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...));
   }
   template <typename T, typename R, typename... Args>
   Function wrap(R (T::*f)(Args...) const) const {
     auto lambda = pine::tag<R, const T&, Args...>(
-        [f](const T& x, Args... args) -> R { return (x.*f)(static_cast<Args>(args)...); });
+        [f](const T& x, Args... args) -> R { return (x.*f)(static_cast<Args&&>(args)...); });
     return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...));
   }
   template <typename T, typename R, typename... Args>

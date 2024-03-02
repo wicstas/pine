@@ -925,6 +925,18 @@ template <typename T>
 T sum(Vector4<T> v) {
   return v[0] + v[1] + v[2] + v[3];
 }
+template <typename T>
+T average(Vector2<T> v) {
+  return sum(v) / 2;
+}
+template <typename T>
+T average(Vector3<T> v) {
+  return sum(v) / 3;
+}
+template <typename T>
+T average(Vector4<T> v) {
+  return sum(v) / 4;
+}
 
 template <typename T>
 Vector2<T> min(Vector2<T> lhs, Vector2<T> rhs) {

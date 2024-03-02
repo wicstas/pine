@@ -134,6 +134,7 @@ void vecmath_context(Context& ctx) {
   ctx.type<vec2i, Context::Complex>("vec2i");
   ctx.type<vec2, Context::Complex>("vec2");
   ctx.type<vec3i, Context::Complex>("vec3i");
+  ctx.type<vec3u8, Context::Complex>("vec3u8");
   ctx.type<vec3, Context::Complex>("vec3");
   ctx.type<vec4, Context::Complex>("vec4");
   ctx.type<mat2>("mat2");
@@ -202,10 +203,10 @@ void vecmath_context(Context& ctx) {
   ctx("/") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<float>>(psl::div_);
   ctx("*") = overloads_set<Overloads<int, float>, Overloads<vec2, vec3, vec4>>(psl::mul_);
   ctx("/") = overloads_set<Overloads<int, float>, Overloads<vec2, vec3, vec4>>(psl::div_);
-  ctx("*=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::mule_);
-  ctx("/=") = overloads_set<Overloads<vec2i, vec3i>, Overloads<int>>(psl::dive_);
-  ctx("*=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(psl::mule_);
-  ctx("/=") = overloads_set<Overloads<vec2, vec3, vec4>, Overloads<int, float>>(psl::dive_);
+  ctx("*=") = overloads_set<Overloads<vec2i&, vec3i&>, Overloads<int>>(psl::mule_);
+  ctx("/=") = overloads_set<Overloads<vec2i&, vec3i&>, Overloads<int>>(psl::dive_);
+  ctx("*=") = overloads_set<Overloads<vec2&, vec3&, vec4&>, Overloads<int, float>>(psl::mule_);
+  ctx("/=") = overloads_set<Overloads<vec2&, vec3&, vec4&>, Overloads<int, float>>(psl::dive_);
   ctx("normalize") = normalize<vec2>;
   ctx("normalize") = normalize<vec3>;
   ctx("length") = length<vec2>;

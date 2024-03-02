@@ -7,8 +7,6 @@
 
 #include <psl/unordered_map.h>
 
-#include <shared_mutex>
-
 namespace pine {
 
 namespace {
@@ -133,61 +131,9 @@ private:
   psl::vector<SpatialNode> nodes;
 };
 
-// struct SpatialTreeHash {
-//   SpatialTreeHash() = default;
-//   SpatialTreeHash(AABB aabb, vec3i64 resolution) : aabb(aabb), resolution(resolution) {
-//     this->aabb.extend_by(1e-4f);
-//     nodes.reserve(volume(resolution) / max_value(resolution));
-//   }
-//   void add_sample(RadianceSample s) {
-//     node_at(s.p).add_flux(s.flux);
-//   }
-//   vec3 flux_estimate(vec3 p) const {
-//     if (auto it = find_node(p))
-//       return it->flux_estimate();
-//     else
-//       return vec3(0.0f);
-//   }
-
-// private:
-//   SpatialNode& node_at(vec3 p) {
-//     auto rp = aabb.relative_position(p);
-//     auto ip = vec3i64(rp * resolution);
-//     ip = clamp(ip, vec3i64(0), resolution - vec3i64(1));
-//     auto index = ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y;
-//     mutex->lock_shared();
-//     if (auto it = nodes.find(index); it != nodes.end()) {
-//       mutex->unlock_shared();
-//       return it->second;
-//     } else {
-//       mutex->unlock_shared();
-//       mutex->lock();
-//       auto it_insert = nodes.insert(nodes.end(), {index, SpatialNode()});
-//       mutex->unlock();
-//       return it_insert->second;
-//     }
-//   }
-//   const SpatialNode* find_node(vec3 p) const {
-//     auto rp = aabb.relative_position(p);
-//     auto ip = vec3i64(rp * resolution);
-//     auto index = ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y;
-//     if (auto it = nodes.find(index); it != nodes.end())
-//       return &it->second;
-//     else
-//       return nullptr;
-//   }
-
-//   AABB aabb;
-//   vec3i64 resolution;
-//   psl::unordered_map<size_t, SpatialNode> nodes;
-//   SpinLock lock;
-//   Local<std::shared_mutex> mutex;
-// };
-
 }  // namespace
 
 static SpatialTree stree;
-
 static bool use_estimate = false;
 
 CachedPathIntegrator::CachedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
@@ -218,13 +164,13 @@ void CachedPathIntegrator::render(Scene& scene) {
   stree = SpatialTree(aabb, resolution);
   accel.build(&scene);
   light_sampler.build(&scene);
-  auto& film = scene.camera.film();
+  auto& film = scene.camera.film(); film.clear();
   film.clear();
 
   Profiler _("Rendering");
 
   set_progress(0.0f);
-  auto primary_spp = psl::max(samples_per_pixel / primary_ratio, 1);
+  auto primary_spp = psl::max(spp / primary_ratio, 1);
 
   use_estimate = false;
   for (int i = 0; i < primary_spp; i++) {

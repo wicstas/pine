@@ -125,10 +125,13 @@ template <typename... Args>
 struct Timer {
   float elapsed_ms();
   float reset();
+  void stop();
+  void continue_();
 
 private:
   psl::clock clock;
   float t0 = clock.now();
+  float stop_time = 0.0f;
 };
 
 }  // namespace pine

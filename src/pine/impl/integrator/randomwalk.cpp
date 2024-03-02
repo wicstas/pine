@@ -9,15 +9,13 @@ RandomWalkIntegrator::RandomWalkIntegrator(Accel accel, Sampler sampler, int max
     Fatal("`RandomWalkIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 
-vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
-                                    Sampler& sampler) {
+vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
   auto L = vec3{0.0f};
   auto beta = vec3{1.0f};
 
   for (int depth = 0; depth < max_path_length; depth++) {
-    if (depth != 0)
-      is_hit = intersect(ray, it);
-    if (!is_hit) {
+    auto it = Interaction();
+    if (!intersect(ray, it)) {
       if (scene.env_light) {
         L += beta * scene.env_light->color(ray.d);
       }

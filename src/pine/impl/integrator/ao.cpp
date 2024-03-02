@@ -13,10 +13,11 @@ static const vec3 directions[8]{uniform_sphere({0.0f, 0.25f}), uniform_sphere({0
 
 AOIntegrator::AOIntegrator(Accel accel, Sampler sampler)
     : RayIntegrator(psl::move(accel), psl::move(sampler)) {
-  samples_per_pixel = psl::max(samples_per_pixel / 8, 1);
+  spp = psl::max(spp / 8, 1);
 }
-vec3 AOIntegrator::radiance(Scene&, Ray ray, Interaction it, bool is_hit, Sampler& sampler) {
-  if (is_hit) {
+vec3 AOIntegrator::radiance(Scene&, Ray ray, Sampler& sampler) {
+  auto it = Interaction();
+  if (intersect(ray, it)) {
     it.n = face_same_hemisphere(it.n, -ray.d);
     Ray rays[8];
     auto tbn = coordinate_system(uniform_sphere(sampler.get2d()));

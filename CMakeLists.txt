@@ -19,8 +19,12 @@ src/psl/system.cpp
 src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
-#target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
-#target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
+target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
+target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
+
+#psl Test
+add_executable(psl_test test/psl_test.cpp)
+target_link_libraries(psl_test psl)
 
 #Pine Core Library
 add_library(pinelib
@@ -38,6 +42,7 @@ src/pine/core/compiler.cpp
 src/pine/core/context.cpp
 src/pine/core/vecmath.cpp
 src/pine/core/sampler.cpp
+src/pine/core/denoise.cpp
 src/pine/core/primes.cpp
 src/pine/core/fileio.cpp
 src/pine/core/parser.cpp
@@ -61,6 +66,8 @@ src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/voxelcone.cpp
+src/pine/impl/integrator/denoiser.cpp
+src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
@@ -81,13 +88,14 @@ add_subdirectory(src/contrib/assimp)
 
 FIND_PACKAGE(embree 4 REQUIRED)
 FIND_PACKAGE(TBB REQUIRED)
+FIND_PACKAGE(OpenImageDenoise REQUIRED)
 
-target_link_libraries(pinelib psl Threads::Threads assimp embree tbb)
+target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise)
 
-#Pine CommandLine
-add_executable(pine src/cli/main.cpp)
+#Pine executable
+add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib)
 
-#psl Test
-add_executable(psl_test test/psl_test.cpp)
-target_link_libraries(psl_test psl)
+#Pine executable
+add_executable(pine-repl src/cli/pine-repl.cpp)
+target_link_libraries(pine-repl pinelib ncurses)

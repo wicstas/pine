@@ -25,6 +25,8 @@ class function<R(Args...)> {
   shared_ptr<FunctionConcept> model;
 
 public:
+  using ReturnType = R;
+  function() = default;
   template <typename F>
   function(F f) : model(psl::make_shared<FunctionModel<F>>(f)) {
   }
@@ -41,12 +43,8 @@ template <typename T>
 constexpr bool is_psl_function = _is_psl_function<T>::value;
 
 template <typename T>
-struct _PslFunctionReturnType;
-template <typename R, typename... Args>
-struct _PslFunctionReturnType<function<R(Args...)>> {
-  using Type = R;
-};
+using unique_ptr_with_custom_deleter = unique_ptr<T, psl::function<void(T*)>>;
 template <typename T>
-using PslFunctionReturnType = typename _PslFunctionReturnType<T>::Type;
+using shared_ptr_with_custom_deleter = shared_ptr<T, psl::function<void(T*)>>;
 
 }  // namespace psl

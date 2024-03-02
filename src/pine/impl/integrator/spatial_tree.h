@@ -9,6 +9,10 @@
 
 namespace pine {
 
+namespace {
+
+// TODO prune nodes
+
 struct RadianceSample {
   RadianceSample() = default;
   RadianceSample(vec3 w, float flux, psl::optional<float> weight_a, psl::optional<float> weight_b)
@@ -438,5 +442,7 @@ struct SpatialGrid {
   AABB aabb;
   Array3d<Unit> grid;
 };
+
+}  // namespace
 
 }  // namespace pine

@@ -14,7 +14,7 @@ vec3 NodeNoise3f::eval(const NodeEvalCtx& ctx) const {
 
 float NodeCheckerboard::eval(const NodeEvalCtx& ctx) const {
   auto x = fract(p(ctx)) - vec3(ratio);
-  return static_cast<float>(x.x * x.y * x.z > 0);
+  return float(x.x * x.y * x.z > 0);
 }
 
 vec3 NodeImage::eval(const NodeEvalCtx& ctx) const {

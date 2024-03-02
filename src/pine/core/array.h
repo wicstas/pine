@@ -12,6 +12,13 @@ struct Array2d {
   Array2d(vec2i size, const T *input) : size_{size}, data_(area(size)) {
     psl::memcpy(&data_[0], input, data_.size() * sizeof(T));
   }
+  template <typename U>
+  static Array2d from(const Array2d<U> &rhs) {
+    auto result = Array2d(rhs.size());
+    for (size_t i = 0; i < result.data_.size(); i++)
+      result.data_[i] = T(rhs.data()[i]);
+    return result;
+  }
 
   T &operator[](vec2i p) {
     DCHECK_RANGE(p[0], 0, size_[0] - 1);
@@ -54,6 +61,40 @@ struct Array2d {
   size_t index(vec2i p) const {
     return p[0] + p[1] * size_[0];
   }
+
+  Array2d &operator+=(T value) {
+    for (auto &x : data_)
+      x += value;
+    return *this;
+  }
+  Array2d &operator-=(T value) {
+    for (auto &x : data_)
+      x -= value;
+    return *this;
+  }
+  Array2d &operator*=(T value) {
+    for (auto &x : data_)
+      x *= value;
+    return *this;
+  }
+  Array2d &operator/=(T value) {
+    for (auto &x : data_)
+      x /= value;
+    return *this;
+  }
+  friend Array2d operator+(Array2d lhs, T rhs) {
+    return lhs += rhs;
+  }
+  friend Array2d operator-(Array2d lhs, T rhs) {
+    return lhs -= rhs;
+  }
+  friend Array2d operator*(Array2d lhs, T rhs) {
+    return lhs *= rhs;
+  }
+  friend Array2d operator/(Array2d lhs, T rhs) {
+    return lhs /= rhs;
+  }
+
   T *data() {
     return data_.data();
   }
@@ -91,6 +132,13 @@ struct Array3d {
   Array3d() = default;
   Array3d(vec3i64 size) : size_{size}, data_(volume(size)) {
   }
+  template <typename U>
+  static Array3d from(const Array3d<U> &rhs) {
+    auto result = Array3d(rhs.size());
+    for (size_t i = 0; i < result.data_.size(); i++)
+      result.data_[i] = T(rhs.data()[i]);
+    return result;
+  }
 
   T &operator[](vec3i64 p) {
     DCHECK_RANGE(p[0], 0, size_[0] - 1);
@@ -115,6 +163,28 @@ struct Array3d {
   size_t index(vec3i64 p) const {
     return p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1];
   }
+
+  Array3d &operator+=(T value) {
+    for (auto &x : data_)
+      x += value;
+    return *this;
+  }
+  Array3d &operator-=(T value) {
+    for (auto &x : data_)
+      x -= value;
+    return *this;
+  }
+  Array3d &operator*=(T value) {
+    for (auto &x : data_)
+      x *= value;
+    return *this;
+  }
+  Array3d &operator/=(T value) {
+    for (auto &x : data_)
+      x /= value;
+    return *this;
+  }
+
   T *data() {
     return data_.data();
   }

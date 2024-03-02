@@ -278,9 +278,9 @@ void fileio_context(Context &ctx) {
   ctx("load_mesh") = overloaded<psl::string_view>(load_mesh);
   ctx("load") = load_scene;
   ctx("load_image") = overloaded<psl::string_view>(load_image);
-  ctx("save_image") = overloaded<psl::string, const Array2d2f &>(save_image);
-  ctx("save_image") = overloaded<psl::string, const Array2d3f &>(save_image);
-  ctx("save_image") = overloaded<psl::string, const Array2d4f &>(save_image);
+  ctx("save_image") = overloaded<psl::string, Array2d2f>(save_image);
+  ctx("save_image") = overloaded<psl::string, Array2d3f>(save_image);
+  ctx("save_image") = overloaded<psl::string, Array2d4f>(save_image);
 }
 
 }  // namespace pine

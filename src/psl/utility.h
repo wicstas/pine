@@ -31,6 +31,11 @@ T exchange(T& x, U y) {
   return old;
 }
 
+template <typename T, typename... Args>
+void initialize_with(T& x, Args&&... args) {
+  x = T(FWD(args)...);
+}
+
 template <typename T, typename U>
 struct pair {
   pair() = default;

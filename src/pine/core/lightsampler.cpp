@@ -13,7 +13,7 @@ psl::optional<LightSample> UniformLightSampler::sample(vec3 p, vec3 n, float u1,
   auto N = lights.size();
   if (N == 0)
     return psl::nullopt;
-  auto index = psl::min(static_cast<size_t>(u1 * N), N - 1);
+  auto index = psl::min(size_t(u1 * N), N - 1);
   if (auto s = lights[index].sample(p, n, u2)) {
     if (s->pdf == 0.0f)
       return psl::nullopt;

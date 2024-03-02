@@ -3,7 +3,7 @@
 namespace pine {
 
 psl::vector<uint16_t> compute_radical_inverse_permutations(RNG& rng) {
-  auto perms = psl::vector<uint16_t>{static_cast<size_t>(psl::sum(Primes))};
+  auto perms = psl::vector<uint16_t>{size_t(psl::sum(Primes))};
 
   uint16_t* p = &perms[0];
   for (int i = 0; i < PrimeTablesize; i++) {

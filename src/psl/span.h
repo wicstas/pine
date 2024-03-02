@@ -1,6 +1,6 @@
 #pragma once
-
 #include <psl/type_traits.h>
+#include <psl/algorithm.h>
 #include <psl/stdint.h>
 #include <psl/check.h>
 

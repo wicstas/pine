@@ -40,8 +40,7 @@ public:
 protected:
   Accel accel;
   psl::vector<Sampler> samplers;
-  int samples_per_pixel;
-  int primary_ratio = 8;
+  int spp;
 };
 
 class RayIntegrator : public RTIntegrator {
@@ -49,23 +48,22 @@ public:
   using RTIntegrator::RTIntegrator;
 
   void render(Scene& scene) override;
-  virtual vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) = 0;
+  virtual vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) = 0;
 };
 
 class CustomRayIntegrator : public RayIntegrator {
 public:
-  CustomRayIntegrator(
-      Accel accel, Sampler sampler,
-      psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)> radiance_)
+  CustomRayIntegrator(Accel accel, Sampler sampler,
+                      psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> radiance_)
       : RayIntegrator(psl::move(accel), psl::move(sampler)), radiance_(psl::move(radiance_)) {
   }
 
-  vec3 radiance(Scene& scene, Ray ray, Interaction it, bool is_hit, Sampler& sampler) override {
-    return radiance_(*this, scene, ray, it, is_hit, sampler);
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override {
+    return radiance_(*this, scene, ray, sampler);
   }
 
 private:
-  psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Interaction, bool, Sampler&)> radiance_;
+  psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> radiance_;
 };
 
 }  // namespace pine

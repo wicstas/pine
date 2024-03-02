@@ -21,7 +21,7 @@ struct Parser {
     uint16_t origin = 0;
     uint8_t rule_index = 0;
     uint8_t position = 0;
-    static constexpr uint16_t invalid_pre_loc = static_cast<uint16_t>(-1);
+    static constexpr uint16_t invalid_pre_loc = uint16_t(-1);
     uint16_t prev_loc = invalid_pre_loc;
     uint16_t prev_index = 0;
     enum class CompleterType : uint16_t { Null, State, Token } completer_type = CompleterType::Null;

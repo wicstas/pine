@@ -26,12 +26,12 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
   accel.build(&scene);
   light_sampler.build(&scene);
-  auto& film = scene.camera.film();
+  auto& film = scene.camera.film(); film.clear();
 
   Profiler _("[Integrator]Rendering");
 
   auto total_pixels = size_t(area(film.size()));
-  auto total_samples = total_pixels * samples_per_pixel;
+  auto total_samples = total_pixels * spp;
   auto initial_samples = size_t(1024 * 16);
   auto current_sample_index = 0;
   auto current_samples = size_t(0);
@@ -75,37 +75,25 @@ void GuidedPathIntegrator::render(Scene& scene) {
     }
     use_learned_ratio = iter_spp > 1 ? 0.5f : 0.0f;
 
-    auto primary_ratio = this->primary_ratio;
-    auto primary_spp = iter_spp;
-    auto secondary_spp = 1;
-    while ((primary_ratio % 2 == 0) && (primary_spp % 2 == 0)) {
-      primary_ratio /= 2;
-      primary_spp /= 2;
-      secondary_spp *= 2;
-    }
-    for (int i = 0; i < primary_spp; i++) {
+    for (int i = 0; i < iter_spp; i++) {
       Atomic<int64_t> max_index = 0;
       parallel_for(iter_image_size, [&](vec2i p) {
         auto& sampler = samplers[threadIdx].start_pixel(p, current_sample_index);
         auto p_film = vec2(p + sampler.get2d()) / iter_image_size;
         auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-        auto it = Interaction();
-        auto is_hit = intersect(ray, it);
-        for (int i = 0; i < secondary_spp; i++) {
-          auto L = min(radiance(scene, ray, it, is_hit, sampler, Vertex::first_vertex()), vec3(20));
-          if (iter_image_size == film.size()) {
-            image[p] += L;
-            squared_image[p] += L * L;
-          }
-          sampler.start_next_sample();
+        auto L = radiance(scene, ray, sampler, Vertex::first_vertex());
+        if (iter_image_size == film.size()) {
+          image[p] += L;
+          squared_image[p] += L * L;
         }
+        sampler.start_next_sample();
         if (p.x == 0) {
           max_index = psl::max<int64_t>(max_index, p.x + p.y * iter_image_size.x);
-          set_progress(double(current_samples + max_index * secondary_spp) / total_samples);
+          set_progress(double(current_samples + max_index) / total_samples);
         }
       });
-      current_sample_index += secondary_spp;
-      current_samples += secondary_spp * area(iter_image_size);
+      current_sample_index += 1;
+      current_samples += area(iter_image_size);
     }
 
     if (iter_spp > 1) {
@@ -115,7 +103,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       for_2d(iter_image_size, [&](vec2i p) {
         auto sc = squared_image[p];
         auto c = image[p];
-        auto local_variance = luminance(abs(sc - c * c));
+        auto local_variance = psl::min(luminance(abs(sc - c * c)), 100000.0f);
         variance += double(local_variance);
       });
       variance = variance / (area(iter_image_size) * iter_spp);
@@ -137,15 +125,12 @@ void GuidedPathIntegrator::render(Scene& scene) {
   set_progress(1.0f);
 }
 
-vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool is_hit,
-                                    Sampler& sampler, Vertex pv) {
+vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv) {
   auto Lo = vec3(0.0f);
   auto wi = -ray.d;
 
-  if (pv.length > 0)
-    is_hit = intersect(ray, it);
-
-  if (!is_hit) {
+  auto it = Interaction();
+  if (!intersect(ray, it)) {
     if (scene.env_light && pv.length == 0)
       Lo += scene.env_light->color(ray.d);
     return Lo;
@@ -197,8 +182,11 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool 
       }
     } else if (scene.env_light) {
       auto cosine = absdot(bs->wo, it.n);
-      auto light_pdf = scene.env_light->pdf(it.n, bs->wo);
-      auto mis = balance_heuristic(bs->pdf, light_pdf);
+      auto mis = 1.0f;
+      if (!it.material()->is_delta()) {
+        auto light_pdf = scene.env_light->pdf(it.n, bs->wo);
+        mis = balance_heuristic(bs->pdf, light_pdf);
+      }
       Lo += scene.env_light->color(bs->wo) * cosine * bs->f / bs->pdf * mis;
     }
   }
@@ -206,7 +194,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool 
   if (select_guide) {
     if (auto gs = leaf.sample(sampler.get2d())) {
       auto nv = Vertex(pv.length + 1, it.n, it.p, gs->pdf);
-      auto Li = radiance(scene, it.spawn_ray(gs->wo), {}, {}, sampler, nv);
+      auto Li = radiance(scene, it.spawn_ray(gs->wo), sampler, nv);
       auto cosine = absdot(gs->wo, it.n);
       auto mec = MaterialEvalCtx(it, wi, gs->wo);
       auto f = it.material()->f(mec);
@@ -221,7 +209,7 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Interaction it, bool 
   } else {
     if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto nv = Vertex(pv.length + 1, it.n, it.p, bs->pdf, it.material()->is_delta());
-      auto Li = radiance(scene, it.spawn_ray(bs->wo), {}, {}, sampler, nv);
+      auto Li = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
       auto cosine = absdot(bs->wo, it.n);
       auto mis_indirect = balance_heuristic(1 - prob_a, bs->pdf, prob_a, leaf.pdf(bs->wo));
       Lo += Li * cosine * bs->f / bs->pdf * mis_indirect / (1 - prob_a);

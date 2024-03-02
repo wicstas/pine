@@ -7,7 +7,7 @@ namespace pine {
 
 void VoxelConeIntegrator::render(Scene& scene) {
   aabb = scene.get_aabb().extend_to_max_axis();
-  resolution = vec3i(128);
+  resolution = vec3i(256);
 
   auto voxels = voxelize(scene, aabb, resolution);
   footprint = aabb.diagonal()[0] / resolution[0];
@@ -34,7 +34,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
   // return;
 
   accel.build(&scene);
-  auto& film = scene.camera.film();
+  auto& film = scene.camera.film(); film.clear();
   set_progress(0);
   Profiler _("[Integrator]Rendering");
   Atomic<int64_t> max_index = 0;
@@ -174,7 +174,7 @@ vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler
     }
 
     auto direct = vec3(0);
-    for (int si = 0; si < samples_per_pixel; si++) {
+    for (int si = 0; si < spp; si++) {
       if (!it.material()->is_delta()) {
         if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
           if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
@@ -187,7 +187,7 @@ vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler
       }
       sampler.start_next_sample();
     }
-    direct /= samples_per_pixel;
+    direct /= spp;
 
     return direct + indirect;
   } else {

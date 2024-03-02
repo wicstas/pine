@@ -162,13 +162,13 @@ unique_ptr<T> make_unique(Args&&... args) {
   return unique_ptr<T>{new T{forward<Args>(args)...}};
 }
 
-template <typename T>
+template <typename T, typename Deleter = default_deleter<T>>
 class shared_ptr {
 public:
   using Pointer = RemoveExtent<T>*;
   using Reference = RemoveExtent<T>&;
 
-  template <typename U>
+  template <typename U, typename UDeleter>
   friend class shared_ptr;
 
   ~shared_ptr() {
@@ -179,7 +179,8 @@ public:
 
   shared_ptr(nullptr_t) {
   }
-  explicit shared_ptr(Pointer ptr) : ptr(ptr), refcount(new size_t{1}) {
+  explicit shared_ptr(Pointer ptr, Deleter deleter = {})
+      : deleter(deleter), ptr(ptr), refcount(new size_t{1}) {
   }
 
   shared_ptr(const shared_ptr& rhs) : shared_ptr() {
@@ -254,10 +255,11 @@ public:
   }
 
 private:
-  template <typename U>
-  void copy(const shared_ptr<U>& rhs) {
+  template <typename U, typename UDeleter>
+  void copy(const shared_ptr<U, UDeleter>& rhs) {
     decrement();
 
+    deleter = rhs.deleter;
     ptr = rhs.ptr;
     refcount = rhs.refcount;
 
@@ -265,10 +267,11 @@ private:
       ++(*refcount);
   }
 
-  template <typename U>
-  void take(shared_ptr<U>& rhs) {
+  template <typename U, typename UDeleter>
+  void take(shared_ptr<U, UDeleter>& rhs) {
     decrement();
 
+    deleter = psl::move(rhs.deleter);
     ptr = psl::exchange(rhs.ptr, nullptr);
     refcount = psl::exchange(rhs.refcount, nullptr);
   }
@@ -276,13 +279,15 @@ private:
   void decrement() {
     if (ptr != Pointer()) {
       if (--(*refcount) == 0) {
-        delete ptr;
+        deleter(ptr);
+        ptr = nullptr;
         delete refcount;
       }
     }
   }
 
-  Pointer ptr = {};
+  Deleter deleter;
+  Pointer ptr = nullptr;
   size_t* refcount = nullptr;
 };
 template <typename T, typename... Args>

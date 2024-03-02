@@ -6,13 +6,20 @@ namespace pine {
 void math_context(Context &ctx) {
   ctx("Pi") = Pi;
   ctx("E") = psl::E;
+  ctx("min") = psl::min<int>;
   ctx("min") = psl::min<float>;
+  ctx("min") = psl::min<int, int>;
   ctx("min") = psl::min<float, float>;
+  ctx("max") = psl::max<int>;
   ctx("max") = psl::max<float>;
+  ctx("max") = psl::max<int, int>;
   ctx("max") = psl::max<float, float>;
+  ctx("abs") = psl::abs<int>;
   ctx("abs") = psl::abs<float>;
+  ctx("clamp") = psl::clamp<int>;
   ctx("clamp") = psl::clamp<float>;
   ctx("lerp") = psl::lerp<float, float>;
+  ctx("sqr") = psl::sqr<int>;
   ctx("sqr") = psl::sqr<float>;
   ctx("sqrt") = psl::sqrt<float>;
   ctx("floor") = psl::floor<float>;

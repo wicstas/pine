@@ -29,5 +29,11 @@ float Timer::reset() {
   t0 = clock.now();
   return elapsed;
 }
+void Timer::stop() {
+  stop_time = clock.now();
+}
+void Timer::continue_() {
+  t0 += (clock.now() - stop_time);
+}
 
 }  // namespace pine

@@ -58,6 +58,24 @@ struct Atomic {
     lock.unlock();
     return *this;
   }
+  Atomic& operator-=(T rhs) {
+    lock.lock();
+    value -= rhs;
+    lock.unlock();
+    return *this;
+  }
+  Atomic& operator*=(T rhs) {
+    lock.lock();
+    value *= rhs;
+    lock.unlock();
+    return *this;
+  }
+  Atomic& operator/=(T rhs) {
+    lock.lock();
+    value /= rhs;
+    lock.unlock();
+    return *this;
+  }
   operator T() const {
     lock.lock();
     auto val = value;
@@ -83,7 +101,7 @@ struct Atomic<T> {
     value = rhs.value.load(std::memory_order_relaxed);
     return *this;
   }
-  Atomic& operator==(Atomic&& rhs) {
+  Atomic& operator=(Atomic&& rhs) {
     value = rhs.value.load(std::memory_order_relaxed);
     return *this;
   }
@@ -96,6 +114,9 @@ struct Atomic<T> {
   }
   void operator+=(T rhs) {
     value += rhs;
+  }
+  void operator-=(T rhs) {
+    value -= rhs;
   }
 
 private:
@@ -114,7 +135,7 @@ struct Atomic<T> {
     value = rhs.value.load(std::memory_order_relaxed);
     return *this;
   }
-  Atomic& operator==(Atomic&& rhs) {
+  Atomic& operator=(Atomic&& rhs) {
     value = rhs.value.load(std::memory_order_relaxed);
     return *this;
   }
@@ -129,12 +150,24 @@ struct Atomic<T> {
   void operator+=(T rhs) {
     value += rhs;
   }
+  void operator-=(T rhs) {
+    value -= rhs;
+  }
   T operator++(int) {
     return value++;
+  }
+  T operator--(int) {
+    return value--;
   }
 
 private:
   std::atomic<T> value;
 };
+
+template <typename T>
+psl::string to_string(Atomic<T> val) {
+  using psl::to_string;
+  return to_string(T(val));
+}
 
 }  // namespace pine
