@@ -92,6 +92,27 @@ private:
   psl::vector<Iteration> iterations;
 };
 
+struct OutlierRejectedVariance {
+  OutlierRejectedVariance(vec2i image_size) : image_size(image_size), variances(area(image_size)) {
+  }
+
+  void set(vec2i p, vec3 value) {
+    variances[p.x + p.y * image_size.x] = value;
+  }
+
+  vec3 compute(float rejection_fraction) {
+    std::sort(variances.begin(), variances.end(),
+              [](vec3 a, vec3 b) { return average(a) < average(b); });
+
+    auto N = area(image_size) * (1 - rejection_fraction);
+    return psl::mean<vec3d>(psl::trim(variances, 0, N));
+  }
+
+private:
+  vec2i image_size;
+  psl::vector<vec3> variances;
+};
+
 void GuidedPathIntegrator::render(Scene& scene) {
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
@@ -103,10 +124,10 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
   Profiler _("[GuidedPath]Render");
 
-  // auto initial_samples = size_t(1024 * 16);
-  auto initial_samples = (size_t)area(film.size());
+  auto initial_samples = size_t(1024 * 64);
   auto spatial_k = 4000;
   guide = SpatialTree(scene.get_aabb(), initial_samples, spatial_k);
+  auto spatial_ratio = psl::max<float>(spatial_k / psl::pow<float>(initial_samples, 0.4f), 1.0f);
   auto iteration_scheme = IterativeScheme(film.size(), initial_samples, spp, 4);
 
   // For denoising later
@@ -121,11 +142,11 @@ void GuidedPathIntegrator::render(Scene& scene) {
   });
 
   auto acc_I = Array2d3f(film.size());
-  auto acc_weight = 0.0;
+  auto acc_weight = 0.0f;
   auto I = Array2d3f(film.size());
   auto I_estimate = Array2d3f(film.size());
   auto I_estimate_populated = false;
-  auto vars = psl::vector<vec3>(area(film.size()));
+  auto or_variance = OutlierRejectedVariance(film.size());
 
   collect_radiance_sample = true;
   use_learned_ratio = 0.0f;
@@ -133,20 +154,25 @@ void GuidedPathIntegrator::render(Scene& scene) {
   while (auto iter = iteration_scheme.next()) {
     if (iter->is_final)
       collect_radiance_sample = false;
-    use_learned_ratio = iter->number > 2 || iter->image_size == film.size() ? 0.5f : 0.0f;
+    use_learned_ratio = iter->number > 4 ? 0.5f : 0.0f;
 
     parallel_for(iter->image_size, [&](vec2i p) {
       auto& sampler = samplers[threadIdx].start_pixel(p, iter->sample_index);
       auto Ie = I_estimate[p];
       auto L = vec3(0.0f);
+      auto L_squared = vec3(0.0f);
       for (int si = 0; si < iter->spp; si++) {
         auto ray = scene.camera.gen_ray((p + sampler.get2d()) / iter->image_size, sampler.get2d());
-        L += radiance(scene, ray, sampler, Vertex::first_vertex());
+        auto Li = radiance(scene, ray, sampler, Vertex::first_vertex());
+        L += Li;
+        L_squared += Li * Li;
         sampler.start_next_sample();
       }
-      L /= iter->spp;
-      I[p] = L;
-      vars[p.x + film.size().x * p.y] = psl::sqr((L - Ie) / max(Ie, vec3(1e-2f)));
+      I[p] = L / iter->spp;
+      // if (iter->spp == 1)
+      or_variance.set(p, psl::sqr((L / iter->spp - Ie) / max(Ie, vec3(1e-2f))));
+      // else
+      //   or_variance.set(p, (L_squared - L * L / iter->spp) / (iter->spp - 1) / iter->spp);
 
       if (p.x % 64 == 0)
         set_progress(psl::lerp(float(p.x + p.y * iter->image_size.x) / area(iter->image_size),
@@ -158,13 +184,11 @@ void GuidedPathIntegrator::render(Scene& scene) {
         denoise(DenoiseQuality::Medium, I_estimate, I, albedo, normal);
         parallel_for(film.size(), [&](vec2i p) {
           auto Ie = I_estimate[p];
-          vars[p.x + film.size().x * p.y] = psl::sqr((I[p] - Ie) / max(Ie, vec3(1e-2f)));
+          or_variance.set(p, psl::sqr((I[p] - Ie) / max(Ie, vec3(1e-2f))));
         });
         I_estimate_populated = true;
       }
-      std::sort(vars.begin(), vars.end(), [](vec3 a, vec3 b) { return average(a) < average(b); });
-      auto N = area(film.size()) * (1 - 0.00001f);
-      auto variance = average(psl::mean<vec3d>(psl::trim(vars, 0, N)));
+      auto variance = average(or_variance.compute(0.00001f));
       Log("Variance: ", variance);
       auto weight = 1.0f / variance;
       combine_inplace(acc_I, I, acc_weight, weight);
@@ -174,7 +198,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
     }
 
     if (!iter->is_final)
-      guide.refine(spatial_k * psl::sqrt<float>(iter->spp));
+      guide.refine(spatial_ratio * psl::pow<float>(iter->spp * area(iter->image_size), 0.4f));
   }
 
   film.pixels = Array2d4f::from(acc_I);
