@@ -128,7 +128,7 @@ public:
   void emplace_back(Args&&... args) {
     reserve(size() + 1);
     len += 1;
-    allocator.construct_at(&back(), T{forward<Args>(args)...});
+    allocator.construct_at(&back(), T(forward<Args>(args)...));
   }
 
   void pop_back() {

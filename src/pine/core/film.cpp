@@ -58,8 +58,42 @@ Film combine(Film a, const Film& b, float weight_a, float weight_b) {
   return a;
 }
 
+void visualize(Film& film) {
+  auto max_value = 0.0f;
+  auto min_value = float_max;
+  for_2d(film.size(), [&](vec2i p) {
+    auto x = film.pixels[p].x;
+    if (x == 0.0f)
+      return;
+    max_value = psl::max(max_value, x);
+    min_value = psl::min(min_value, x);
+  });
+  for_2d(film.size(), [&](vec2i p) {
+    auto x = film.pixels[p].x;
+    if (x == 0.0f)
+      return;
+    film.pixels[p] = vec4(color_map((x - min_value) / (max_value - min_value)));
+  });
+}
+
 void film_context(Context& ctx) {
   ctx.type<Film>("Film").ctor<vec2i>().member("pixels", &Film::pixels);
+  ctx("=") = +[](Film& film, const Array2d3f& color) {
+    CHECK_EQ(film.size(), color.size());
+    for_2d(film.size(), [&](vec2i p) { film[p] = vec4(color[p]); });
+  };
+  ctx("=") = +[](Film& film, const Array2d4f& color) {
+    CHECK_EQ(film.size(), color.size());
+    for_2d(film.size(), [&](vec2i p) { film[p] = color[p]; });
+  };
+  ctx("=") = +[](Film& film, const Image& color) {
+    CHECK_EQ(film.size(), color.size());
+    for_2d(film.size(), [&](vec2i p) { film[p] = vec4(color[p]); });
+  };
+  ctx("=") = +[](Film& film, const psl::shared_ptr<Image>& color) {
+    CHECK_EQ(film.size(), color->size());
+    for_2d(film.size(), [&](vec2i p) { film[p] = vec4((*color)[p]); });
+  };
   ctx("save") = tag<void, Film&, psl::string_view>(
       [](Film& film, psl::string_view filename) { save_film_as_image(filename, film); });
 }

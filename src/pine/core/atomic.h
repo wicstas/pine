@@ -93,16 +93,16 @@ struct Atomic<T> {
   Atomic() = default;
   Atomic(T v) : value(v){};
 
-  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_acquire)) {
   }
-  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_acquire)) {
   }
   Atomic& operator=(const Atomic& rhs) {
-    value = rhs.value.load(std::memory_order_relaxed);
+    value = rhs.value.load(std::memory_order_acquire);
     return *this;
   }
   Atomic& operator=(Atomic&& rhs) {
-    value = rhs.value.load(std::memory_order_relaxed);
+    value = rhs.value.load(std::memory_order_acquire);
     return *this;
   }
 
@@ -127,16 +127,16 @@ struct Atomic<T> {
   Atomic() = default;
   Atomic(T v) : value(v){};
 
-  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  Atomic(const Atomic& rhs) : value(rhs.value.load(std::memory_order_acquire)) {
   }
-  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_relaxed)) {
+  Atomic(Atomic&& rhs) : value(rhs.value.load(std::memory_order_acquire)) {
   }
   Atomic& operator=(const Atomic& rhs) {
-    value = rhs.value.load(std::memory_order_relaxed);
+    value = rhs.value.load(std::memory_order_acquire);
     return *this;
   }
   Atomic& operator=(Atomic&& rhs) {
-    value = rhs.value.load(std::memory_order_relaxed);
+    value = rhs.value.load(std::memory_order_acquire);
     return *this;
   }
 

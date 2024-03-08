@@ -239,6 +239,8 @@ struct EmissiveMaterial {
     return {};
   }
   vec3 le(const LeEvalCtx& ec) const {
+    if (dot(ec.wo, ec.n) < 0.0f)
+      return vec3(0.0f);
     return color.eval(ec);
   }
   float roughness_amount(const NodeEvalCtx&) const {

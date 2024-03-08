@@ -30,7 +30,7 @@ vec3 color_map(float v) {
   } else if (v < 3 / 3.0f) {
     return psl::lerp((v - 2 / 3.0f) * 3.0f, vec3(0, 1, 0), vec3(1, 0, 0));
   } else {
-    return vec3(1, 0, 0);
+    return vec3(v, 0, 0);
   }
 }
 vec3 color_map_auto(float v) {

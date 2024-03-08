@@ -16,22 +16,20 @@ LightSample PointLight::sample(vec3 p, vec3, vec2) const {
   return ls;
 }
 SpotLight::SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_radian,
-                     float cutoff_radian)
+                     float cutoff_additonal_radian)
     : position(position),
       direction(normalize(direction)),
       color(color),
       falloff_cos(psl::cos(falloff_radian)),
-      cutoff_cos(psl::cos(cutoff_radian)) {
+      cutoff_cos(psl::cos(falloff_radian + cutoff_additonal_radian)) {
   if (falloff_radian <= 0.0f)
     Fatal("`SpotLight` invalid falloff angle");
   if (falloff_radian > Pi2)
     Fatal("`SpotLight` invalid falloff angle(please use radian, not degree)");
-  if (cutoff_radian <= 0.0f)
+  if (cutoff_additonal_radian < 0.0f)
     Fatal("`SpotLight` invalid cutoff angle");
-  if (cutoff_radian > Pi2)
+  if (falloff_radian + cutoff_additonal_radian > Pi2)
     Fatal("`SpotLight` invalid cutoff angle(please use radian, not degree)");
-  if (cutoff_radian < falloff_radian)
-    Fatal("`SpotLight` cutoff angle should be no-less than falloff angle");
 };
 psl::optional<LightSample> SpotLight::sample(vec3 p, vec3, vec2) const {
   LightSample ls;
@@ -62,6 +60,8 @@ psl::optional<LightSample> AreaLight::sample(vec3 p, vec3, vec2 u) const {
   ls.pdf = gs.pdf;
   ls.distance = gs.distance;
   ls.le = geometry->material->le(LeEvalCtx{gs.p, gs.n, gs.uv, -ls.wo});
+  if (ls.le.is_black())
+    return psl::nullopt;
   return ls;
 }
 

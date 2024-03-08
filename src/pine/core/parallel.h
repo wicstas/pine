@@ -4,6 +4,8 @@
 #include <pine/core/log.h>
 
 #include <psl/vector.h>
+
+#include <shared_mutex>
 #include <thread>
 #include <atomic>
 
@@ -16,25 +18,26 @@ inline int n_threads() {
 thread_local inline int threadIdx;
 
 template <typename F, typename... Args>
-void parallel_for_impl(int64_t nItems, F&& f) {
-  psl::vector<std::thread> threads{size_t(n_threads())};
-  std::atomic<int64_t> i{0};
-  int tid = 0;
-  std::mutex mutex;
-  std::exception_ptr eptr = nullptr;
+void parallel_for_impl(int n_items, F&& f) {
+  auto threads = psl::vector<std::thread>(n_threads());
+  auto global_index = std::atomic<int>(0);
+  auto tid = 0;
+  auto mutex = std::shared_mutex();
+  auto eptr = std::exception_ptr(nullptr);
+  auto batch_count = psl::max<int>(n_threads(), n_items / 64);
+  auto batch_size = psl::max(n_items / batch_count, 1);
 
   for (auto& thread : threads)
     thread = std::thread([&, tid = tid++]() {
+      threadIdx = tid;
       try {
-        threadIdx = tid;
         while (true) {
-          if (auto index = i++; index < nItems)
-            f(index);
-          else
+          auto index = (global_index += batch_size) - batch_size;
+          auto end_index = psl::min(index + batch_size, n_items);
+          for (int i = index; i < end_index; i++)
+            f(i);
+          if (end_index >= n_items)
             break;
-
-          if (eptr)
-            return;
         }
       } catch (...) {
         mutex.lock();

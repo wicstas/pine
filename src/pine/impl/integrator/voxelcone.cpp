@@ -36,7 +36,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
   accel.build(&scene);
   auto& film = scene.camera.film(); film.clear();
   set_progress(0);
-  Profiler _("[Integrator]Rendering");
+  Profiler _("[VoxelCone]Render");
   Atomic<int64_t> max_index = 0;
   parallel_for(film.size(), [&](vec2i p) {
     Sampler& sampler = samplers[threadIdx];

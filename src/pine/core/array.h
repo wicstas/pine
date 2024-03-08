@@ -252,7 +252,7 @@ inline Array2d2f grid(vec2 a, vec2 b, vec2i size) {
 }
 
 template <typename T>
-Array2d<T> combine(Array2d<T> a, const Array2d<T> &b, float weight_a, float weight_b) {
+void combine_inplace(Array2d<T> &a, const Array2d<T> &b, float weight_a, float weight_b) {
   auto index = size_t{0};
   CHECK_EQ(a.size(), b.size());
   CHECK(weight_a + weight_b != 0.0f);
@@ -261,6 +261,10 @@ Array2d<T> combine(Array2d<T> a, const Array2d<T> &b, float weight_a, float weig
     ea = (weight_a * ea + weight_b * b.data()[index]) * inv_weight_sum;
     index++;
   }
+}
+template <typename T>
+Array2d<T> combine(Array2d<T> a, const Array2d<T> &b, float weight_a, float weight_b) {
+  combine_inplace(a, b, weight_a, weight_b);
   return a;
 }
 

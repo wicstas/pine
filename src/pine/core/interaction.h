@@ -11,7 +11,7 @@ struct Interaction {
     ray.d = wo;
     ray.o = offset_ray_origin(p, face_same_hemisphere(n, ray.d));
     ray.tmin = 1e-8f;
-    ray.tmax = distance * (1.0f - 1e-4f);
+    ray.tmax = distance * (1.0f - 1e-3f);
     return ray;
   }
 

@@ -242,11 +242,11 @@ auto roughly(float x) {
   return FuzzyValue{x};
 }
 
-Rect::Rect(vec3 position, vec3 ex, vec3 ey)
+Rect::Rect(vec3 position, vec3 ex, vec3 ey, bool flip_normal)
     : position(position),
       ex(normalize(ex)),
       ey(normalize(ey)),
-      n(normalize(cross(this->ex, this->ey))),
+      n(normalize(cross(this->ex, this->ey)) * (flip_normal ? -1 : 1)),
       lx(length(ex)),
       ly(length(ey)),
       rx(this->ex / lx),
@@ -601,7 +601,7 @@ void geometry_context(Context& ctx) {
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();
   ctx.type<Line>("Line").ctor<vec3, vec3, float>();
-  ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>();
+  ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>().ctor<vec3, vec3, vec3, bool>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<TriangleMesh>("TriangleMesh")
       .ctor(tag<TriangleMesh, psl::string>([&ctx](psl::string_view filename) {

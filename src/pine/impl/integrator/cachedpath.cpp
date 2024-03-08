@@ -167,7 +167,7 @@ void CachedPathIntegrator::render(Scene& scene) {
   auto& film = scene.camera.film(); film.clear();
   film.clear();
 
-  Profiler _("Rendering");
+  Profiler _("[CachedPath]Render");
 
   set_progress(0.0f);
   auto primary_spp = psl::max(spp / primary_ratio, 1);

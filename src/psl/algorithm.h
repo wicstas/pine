@@ -685,18 +685,21 @@ inline auto clip_(RandomAccessIterator auto last) {
   return [last](Range auto&& range) { return clip(FWD(range), last); };
 }
 
+template <typename ResultType>
 auto sum(Range auto&& range) {
-  auto s = psl::Decay<decltype(*psl::begin(range))>{0};
+  auto s = ResultType();
   for (auto&& x : range)
     s += x;
   return s;
 }
+template <typename ResultType>
 auto mean(Range auto&& range) {
-  return sum(range) / psl::size(range);
+  return sum<ResultType>(range) / psl::size(range);
 }
+template <typename ResultType>
 auto variance(Range auto&& range) {
-  auto var = psl::Decay<decltype(*psl::begin(range))>{0};
-  auto mean = psl::mean(range);
+  auto var = ResultType();
+  auto mean = psl::mean<ResultType>(range);
   for (auto&& x : range)
     var += (x - mean) * (x - mean);
   return var / psl::size(range);

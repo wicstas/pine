@@ -263,10 +263,14 @@ struct SpatialNode {
       if (weight_sum > 0)
         prob_a = weight_a / weight_sum;
     }
-    // weight_a = 0;
-    // weight_b = 0;
-    // alpha_a = 0;
-    // alpha_b = 0;
+    this->weight_a = this->weight_a / 2;
+    this->weight_b = this->weight_b / 2;
+    this->alpha_a = this->alpha_a / 2;
+    this->alpha_b = this->alpha_b / 2;
+    // this->weight_a = {};
+    // this->weight_b = {};
+    // this->alpha_a = {};
+    // this->alpha_b = {};
   }
   void initial_refinement(int64_t initial_samples, size_t threshold) {
     CHECK(is_leaf());

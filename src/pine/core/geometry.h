@@ -91,7 +91,7 @@ private:
 };
 
 struct Rect {
-  Rect(vec3 position, vec3 ex, vec3 ey);
+  Rect(vec3 position, vec3 ex, vec3 ey, bool flip_normal=false);
   static Rect from_vertex(vec3 v0, vec3 v1, vec3 v2);
   Rect& apply(mat4 m);
 
