@@ -63,7 +63,6 @@ src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
 src/pine/impl/integrator/randomwalk.cpp
-src/pine/impl/integrator/visualizer.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/voxelcone.cpp

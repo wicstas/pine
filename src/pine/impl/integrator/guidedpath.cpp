@@ -132,11 +132,11 @@ struct GuidedPathIntegrator::Vertex {
 static auto cost_to_var = float(0.0f);
 
 void GuidedPathIntegrator::render(Scene& scene) {
+  RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
       Fatal("`GuidedPathIntegrator` doesn't support `Plane`, please use `Rect` or `Disk` instead");
 
-  accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
   auto debug_film = film;

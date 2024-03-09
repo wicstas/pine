@@ -6,6 +6,7 @@
 namespace pine {
 
 void VoxelConeIntegrator::render(Scene& scene) {
+  RTIntegrator::render(scene);
   aabb = scene.get_aabb().extend_to_max_axis();
   resolution = vec3i(256);
 

@@ -28,7 +28,7 @@ static uint64_t multiplicativeInverse(int64_t a, int64_t n) {
 
 psl::vector<uint16_t> HaltonSampler::radicalInversePermutations;
 
-HaltonSampler::HaltonSampler(int samples_per_pixel) : samples_per_pixel(samples_per_pixel) {
+HaltonSampler::HaltonSampler(int spp) : samples_per_pixel(spp) {
   if (samples_per_pixel <= 0)
     Fatal("`HaltonSampler` should have positive samples per pixel");
   if (radicalInversePermutations.size() == 0) {
@@ -68,6 +68,40 @@ void HaltonSampler::start_pixel(vec2i p, int sample_index) {
   dimension = 2;
 }
 
+void SobolSampler::init(vec2i image_size) {
+  auto res = psl::roundup2(max_value(image_size));
+  nbase4_digits = psl::log2i(res) + (log2_spp + 1) / 2;
+}
+
+uint64_t SobolSampler::compute_sample_index() {
+  static const uint8_t permutations[24][4] = {
+      {0, 1, 2, 3}, {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 2, 1}, {0, 3, 1, 2},
+      {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 2, 0}, {1, 3, 0, 2},
+      {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 3, 0, 1}, {2, 3, 1, 0},
+      {3, 1, 2, 0}, {3, 1, 0, 2}, {3, 2, 1, 0}, {3, 2, 0, 1}, {3, 0, 2, 1}, {3, 0, 1, 2}};
+
+  auto si = uint64_t(0);
+  // Apply random permutations to full base-4 digits
+  auto only_power_of_2 = bool(log2_spp & 1);
+  auto last_digit = only_power_of_2 ? 1 : 0;
+  for (int i = nbase4_digits - 1; i >= last_digit; --i) {
+    int digit_shift = 2 * i - (only_power_of_2 ? 1 : 0);
+    int digit = (sobol_index >> digit_shift) & 3;
+    uint64_t higher_digits = sobol_index >> (digit_shift + 2);
+    int p = (mix_bits(higher_digits ^ (0x55555555u * dimension)) >> 24) % 24;
+    digit = permutations[p][digit];
+    si |= uint64_t(digit) << digit_shift;
+  }
+
+  // Handle power-of-2 (but not 4) sample count
+  if (only_power_of_2) {
+    int digit = sobol_index & 1;
+    si |= digit ^ (mix_bits((sobol_index >> 1) ^ (0x55555555u * dimension)) & 1);
+  }
+
+  return si;
+}
+
 void MltSampler::ensure_ready(int dim) {
   if (dim >= (int)X.size())
     X.resize(dim + 1);
@@ -98,13 +132,6 @@ void sampler_context(Context& ctx) {
       .method("start_next_sample", &UniformSampler::start_next_sample)
       .method("get1d", &UniformSampler::get1d)
       .method("get2d", &UniformSampler::get2d);
-  ctx.type<StratifiedSampler>("StratifiedSampler")
-      .ctor<int, int, bool>()
-      .method("spp", &StratifiedSampler::spp)
-      .method("start_pixel", &StratifiedSampler::start_pixel)
-      .method("start_next_sample", &StratifiedSampler::start_next_sample)
-      .method("get1d", &StratifiedSampler::get1d)
-      .method("get2d", &StratifiedSampler::get2d);
   ctx.type<HaltonSampler>("HaltonSampler")
       .ctor<int>()
       .method("spp", &HaltonSampler::spp)
@@ -113,16 +140,14 @@ void sampler_context(Context& ctx) {
       .method("get1d", &HaltonSampler::get1d)
       .method("get2d", &HaltonSampler::get2d);
   ctx.type<SobolSampler>("SobolSampler")
-      .ctor<int, vec2i>()
+      .ctor<int>()
       .method("spp", &SobolSampler::spp)
       .method("start_pixel", &SobolSampler::start_pixel)
       .method("start_next_sample", &SobolSampler::start_next_sample)
       .method("get1d", &SobolSampler::get1d)
       .method("get2d", &SobolSampler::get2d);
 
-  ctx.type<Sampler>("Sampler").ctor_variant<UniformSampler, StratifiedSampler, HaltonSampler>();
-
-  ctx("radical_inverse") = radical_inverse;
+  ctx.type<Sampler>("Sampler").ctor_variant<UniformSampler, HaltonSampler, SobolSampler>();
 }
 
 }  // namespace pine

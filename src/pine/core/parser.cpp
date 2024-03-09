@@ -5,7 +5,6 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
-#include <pine/impl/integrator/visualizer.h>
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
@@ -49,61 +48,56 @@ Context get_default_context() {
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
-      .ctor(+[](int spp) { return AOIntegrator(EmbreeAccel(), HaltonSampler(spp)); })
+      .ctor(+[](int spp) { return AOIntegrator(EmbreeAccel(), SobolSampler(spp)); })
       .method("render", &AOIntegrator::render);
   ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
       .ctor<Accel, Sampler, int>()
       .ctor(+[](int spp, int max_path_length) {
-        return RandomWalkIntegrator(EmbreeAccel(), HaltonSampler(spp), max_path_length);
+        return RandomWalkIntegrator(EmbreeAccel(), SobolSampler(spp), max_path_length);
       })
       .method("render", &RandomWalkIntegrator::render);
   ctx.type<PathIntegrator>("PathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](vec2i image_size, int spp, int max_path_length) {
-        return PathIntegrator(EmbreeAccel(), SobolSampler(spp, image_size), UniformLightSampler(),
+      .ctor(+[](int spp, int max_path_length) {
+        return PathIntegrator(EmbreeAccel(), SobolSampler(spp), UniformLightSampler(),
                               max_path_length);
       })
       .method("render", &PathIntegrator::render);
   ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor(+[](int spp, int max_path_length) {
-        return GuidedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+        return GuidedPathIntegrator(EmbreeAccel(), SobolSampler(spp), UniformLightSampler(),
                                     max_path_length);
       })
       .method("render", &GuidedPathIntegrator::render);
   ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int, int, int>()
       .ctor(+[](int spp, int max_path_length, int max_axis_resolution, int starting_depth) {
-        return CachedPathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+        return CachedPathIntegrator(EmbreeAccel(), SobolSampler(spp), UniformLightSampler(),
                                     max_path_length, max_axis_resolution, starting_depth);
       })
       .method("render", &CachedPathIntegrator::render);
   ctx.type<EARSIntegrator>("EARSIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor(+[](int spp, int max_path_length) {
-        return EARSIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+        return EARSIntegrator(EmbreeAccel(), SobolSampler(spp), UniformLightSampler(),
                               max_path_length);
       })
       .method("render", &EARSIntegrator::render);
-  ctx.type<VisualizerIntegrator>("VisIntegrator")
-      .ctor(+[](psl::string type) {
-        return VisualizerIntegrator(EmbreeAccel(), HaltonSampler(1), type);
-      })
-      .method("render", &VisualizerIntegrator::render);
   ctx.type<VoxelConeIntegrator>("VoxelConeIntegrator")
       .ctor<Accel, Sampler, LightSampler>()
       .ctor(+[](int spp) {
-        return VoxelConeIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler());
+        return VoxelConeIntegrator(EmbreeAccel(), SobolSampler(spp), UniformLightSampler());
       })
       .method("render", &VoxelConeIntegrator::render);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
       .ctor<Accel, Sampler, psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)>>()
       .ctor(+[](int spp, psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> f) {
-        return CustomRayIntegrator(EmbreeAccel(), HaltonSampler(spp), psl::move(f));
+        return CustomRayIntegrator(EmbreeAccel(), SobolSampler(spp), psl::move(f));
       })
       .method("render", &CustomRayIntegrator::render);
   ctx("denoise") =
-      +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), HaltonSampler(1)).render(scene); };
+      +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
 

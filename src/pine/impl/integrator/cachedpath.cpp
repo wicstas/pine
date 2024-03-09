@@ -99,6 +99,7 @@ CachedPathIntegrator::CachedPathIntegrator(Accel accel, Sampler sampler, LightSa
     Fatal("`CachedPathIntegrator` expect `starting_depth` to be non-negative, get", starting_depth);
 }
 void CachedPathIntegrator::render(Scene& scene) {
+  RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
       Fatal("CachedPathIntegrator doesn't support `Plane`, please use `Rect` or `Disk` instead");
@@ -108,7 +109,6 @@ void CachedPathIntegrator::render(Scene& scene) {
   resolution = max(resolution, vec3i(1, 1, 1));
   footprint = max_value(aabb.diagonal()) / max_axis_resolution;
   stree = SpatialTree(aabb, resolution);
-  accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
   auto image0 = Array2d3f(film.size());

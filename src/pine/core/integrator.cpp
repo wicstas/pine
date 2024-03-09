@@ -10,43 +10,44 @@ namespace pine {
 Atomic<float> g_progress{};
 
 void set_progress(float progress) {
-  g_progress = psl::clamp(progress, 0.0f, 1.0f);
+  if (progress == 0 || progress > g_progress)
+    g_progress = psl::clamp(progress, 0.0f, 1.0f);
 }
 float get_progress() {
   return g_progress;
 }
 
 RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel)} {
+  spp = sampler.spp();
+  samplers.push_back(psl::move(sampler));
+}
+void RTIntegrator::render(Scene& scene) {
+  auto sampler = samplers.consume_back();
+  sampler.init(scene.camera.film().size());
   for (int i = 0; i < n_threads(); i++)
     samplers.push_back(sampler);
-  spp = sampler.spp();
+  accel.build(&scene);
+  set_progress(0);
 }
 
 void RayIntegrator::render(Scene& scene) {
-  accel.build(&scene);
+  RTIntegrator::render(scene);
   auto& film = scene.camera.film();
   film.clear();
-  set_progress(0);
 
   Profiler _("[Ray]Render");
-  Atomic<int64_t> max_index = 0;
   parallel_for(film.size(), [&](vec2i p) {
-    Sampler& sampler = samplers[threadIdx];
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
     auto L = vec3(0.0f);
     for (int si = 0; si < spp; si++) {
-      sampler.start_pixel(p, si);
-      auto p_film = vec2(p + sampler.get2d()) / film.size();
-      auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
+      auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
       L += radiance(scene, ray, sampler);
+      sampler.start_next_sample();
     }
     scene.camera.film()[p] = vec4(L / spp, 1.0f);
-    if (p.x % 64 == 0) {
-      max_index = psl::max<int64_t>(max_index, p.x + p.y * film.size().x);
-      set_progress(float(max_index) / area(film.size()));
-    }
+    if (p.x % 64 == 0)
+      set_progress(float(p.x + p.y * film.size().x) / area(film.size()));
   });
-
-  set_progress(1);
 }
 
 }  // namespace pine

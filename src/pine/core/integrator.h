@@ -37,6 +37,8 @@ public:
     return is_hit;
   }
 
+  void render(Scene& scene) override;
+
 protected:
   Accel accel;
   psl::vector<Sampler> samplers;

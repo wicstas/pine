@@ -267,11 +267,11 @@ struct EARSIntegrator::Vertex {
 };
 
 void EARSIntegrator::render(Scene& scene) {
+  RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
       Fatal("EARSIntegrator doesn't support `Plane`, please use `Rect` or `Disk` instead");
 
-  accel.build(&scene);
   light_sampler.build(&scene);
   auto& film = scene.camera.film();
   Film debug_film = film;

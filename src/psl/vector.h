@@ -134,12 +134,22 @@ public:
   void pop_back() {
     resize(size() - 1);
   }
+  T consume_back() {
+    auto x = back();
+    pop_back();
+    return x;
+  }
   void pop_back(size_t n) {
     psl_check(n <= size());
     resize(size() - n);
   }
   void pop_front() {
     erase(begin());
+  }
+  T consume_front() {
+    auto x = front();
+    pop_front();
+    return x;
   }
 
   Iterator insert(Iterator it, T x) {

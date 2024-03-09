@@ -18,6 +18,8 @@ struct UniformSampler {
       Fatal("`UniformSampler` should have positive samples per pixel");
   }
 
+  void init(vec2i) {
+  }
   int spp() const {
     return samples_per_pixel;
   }
@@ -37,59 +39,11 @@ private:
   RNG rng;
 };
 
-struct StratifiedSampler {
-  StratifiedSampler(int xPixelSamples, int yPixelSamples, bool jitter)
-      : xPixelSamples(xPixelSamples), yPixelSamples(yPixelSamples), jitter(jitter) {
-    if (xPixelSamples <= 0)
-      Fatal("`StratifiedSampler` should have positive x-samples per pixel");
-    if (yPixelSamples <= 0)
-      Fatal("`StratifiedSampler` should have positive y-samples per pixel");
-    samples_per_pixel = xPixelSamples * yPixelSamples;
-  }
-
-  int spp() const {
-    return samples_per_pixel;
-  }
-  void start_pixel(vec2i p, int index) {
-    pixel = p;
-    sample_index = index;
-    dimension = 0;
-  }
-  void start_next_sample() {
-    sample_index++;
-    dimension = 0;
-  }
-  float get1d() {
-    int stratum = (sample_index + hash(pixel, dimension)) % samples_per_pixel;
-    dimension += 1;
-
-    float delta = jitter ? rng.uniformf() : 0.5f;
-
-    return (stratum + delta) / spp();
-  }
-  vec2 get2d() {
-    int stratum = (sample_index + hash(pixel, dimension)) % samples_per_pixel;
-    dimension += 2;
-
-    int x = stratum % xPixelSamples, y = stratum / xPixelSamples;
-    float dx = jitter ? rng.uniformf() : 0.5f, dy = jitter ? rng.uniformf() : 0.5f;
-
-    return {(x + dx) / xPixelSamples, (y + dy) / yPixelSamples};
-  }
-
-private:
-  int xPixelSamples, yPixelSamples;
-  int samples_per_pixel;
-  RNG rng;
-  vec2i pixel;
-  int sample_index;
-  int dimension;
-  bool jitter;
-};
-
 struct HaltonSampler {
   HaltonSampler(int samples_per_pixel);
 
+  void init(vec2i) {
+  }
   int spp() const {
     return samples_per_pixel;
   }
@@ -139,6 +93,21 @@ struct SobolSampler {
     }
     uint32_t x;
   };
+  struct FastOwenScrambler {
+    FastOwenScrambler(uint32_t seed) : seed(seed) {
+    }
+    uint32_t operator()(uint32_t v) const {
+      v = reverse_bits32(v);
+      v ^= v * 0x3d20adea;
+      v += seed;
+      v *= (seed >> 16) | 1;
+      v ^= v * 0x05526c56;
+      v ^= v * 0x53a22864;
+      return reverse_bits32(v);
+    }
+
+    uint32_t seed;
+  };
   struct OwenScrambler {
     OwenScrambler(uint32_t seed) : seed(seed) {
     }
@@ -156,12 +125,11 @@ struct SobolSampler {
     uint32_t seed;
   };
 
-  SobolSampler(int samples_per_pixel, vec2i image_size) : samples_per_pixel(samples_per_pixel) {
+  SobolSampler(int samples_per_pixel) : samples_per_pixel(samples_per_pixel) {
     log2_spp = psl::log2i(samples_per_pixel);
-    auto res = psl::roundup2(max_value(image_size));
-    nbase4_digits = psl::log2i(res) + (log2_spp + 1) / 2;
   }
 
+  void init(vec2i image_size);
   int spp() const {
     return samples_per_pixel;
   }
@@ -170,54 +138,23 @@ struct SobolSampler {
     sobol_index = (encode_morton64x2(p.x, p.y) << log2_spp) | uint64_t(sample_index);
   }
   void start_next_sample() {
+    dimension = 0;
     sobol_index++;
   }
   float get1d() {
-    if (dimension >= NSobolDimensions)
-      dimension = 0;
+    auto sample_index = compute_sample_index();
     dimension += 1;
     auto u = hash(dimension);
-    return sobol_sample(compute_sample_index(), 0, OwenScrambler(u));
+    return sobol_sample(sample_index, 0, FastOwenScrambler(u));
   }
   vec2 get2d() {
-    if (dimension + 1 >= NSobolDimensions)
-      dimension = 0;
+    auto sample_index = compute_sample_index();
     dimension += 2;
     auto u = hash(dimension);
-    return {sobol_sample(compute_sample_index(), 0, OwenScrambler(u)),
-            sobol_sample(compute_sample_index(), 1, OwenScrambler(u >> 32))};
+    return {sobol_sample(sample_index, 0, FastOwenScrambler(u)),
+            sobol_sample(sample_index, 1, FastOwenScrambler(u >> 32))};
   }
-  uint64_t compute_sample_index() {
-    static const uint8_t permutations[24][4] = {
-        {0, 1, 2, 3}, {0, 1, 3, 2}, {0, 2, 1, 3}, {0, 2, 3, 1}, {0, 3, 2, 1},
-        {0, 3, 1, 2}, {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0},
-        {1, 3, 2, 0}, {1, 3, 0, 2}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 0, 1, 3},
-        {2, 0, 3, 1}, {2, 3, 0, 1}, {2, 3, 1, 0}, {3, 1, 2, 0}, {3, 1, 0, 2},
-        {3, 2, 1, 0}, {3, 2, 0, 1}, {3, 0, 2, 1}, {3, 0, 1, 2}
-
-    };
-
-    auto si = uint64_t(0);
-    // Apply random permutations to full base-4 digits
-    auto only_power_of_2 = bool(log2_spp & 1);
-    auto last_digit = only_power_of_2 ? 1 : 0;
-    for (int i = nbase4_digits - 1; i >= last_digit; --i) {
-      int digit_shift = 2 * i - (only_power_of_2 ? 1 : 0);
-      int digit = (sobol_index >> digit_shift) & 3;
-      uint64_t higher_digits = sobol_index >> (digit_shift + 2);
-      int p = (mix_bits(higher_digits ^ (0x55555555u * dimension)) >> 24) % 24;
-      digit = permutations[p][digit];
-      si |= uint64_t(digit) << digit_shift;
-    }
-
-    // Handle power-of-2 (but not 4) sample count
-    if (only_power_of_2) {
-      int digit = sobol_index & 1;
-      si |= digit ^ (mix_bits((sobol_index >> 1) ^ (0x55555555u * dimension)) & 1);
-    }
-
-    return si;
-  }
+  uint64_t compute_sample_index();
 
 private:
   int samples_per_pixel;
@@ -233,13 +170,6 @@ struct MltSampler {
         sigma(sigma),
         largeStepProbability(largeStepProbability),
         streamCount(streamCount) {
-  }
-
-  int spp() const {
-    return 0;
-  }
-
-  void start_pixel(vec2i, int) {
   }
 
   void start_next_sample() {
@@ -308,12 +238,14 @@ private:
   int64_t lastLargeStepIndex = 0;
 };
 
-struct Sampler : private psl::variant<UniformSampler, StratifiedSampler, HaltonSampler,
-                                      SobolSampler, MltSampler> {
+struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSampler> {
   using variant::variant;
 
   int spp() const {
     return dispatch([&](auto&& x) { return x.spp(); });
+  }
+  void init(vec2i image_size) {
+    return dispatch([&](auto&& x) { return x.init(image_size); });
   }
   Sampler& start_pixel(vec2i p, int sample_index) {
     dispatch([&](auto&& x) { x.start_pixel(p, sample_index); });

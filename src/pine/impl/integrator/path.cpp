@@ -12,12 +12,9 @@ PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_
     Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 
-static auto counter = Atomic<size_t>(0);
-
 void PathIntegrator::render(Scene& scene) {
   light_sampler.build(&scene);
   RayIntegrator::render(scene);
-  Log("[Path] counter: ", size_t(counter));
 }
 vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
   auto L = vec3{0.0f};
@@ -28,7 +25,6 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
 
   for (int depth = 0; depth < max_path_length; depth++) {
     auto it = Interaction();
-    counter++;
     if (!intersect(ray, it)) {
       if (scene.env_light) {
         auto le = scene.env_light->color(ray.d);

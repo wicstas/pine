@@ -7,8 +7,7 @@
 namespace pine {
 
 void DenoiseIntegrator::render(Scene& scene) {
-  accel.build(&scene);
-
+  RTIntegrator::render(scene);
   auto& film = scene.camera.film();
   auto color = Array2d3f::from(film.pixels);
   auto albedo = Array2d3f(film.size());
