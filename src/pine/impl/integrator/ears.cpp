@@ -409,7 +409,7 @@ EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene, Ray ray, S
                                                         Vertex pv, Stats& stats) {
   auto result = RadianceResult();
   auto wi = -ray.d;
-  auto& Lo = result.Lr;
+  auto& Lo = result.Lo;
 
   auto it = Interaction();
   global_stats.record_intersection_test();

@@ -15,6 +15,8 @@ static constexpr float one_minus_epsilon = 0x1.fffffep-1;
 static constexpr float float_max = psl::numeric_limits<float>::max();
 static constexpr float Infinity = psl::numeric_limits<float>::infinity();
 
+using psl::sqr;
+
 inline uint32_t reverse_bits32(uint32_t x) {
   x = (x & 0x55555555) << 1 | (x & 0xaaaaaaaa) >> 1;
   x = (x & 0x33333333) << 2 | (x & 0xcccccccc) >> 2;

@@ -13,7 +13,7 @@ public:
 
   struct Vertex;
   struct RadianceResult {
-    vec3 Lr;
+    vec3 Lo;
     psl::optional<float> light_pdf;
     float cost = 0.0f;
   };

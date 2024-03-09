@@ -107,7 +107,7 @@ struct Atomic<T> {
   }
 
   operator T() const {
-    return value;
+    return value.load(std::memory_order_relaxed);
   }
   void operator=(T rhs) {
     value = rhs;
@@ -141,7 +141,7 @@ struct Atomic<T> {
   }
 
   operator T() const {
-    return value;
+    return value.load(std::memory_order_relaxed);
   }
   auto& operator=(T rhs) {
     value = rhs;

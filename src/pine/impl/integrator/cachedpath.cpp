@@ -2,10 +2,12 @@
 #include <pine/core/sampling.h>
 #include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
+#include <pine/core/denoise.h>
 #include <pine/core/scene.h>
 #include <pine/core/color.h>
 
 #include <psl/unordered_map.h>
+#include <psl/array.h>
 
 namespace pine {
 
@@ -19,77 +21,10 @@ struct RadianceSample {
   vec3 flux;
 };
 
-struct UnitVector {
-  UnitVector() = default;
-  UnitVector(vec3 n) {
-    c[0] = psl::min((n[0] + 1) / 2 * 256, 255.0f);
-    c[1] = psl::min((n[1] + 1) / 2 * 256, 255.0f);
-    c[2] = psl::min((n[2] + 1) / 2 * 256, 255.0f);
-  }
-  vec3 decode() const {
-    auto n0 = (c[0] / 255.0f) * 2 - 1;
-    auto n1 = (c[1] / 255.0f) * 2 - 1;
-    auto n2 = (c[2] / 255.0f) * 2 - 1;
-    return vec3(n0, n1, n2);
-  }
-
-  uint8_t c[4];
-};
-struct UnitVectorNoOp {
-  UnitVectorNoOp(vec3 n) : n(n) {
-  }
-  vec3 decode() const {
-    return n;
-  }
-  vec3 n;
-};
-
-struct unsigned_float16 {
-  static uint16_t float_to_bits(float x) {
-    auto u = psl::bitcast<uint32_t>(x);
-    auto exp = int((u >> 23) & 0b11111111);
-    exp = psl::max(exp + 0b1111 - 0b1111111, 0);
-    uint16_t sig = (u >> 12) & 0b11111111111;
-    return (exp << 11) | sig;
-  }
-  static float bits_to_float(uint16_t b) {
-    auto exp = uint32_t(b >> 11);
-    exp = exp + 0b1111111 - 0b1111;
-    auto sig = uint32_t(b & 0b11111111111) << 12;
-    return psl::bitcast<float>((exp << 23) | sig);
-  }
-
-  unsigned_float16(float x) : bits(float_to_bits(x)) {
-  }
-  operator float() const {
-    return bits_to_float(bits);
-  }
-  unsigned_float16& operator+=(float rhs) {
-    return *this = float(*this) + rhs;
-  }
-  unsigned_float16& operator-=(float rhs) {
-    return *this = float(*this) - rhs;
-  }
-  unsigned_float16& operator*=(float rhs) {
-    return *this = float(*this) * rhs;
-  }
-  unsigned_float16& operator/=(float rhs) {
-    return *this = float(*this) / rhs;
-  }
-
-  psl::string to_string() const {
-    return psl::to_string(float(*this));
-  }
-
-  uint16_t bits;
-};
-
-struct SpatialNode {
+struct DirectionalBin {
   void add_flux(vec3 l) {
-    lock.lock();
     flux += l;
     nsamples += 1;
-    lock.unlock();
   }
   vec3 flux_estimate() const {
     if (nsamples != 0)
@@ -98,37 +33,48 @@ struct SpatialNode {
       return vec3(0);
   }
 
-  Vector3<float> flux;
-  mutable SpinLock lock;
-  uint32_t nsamples;
+private:
+  Vector3<Atomic<float>> flux;
+  Atomic<uint32_t> nsamples;
+};
+
+struct SpatialNode {
+  DirectionalBin& bin_of(vec3 w) {
+    auto sc = inverse_uniform_sphere(w);
+    auto x = psl::min(int(sc.x * bin_resolution), bin_resolution - 1);
+    auto y = psl::min(int(sc.y * bin_resolution), bin_resolution - 1);
+    return bins[x + y * bin_resolution];
+  }
+  const DirectionalBin& bin_of(vec3 w) const {
+    return const_cast<SpatialNode*>(this)->bin_of(w);
+  }
+
+  static constexpr int bin_resolution = 2;
+  psl::Array<DirectionalBin, bin_resolution * bin_resolution> bins;
 };
 
 struct SpatialTree {
   SpatialTree() = default;
-  SpatialTree(AABB aabb, vec3i64 resolution) : aabb(aabb), resolution(resolution) {
+  SpatialTree(AABB aabb, vec3i64 resolution) : aabb(aabb), grid(resolution) {
     this->aabb.extend_by(1e-4f);
-    nodes.resize(volume(resolution));
   }
   void add_sample(RadianceSample s) {
-    node_at(s.p).add_flux(s.flux);
+    bin_of(s.p, s.w).add_flux(s.flux);
   }
-  vec3 flux_estimate(vec3 p) const {
-    return node_at(p).flux_estimate();
+  vec3 flux_estimate(vec3 p, vec3 w) const {
+    return bin_of(p, w).flux_estimate();
   }
 
 private:
-  SpatialNode& node_at(vec3 p) {
-    auto rp = aabb.relative_position(p);
-    auto ip = vec3i(rp * resolution);
-    return nodes[ip.x + ip.y * resolution.x + ip.z * resolution.x * resolution.y];
+  DirectionalBin& bin_of(vec3 p, vec3 w) {
+    return grid[aabb.relative_position(p) * grid.size()].bin_of(w);
   }
-  const SpatialNode& node_at(vec3 p) const {
-    return const_cast<SpatialTree*>(this)->node_at(p);
+  const DirectionalBin& bin_of(vec3 p, vec3 w) const {
+    return const_cast<SpatialTree*>(this)->bin_of(p, w);
   }
 
   AABB aabb;
-  vec3i resolution;
-  psl::vector<SpatialNode> nodes;
+  Array3d<SpatialNode> grid;
 };
 
 }  // namespace
@@ -164,43 +110,63 @@ void CachedPathIntegrator::render(Scene& scene) {
   stree = SpatialTree(aabb, resolution);
   accel.build(&scene);
   light_sampler.build(&scene);
-  auto& film = scene.camera.film(); film.clear();
-  film.clear();
+  auto& film = scene.camera.film();
+  auto image0 = Array2d3f(film.size());
+  auto image1 = Array2d3f(film.size());
+  auto image0_estimate = Array2d3f(film.size());
+  auto image1_estimate = Array2d3f(film.size());
 
   Profiler _("[CachedPath]Render");
 
   set_progress(0.0f);
-  auto primary_spp = psl::max(spp / primary_ratio, 1);
+  auto primary_spp = psl::max(spp / 2 / primary_ratio, 1);
+
+  auto albedo = Array2d3f(film.size());
+  auto normal = Array2d3f(film.size());
+  parallel_for(film.size(), [&](vec2i p) {
+    auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
+    if (auto it = Interaction(); intersect(ray, it)) {
+      albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
+      normal[p] = it.n;
+    }
+  });
 
   use_estimate = false;
-  for (int i = 0; i < primary_spp; i++) {
-    parallel_for(film.size(), [&](vec2i p) {
-      Sampler& sampler = samplers[threadIdx];
-      sampler.start_pixel(p, i * primary_ratio);
-      auto p_film = vec2(p + sampler.get2d()) / scene.camera.film().size();
-      auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-      radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
-      if (p.x == 0)
-        set_progress(float(i) / primary_spp / 2 +
-                     float(p.x + p.y * film.size().x) / area(film.size()) / primary_spp / 2);
-    });
-  }
+  parallel_for(film.size(), [&](vec2i p) {
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
+    auto L = vec3(0.0f);
+    for (int i = 0; i < primary_spp; i++) {
+      auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
+      L += radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
+    }
+    image0[p] = L / primary_spp;
+    if (p.x == 0)
+      set_progress(float(p.x + p.y * film.size().x) / area(film.size()) / 2);
+  });
 
   use_estimate = true;
-  for (int i = 0; i < primary_spp; i++) {
-    parallel_for(film.size(), [&](vec2i p) {
-      Sampler& sampler = samplers[threadIdx];
-      sampler.start_pixel(p, i * primary_ratio);
-      auto p_film = vec2(p + sampler.get2d()) / scene.camera.film().size();
-      auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-      auto L = radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
-      scene.camera.film().add_sample(p, L);
-      if (p.x == 0)
-        set_progress(0.5f + float(i) / primary_spp / 2 +
-                     float(p.x + p.y * film.size().x) / area(film.size()) / primary_spp / 2);
-    });
-  }
+  parallel_for(film.size(), [&](vec2i p) {
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
+    auto L = vec3(0.0f);
+    for (int i = 0; i < primary_spp; i++) {
+      auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
+      L += radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
+    }
+    image1[p] = L / primary_spp;
+    if (p.x == 0)
+      set_progress(0.5f + float(p.x + p.y * film.size().x) / area(film.size()));
+  });
 
+  denoise(DenoiseQuality::High, image0_estimate, image0, albedo, normal);
+  denoise(DenoiseQuality::High, image1_estimate, image1, albedo, normal);
+  auto variance0 = 0.0, variance1 = 0.0;
+  parallel_for(film.size(), [&](vec2i p) {
+    auto Ie0 = image0_estimate[p];
+    auto Ie1 = image1_estimate[p];
+    variance0 += average(sqr((image0[p] - Ie0) / max(Ie0, vec3(0.01f))));
+    variance1 += average(sqr((image1[p] - Ie1) / max(Ie1, vec3(0.01f))));
+  });
+  film.pixels = Array2d4f::from(combine(image0, image1, 1.0f / variance0, 1.0f / variance1));
   set_progress(1.0f);
 }
 
@@ -233,8 +199,8 @@ vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int
   if (depth + 1 == max_path_length)
     return vec3(0.0f);
 
-  if (use_estimate && v.non_delta_path_length >= starting_depth)
-    return stree.flux_estimate(it.p);
+  if (use_estimate && v.non_delta_path_length >= starting_depth && !it.material()->is_delta())
+    return stree.flux_estimate(it.p, wi);
 
   auto direct_light = [&](const LightSample& ls, float pdf_g) {
     if (!hit(it.spawn_ray(ls.wo, ls.distance))) {

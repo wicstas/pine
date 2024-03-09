@@ -91,15 +91,16 @@ struct QuadNode {
       return 4 * c.flux / flux * c.pdf(sc);
     }
   }
-  void clear() {
-    flux = 0;
+  void prepare_next_iter() {
+    // Moving average
+    flux = flux / 2;
     if (!is_leaf())
       for (int i = 0; i < 4; i++)
-        child(i).clear();
+        child(i).prepare_next_iter();
   }
 
   void refine(float total_flux) {
-    if (flux > total_flux * 0.02f && depth < 16) {
+    if (flux > total_flux * 0.015f && depth < 16) {
       if (is_leaf()) {
         children = psl::array_of(QuadNode(depth + 1), QuadNode(depth + 1), QuadNode(depth + 1),
                                  QuadNode(depth + 1));
@@ -116,15 +117,15 @@ struct QuadNode {
         children.reset();
     }
   }
-  int node_count() const {
-    if (is_leaf())
-      return 1;
-    else
-      return 1 + child(0).node_count() + child(1).node_count() + child(2).node_count() +
-             child(3).node_count();
-  }
   float length() const {
     return 1.0f / (1 << depth);
+  }
+
+  float flux_density(vec2 sc) const {
+    if (is_leaf())
+      return flux / sqr(length());
+    else
+      return child(sc).flux_density(sc);
   }
 
 private:
@@ -182,23 +183,42 @@ struct QuadTree {
   float pdf(vec3 w) const {
     return root.pdf(inverse_uniform_sphere(w));
   }
-  void clear() {
-    root.clear();
+  void prepare_next_iter() {
+    n_samples = n_samples / 2;
+    root.prepare_next_iter();
   }
-  void initial_refinement() {
+  void prepare_for_initial_refine() {
     root.flux = 1;
-    refine();
-    clear();
   }
   void refine() {
     root.refine(root.flux);
   }
-  int node_count() const {
-    return root.node_count();
+  float flux_density(vec2 sc) const {
+    return root.flux_density(sc) / n_samples;
   }
 
   QuadNode root;
   Atomic<int> n_samples{0};
+};
+
+struct DirectionalBin {
+  float splitting_factor(vec3 throughput, float g_cost_to_var) const {
+    auto n = 1.0f;
+    auto split_s = average(psl::sqr(throughput) * var_to_cost) * g_cost_to_var;
+    auto split_r = average(psl::sqr(throughput) * moment2_to_cost) * g_cost_to_var;
+    if (split_r > 1) {
+      if (split_s > 1)
+        n = split_s;
+    } else {
+      n = split_r;
+    }
+    return psl::sqrt(n);
+  }
+  Vector3<Atomic<float>> estimate, moment2;
+  Atomic<float> cost{0};
+  Atomic<uint32_t> n{0};
+  bool valid = false;
+  vec3 var_to_cost, moment2_to_cost;
 };
 
 struct SpatialNode {
@@ -224,12 +244,26 @@ struct SpatialNode {
     else [[likely]]
       return child(p).traverse(p);
   }
-
+  DirectionalBin& bin_of(vec3 w) {
+    auto sc = inverse_uniform_sphere(w);
+    auto x = psl::min(int(sc.x * bin_resolution), bin_resolution - 1);
+    auto y = psl::min(int(sc.y * bin_resolution), bin_resolution - 1);
+    return bins[x + y * bin_resolution];
+  }
   void refine(size_t threshold) {
     if (is_leaf()) {
+      collector->refine();
       if (n_samples > threshold) {
         children = children.default_value();
+        auto decay_factor = 1;
+        for (auto& bin : bins) {
+          bin.cost = bin.cost / 8 / decay_factor;
+          bin.estimate = bin.estimate / 8 / decay_factor;
+          bin.moment2 = bin.moment2 / 8 / decay_factor;
+          bin.n = bin.n / 8 / decay_factor;
+        }
         for (int i = 0; i < 8; i++) {
+          child(i).bins = bins;
           // no need to assign guide
           child(i).collector = collector;
           child(i).footprint_ = footprint_ / 2;
@@ -242,9 +276,8 @@ struct SpatialNode {
         }
         guide = collector = psl::nullopt;
       } else {
-        collector->refine();
         guide = collector;
-        collector->clear();
+        collector->prepare_next_iter();
       }
     } else {
       for (int i = 0; i < 8; i++)
@@ -263,19 +296,15 @@ struct SpatialNode {
       if (weight_sum > 0)
         prob_a = weight_a / weight_sum;
     }
-    this->weight_a = this->weight_a / 2;
-    this->weight_b = this->weight_b / 2;
-    this->alpha_a = this->alpha_a / 2;
-    this->alpha_b = this->alpha_b / 2;
-    // this->weight_a = {};
-    // this->weight_b = {};
-    // this->alpha_a = {};
-    // this->alpha_b = {};
+    this->weight_a = this->weight_a * 0.5f;
+    this->weight_b = this->weight_b * 0.5f;
+    this->alpha_a = this->alpha_a * 0.5f;
+    this->alpha_b = this->alpha_b * 0.5f;
   }
   void initial_refinement(int64_t initial_samples, size_t threshold) {
     CHECK(is_leaf());
     n_samples = initial_samples;
-    collector->initial_refinement();
+    collector->prepare_for_initial_refine();
     refine(threshold);
     n_samples = 0;
   }
@@ -286,29 +315,18 @@ struct SpatialNode {
   float strategy_a_prob() const {
     return prob_a;
   }
-  int max_tree_depth() const {
-    if (is_leaf())
-      return 0;
-    else
-      return 1 + psl::max(child(0).max_tree_depth(), child(1).max_tree_depth());
+  float flux_density(vec3 w) const {
+    return guide->flux_density(inverse_uniform_sphere(w));
   }
-  int max_sample_count() const {
-    if (is_leaf())
-      return guide->n_samples;
-    else
-      return psl::max(child(0).max_sample_count(), child(1).max_sample_count());
-  }
-  int node_count() const {
-    if (is_leaf())
-      return 1;
-    else
-      return 1 + child(0).node_count() + child(1).node_count();
-  }
-  int max_quad_node_count() const {
-    if (is_leaf())
-      return guide->node_count();
-    else
-      return psl::max(child(0).node_count(), child(1).node_count());
+
+  void for_each_bin(auto f) {
+    if (is_leaf()) {
+      for (auto& bin : bins)
+        f(bin);
+    } else {
+      for (int i = 0; i < 8; i++)
+        child(i).for_each_bin(f);
+    }
   }
 
 private:
@@ -345,6 +363,8 @@ private:
   Atomic<int> alpha_a{0}, alpha_b{0};
   float prob_a = 0.5f;
   psl::Box<psl::Array<SpatialNode, 8>> children;
+  static constexpr int bin_resolution = 4;
+  psl::Array<DirectionalBin, bin_resolution * bin_resolution> bins;
   psl::optional<QuadTree> guide;
   psl::optional<QuadTree> collector;
 };
@@ -378,17 +398,8 @@ struct SpatialTree {
   void refine(size_t threshold) {
     return root.refine(threshold);
   }
-  int max_tree_depth() const {
-    return root.max_tree_depth();
-  }
-  int max_sample_count() const {
-    return root.max_sample_count();
-  }
-  int node_count() const {
-    return root.node_count();
-  }
-  int max_quad_node_count() const {
-    return root.max_quad_node_count();
+  void for_each_bin(auto f) {
+    root.for_each_bin(f);
   }
 
 private:

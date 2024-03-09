@@ -12,20 +12,15 @@ public:
 
   void render(Scene& scene) override;
 
-  struct Vertex {
-    Vertex(int length, vec3 n, vec3 p, float pdf, bool is_delta = false)
-        : length(length), n(n), p(p), pdf(pdf), is_delta(is_delta) {
-    }
-    static Vertex first_vertex() {
-      return Vertex(0, vec3(0), vec3(0), 0.0f, true);
-    }
-    int length;
-    vec3 n;
-    vec3 p;
-    float pdf;
-    bool is_delta;
+  struct Vertex;
+  struct RadianceResult {
+    vec3 Lo;
+    float cost = 0.0f;
   };
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
+  struct Stats {
+    vec3 value;
+  };
+  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex, Stats& stats);
 
 private:
   LightSampler light_sampler;
