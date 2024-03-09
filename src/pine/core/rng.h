@@ -6,26 +6,62 @@
 
 namespace pine {
 
-inline uint64_t hash64u(uint64_t s) {
-  s += 0x9E3779B97f4A7C15ULL;
-  s = (s ^ (s >> 30)) * 0xBF58476D1CE4E5B9ULL;
-  s = (s ^ (s >> 27)) * 0x94D049BB133111EBULL;
-  return s ^ (s >> 31);
-}
+inline uint64_t murmur_hash64A(const unsigned char *key, size_t len, uint64_t seed) {
+  const uint64_t m = 0xc6a4a7935bd1e995ull;
+  const int r = 47;
 
-template <typename T, typename... Ts>
-inline uint64_t hash(T first, Ts... rest) {
-  uint64_t bits[(sizeof(T) + 7) / sizeof(uint64_t)] = {};
-  psl::memcpy(bits, &first, sizeof(T));
+  uint64_t h = seed ^ (len * m);
 
-  uint64_t h = 0;
-  for (size_t i = 0; i < sizeof(bits) / sizeof(bits[0]); i++)
-    h = hash64u(h ^ bits[i]);
+  const unsigned char *end = key + 8 * (len / 8);
 
-  if constexpr (sizeof...(rest) != 0)
-    h = hash64u(h ^ hash(rest...));
+  while (key != end) {
+    uint64_t k;
+    psl::memcpy(&k, key, sizeof(uint64_t));
+    key += 8;
+
+    k *= m;
+    k ^= k >> r;
+    k *= m;
+
+    h ^= k;
+    h *= m;
+  }
+
+  switch (len & 7) {
+    case 7: h ^= uint64_t(key[6]) << 48;
+    case 6: h ^= uint64_t(key[5]) << 40;
+    case 5: h ^= uint64_t(key[4]) << 32;
+    case 4: h ^= uint64_t(key[3]) << 24;
+    case 3: h ^= uint64_t(key[2]) << 16;
+    case 2: h ^= uint64_t(key[1]) << 8;
+    case 1: h ^= uint64_t(key[0]); h *= m;
+  };
+
+  h ^= h >> r;
+  h *= m;
+  h ^= h >> r;
 
   return h;
+}
+
+template <typename T>
+inline uint64_t hash_buffer(const T *ptr, size_t size, uint64_t seed = 0) {
+  return murmur_hash64A((const unsigned char *)ptr, size, seed);
+}
+
+template <typename T, typename... Args>
+void hash_recursive_copy(char *buf, T v, Args... args) {
+  psl::memcpy(buf, &v, sizeof(T));
+  if constexpr (sizeof...(Args) > 0)
+    hash_recursive_copy(buf + sizeof(T), args...);
+}
+
+template <typename... Args>
+inline uint64_t hash(Args... args) {
+  constexpr size_t sz = (sizeof(Args) + ... + 0);
+  uint64_t buf[(sz + 7) / 8];
+  hash_recursive_copy((char *)buf, args...);
+  return murmur_hash64A((const unsigned char *)buf, sz, 0);
 }
 
 template <typename... Ts>
@@ -35,7 +71,7 @@ inline float hashf(Ts... vals) {
   return psl::min(h32 / float(-1u), one_minus_epsilon);
 }
 
-inline uint64_t split_mix_64(uint64_t& s) {
+inline uint64_t split_mix_64(uint64_t &s) {
   uint64_t r = s += 0x9E3779B97f4A7C15ULL;
   r = (r ^ (r >> 30)) * 0xBF58476D1CE4E5B9ULL;
   r = (r ^ (r >> 27)) * 0x94D049BB133111EBULL;
@@ -103,6 +139,6 @@ struct RNG {
   uint64_t s[2];
 };
 
-void rng_context(Context& ctx);
+void rng_context(Context &ctx);
 
 }  // namespace pine

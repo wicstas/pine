@@ -1,5 +1,5 @@
 #pragma once
-
+#include <pine/core/sobolmatrices.h>
 #include <pine/core/vecmath.h>
 #include <pine/core/primes.h>
 #include <pine/core/rng.h>
@@ -62,15 +62,43 @@ void shuffle(T* samp, int count, int nDimensions, RNG& rng) {
 psl::vector<uint16_t> compute_radical_inverse_permutations(RNG& rng);
 
 inline uint32_t multiply_generator(const uint32_t* C, uint32_t a) {
-  uint32_t v = 0;
-  for (int i = 0; a != 0; i++, a >>= 1)
+  auto v = uint32_t(0);
+  for (int i = 0; a != 0; a >>= 1, i++)
     if (a & 1)
       v ^= C[i];
   return v;
 }
 
-inline float sample_generator_matrix(const uint32_t* C, uint32_t a, uint32_t scramble = 0) {
-  return psl::min((multiply_generator(C, a) ^ scramble) * 0x1p-32f, one_minus_epsilon);
+template <typename R>
+float sobol_sample(int64_t a, int dim, R randomizer) {
+  auto v = uint32_t(0);
+  for (int i = dim * SobolMatrixSize; a != 0; a >>= 1, i++)
+    if (a & 1)
+      v ^= SobolMatrices32[i];
+  v = randomizer(v);
+  return psl::min(v * 0x1p-32f, one_minus_epsilon);
+}
+
+inline uint64_t sobol_interval_to_index(uint32_t m, uint64_t frame, vec2i p) {
+  if (m == 0)
+    return frame;
+
+  const uint32_t m2 = m << 1;
+  uint64_t index = uint64_t(frame) << m2;
+
+  uint64_t delta = 0;
+  for (int c = 0; frame; frame >>= 1, ++c)
+    if (frame & 1)  // Add flipped column m + c + 1.
+      delta ^= VdCSobolMatrices[m - 1][c];
+
+  // flipped b
+  uint64_t b = (((uint64_t)((uint32_t)p.x) << m) | ((uint32_t)p.y)) ^ delta;
+
+  for (int c = 0; b; b >>= 1, ++c)
+    if (b & 1)  // Add column 2 * m - c.
+      index ^= VdCSobolMatricesInv[m - 1][c];
+
+  return index;
 }
 
 inline void GrayCodeSample(const uint32_t* C, uint32_t n, uint32_t scramble, float* p) {

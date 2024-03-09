@@ -1312,7 +1312,7 @@ inline vec3 face_same_hemisphere(vec3 v, vec3 ref) {
   return dot(v, ref) < 0 ? -v : v;
 }
 
-inline uint32_t left_shift_32(uint32_t x) {
+inline uint32_t left_shift_32x3(uint32_t x) {
   if (x == (1 << 10))
     x--;
   x = (x | (x << 16)) & 0x30000ff;
@@ -1321,24 +1321,21 @@ inline uint32_t left_shift_32(uint32_t x) {
   x = (x | (x << 2)) & 0x9249249;
   return x;
 }
-inline uint64_t left_shift_64(uint64_t x) {
-  uint64_t v = 0;
-  for (int i = 0; i < 10; i++)
-    v |= (1u << (i * 3)) & (x << (i * 2));
-  return v;
+inline uint64_t left_shift_64x2(uint64_t x) {
+  x &= 0xffffffff;
+  x = (x ^ (x << 16)) & 0x0000ffff0000ffff;
+  x = (x ^ (x << 8)) & 0x00ff00ff00ff00ff;
+  x = (x ^ (x << 4)) & 0x0f0f0f0f0f0f0f0f;
+  x = (x ^ (x << 2)) & 0x3333333333333333;
+  x = (x ^ (x << 1)) & 0x5555555555555555;
+  return x;
 }
 
-inline uint32_t encode_morton_32x3(vec3 v) {
-  constexpr int kMortonBits = 10;
-  constexpr int kMortonScale = 1 << kMortonBits;
-  v *= kMortonScale;
-  return (left_shift_32(v.z) << 2) | (left_shift_32(v.y) << 1) | left_shift_32(v.x);
+inline uint32_t encode_morton32x3(vec3i p) {
+  return (left_shift_32x3(p.z) << 2) | (left_shift_32x3(p.y) << 1) | left_shift_32x3(p.x);
 }
-inline uint64_t encode_morton_64x3(vec3 v) {
-  constexpr int kMortonBits = 20;
-  constexpr int kMortonScale = 1 << kMortonBits;
-  v *= kMortonScale;
-  return (left_shift_64(v.z) << 2) | (left_shift_64(v.y) << 1) | left_shift_64(v.x);
+inline uint64_t encode_morton64x2(uint32_t x, uint32_t y) {
+  return (left_shift_64x2(y) << 1) | left_shift_64x2(x);
 }
 
 template <typename T>

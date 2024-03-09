@@ -59,8 +59,8 @@ Context get_default_context() {
       .method("render", &RandomWalkIntegrator::render);
   ctx.type<PathIntegrator>("PathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](int spp, int max_path_length) {
-        return PathIntegrator(EmbreeAccel(), HaltonSampler(spp), UniformLightSampler(),
+      .ctor(+[](vec2i image_size, int spp, int max_path_length) {
+        return PathIntegrator(EmbreeAccel(), SobolSampler(spp, image_size), UniformLightSampler(),
                               max_path_length);
       })
       .method("render", &PathIntegrator::render);

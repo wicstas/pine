@@ -29,6 +29,7 @@ target_link_libraries(psl_test psl)
 #Pine Core Library
 add_library(pinelib
 src/pine/core/lowdiscrepancy.cpp
+src/pine/core/sobolmatrices.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/interaction.cpp
