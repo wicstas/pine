@@ -11,7 +11,7 @@ public:
         light_sampler{psl::move(light_sampler)} {
   }
   void render(Scene& scene) override;
-  vec3 radiance(Ray ray, Interaction it, bool is_hit, Sampler& sampler);
+  vec3 radiance(Ray ray, SurfaceInteraction it, bool is_hit, Sampler& sampler);
 
 private:
   AABB aabb;

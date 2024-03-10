@@ -24,7 +24,7 @@ vec3 PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
   auto bsdf_pdf = 0.0f;
 
   for (int depth = 0; depth < max_path_length; depth++) {
-    auto it = Interaction();
+    auto it = SurfaceInteraction();
     if (!intersect(ray, it)) {
       if (scene.env_light) {
         auto le = scene.env_light->color(ray.d);

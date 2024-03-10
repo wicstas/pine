@@ -19,7 +19,7 @@ vec3 ACES(vec3 v) {
   vec3 d = vec3(0.59f);
   vec3 e = vec3(0.14f);
   v = v * (a * v + b) / (v * (c * v + d) + e);
-  return clamp(pow(0.8f * v * (a * v + b) / (v * (c * v + d) + e), 0.8f), vec3(0.0f), vec3(1.0f));
+  return clamp(pow(0.2f * v * (a * v + b) / (v * (c * v + d) + e), 0.4f), vec3(0.0f), vec3(1.0f));
 }
 
 vec3 color_map(float v) {

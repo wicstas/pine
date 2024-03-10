@@ -30,16 +30,24 @@ public:
   uint8_t hit8(psl::span<const Ray> rays) const {
     return accel.hit8(rays);
   }
-  bool intersect(Ray& ray, Interaction& it) const {
-    auto is_hit = accel.intersect(ray, it);
-    if (is_hit)
-      it.compute_transformation();
-    return is_hit;
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  Interaction intersect_tr(Ray& ray, Sampler& sampler) const;
+
+  bool intersect_cases(Ray& ray, Sampler& sampler, auto f_escape, auto f_surface,
+                       auto f_medium) const {
+    auto it_tr = intersect_tr(ray, sampler);
+    if (!it_tr.is_valid())
+      return f_escape();
+    else if (it_tr.is<SurfaceInteraction>())
+      return f_surface(it_tr.as<SurfaceInteraction>());
+    else
+      return f_medium(it_tr.as<MediumInteraction>());
   }
 
   void render(Scene& scene) override;
 
 protected:
+  const Scene* scene;
   Accel accel;
   psl::vector<Sampler> samplers;
   int spp;

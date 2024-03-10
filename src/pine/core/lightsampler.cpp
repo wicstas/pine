@@ -25,7 +25,7 @@ psl::optional<LightSample> UniformLightSampler::sample(vec3 p, vec3 n, float u1,
     return psl::nullopt;
   }
 }
-float UniformLightSampler::pdf(const Geometry* light, const Interaction& it, const Ray& ray,
+float UniformLightSampler::pdf(const Geometry* light, const SurfaceInteraction& it, const Ray& ray,
                                vec3 n) const {
   CHECK(lights.size() != 0);
   CHECK(light != nullptr);

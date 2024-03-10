@@ -48,6 +48,7 @@ src/pine/core/primes.cpp
 src/pine/core/fileio.cpp
 src/pine/core/parser.cpp
 src/pine/core/camera.cpp
+src/pine/core/medium.cpp
 src/pine/core/noise.cpp
 src/pine/core/scene.cpp
 src/pine/core/light.cpp

@@ -3,7 +3,7 @@
 
 namespace pine {
 
-const Material* Interaction::material() const {
+const Material* SurfaceInteraction::material() const {
   DCHECK(geometry);
   DCHECK(geometry->material.get());
   return geometry->material.get();

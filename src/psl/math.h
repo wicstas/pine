@@ -181,6 +181,18 @@ inline T sqrt(T y) {
 
   return x;
 }
+template <FloatingPoint T>
+inline T safe_sqrt(T y) {
+  return psl::sqrt(psl::max(y, T(0)));
+  T x = psl::exp2i(psl::ieeeexp(y) / 2);
+
+  x = x / 2 + y / (2 * x);
+  x = x / 2 + y / (2 * x);
+  x = x / 2 + y / (2 * x);
+  x = x / 2 + y / (2 * x);
+
+  return x;
+}
 
 template <typename T>
 inline constexpr T powi(T x, int e) {

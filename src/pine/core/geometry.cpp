@@ -16,7 +16,7 @@ bool Plane::hit(const Ray& ray) const {
     return false;
   return t < ray.tmax;
 }
-bool Plane::intersect(Ray& ray, Interaction& it) const {
+bool Plane::intersect(Ray& ray, SurfaceInteraction& it) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
   if (t < ray.tmin)
     return false;
@@ -45,7 +45,7 @@ ShapeSample Plane::sample(vec3 p, vec2 u2) const {
   ss.pdf = 1.0f / (2 * Pi);
   return ss;
 }
-float Plane::pdf(const Interaction&, const Ray&, vec3) const {
+float Plane::pdf(const SurfaceInteraction&, const Ray&, vec3) const {
   return 1.0f / (2 * Pi);
 }
 
@@ -70,7 +70,7 @@ bool Sphere::hit(const Ray& ray) const {
   float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   return t > ray.tmin && t < ray.tmax;
 }
-bool Sphere::intersect(Ray& ray, Interaction& it) const {
+bool Sphere::intersect(Ray& ray, SurfaceInteraction& it) const {
   float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   if (t < ray.tmin || t > ray.tmax)
     return false;
@@ -90,7 +90,7 @@ ShapeSample Sphere::sample(vec3 p, vec2 u) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Sphere::pdf(const Interaction& it, const Ray& ray, vec3) const {
+float Sphere::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
   return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
 }
 AABB Sphere::get_aabb() const {
@@ -115,7 +115,7 @@ bool Disk::hit(const Ray& ray) const {
     return false;
   return true;
 }
-bool Disk::intersect(Ray& ray, Interaction& it) const {
+bool Disk::intersect(Ray& ray, SurfaceInteraction& it) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
   if (t < ray.tmin)
     return false;
@@ -141,7 +141,7 @@ ShapeSample Disk::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Disk::pdf(const Interaction& it, const Ray& ray, vec3) const {
+float Disk::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
   return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
 }
 AABB Disk::get_aabb() const {
@@ -175,7 +175,7 @@ bool Line::hit(const Ray& ray) const {
 
   return D <= thickness;
 }
-bool Line::intersect(Ray& ray, Interaction& it) const {
+bool Line::intersect(Ray& ray, SurfaceInteraction& it) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
   auto o2r = inverse(r2o);
   auto p0 = vec3(o2r * vec4(this->p0, 1.0f));
@@ -211,7 +211,7 @@ ShapeSample Line::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Line::pdf(const Interaction& it, const Ray& ray, vec3) const {
+float Line::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
   return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
 }
 AABB Line::get_aabb() const {
@@ -284,7 +284,7 @@ bool Rect::hit(const Ray& ray) const {
     return false;
   return true;
 }
-bool Rect::intersect(Ray& ray, Interaction& it) const {
+bool Rect::intersect(Ray& ray, SurfaceInteraction& it) const {
   float denom = dot(ray.d, n);
   if (denom == 0.0f)
     return false;
@@ -360,7 +360,7 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   ss.pdf = 1.0f / S;
   return ss;
 }
-float Rect::pdf(const Interaction& it, const Ray& ray, vec3) const {
+float Rect::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
   return psl::max(psl::sqr(ray.tmax), epsilon) / psl::max(area() * absdot(it.n, -ray.d), epsilon);
 
   auto p = position - ex * lx / 2 - ey * ly / 2;
@@ -431,7 +431,7 @@ bool Triangle::hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2) {
     return false;
   return u + v < 1.0f;
 }
-bool Triangle::intersect(Ray& ray, Interaction& it, vec3 v0, vec3 v1, vec3 v2) {
+bool Triangle::intersect(Ray& ray, SurfaceInteraction& it, vec3 v0, vec3 v1, vec3 v2) {
   vec3 E1 = v1 - v0;
   vec3 E2 = v2 - v0;
   vec3 T = ray.o - v0;
@@ -455,7 +455,7 @@ bool Triangle::intersect(Ray& ray, Interaction& it, vec3 v0, vec3 v1, vec3 v2) {
   it.uv = vec2(u, v);
   return true;
 }
-bool Triangle::intersect(Ray& ray, Interaction& it) const {
+bool Triangle::intersect(Ray& ray, SurfaceInteraction& it) const {
   bool hit = intersect(ray, it, v0, v1, v2);
   if (hit) {
     it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
@@ -474,7 +474,7 @@ ShapeSample Triangle::sample(vec3 p, vec2 u) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Triangle::pdf(const Interaction& it, const Ray& ray, vec3) const {
+float Triangle::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
   return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
 }
 AABB Triangle::get_aabb() const {
@@ -501,7 +501,7 @@ bool TriangleMesh::hit(const Ray& ray, int index) const {
   auto face = indices[index];
   return Triangle::hit(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
 }
-bool TriangleMesh::intersect(Ray& ray, Interaction& it, int index) const {
+bool TriangleMesh::intersect(Ray& ray, SurfaceInteraction& it, int index) const {
   DCHECK_LT(size_t(index), indices.size());
   auto face = indices[index];
   auto v0 = vertices[face[0]], v1 = vertices[face[1]], v2 = vertices[face[2]];
@@ -573,7 +573,7 @@ TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> hei
   return height_map_to_mesh(height_map);
 }
 
-bool Geometry::intersect(Ray& ray, Interaction& it) const {
+bool Geometry::intersect(Ray& ray, SurfaceInteraction& it) const {
   auto hit = shape.intersect(ray, it);
   if (hit) {
     it.geometry = this;
@@ -583,7 +583,7 @@ bool Geometry::intersect(Ray& ray, Interaction& it) const {
 ShapeSample Geometry::sample(vec3 p, vec2 u) const {
   return shape.sample(p, u);
 }
-float Geometry::pdf(const Interaction& it, const Ray& ray, vec3 n) const {
+float Geometry::pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const {
   return shape.pdf(it, ray, n);
 }
 
@@ -593,10 +593,10 @@ void geometry_context(Context& ctx) {
       .member("d", &Ray::d)
       .member("tmin", &Ray::tmin)
       .member("tmax", &Ray::tmax);
-  ctx.type<Interaction>("Interaction")
-      .member("n", &Interaction::n)
-      .member("p", &Interaction::p)
-      .member("uv", &Interaction::uv);
+  ctx.type<SurfaceInteraction>("SurfaceInteraction")
+      .member("n", &SurfaceInteraction::n)
+      .member("p", &SurfaceInteraction::p)
+      .member("uv", &SurfaceInteraction::uv);
   ctx.type<Sphere>("Sphere").ctor<vec3, float>();
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();

@@ -12,7 +12,7 @@ struct MaterialSampleCtx : NodeEvalCtx {
       : NodeEvalCtx(p, n, uv), m2w(coordinate_system(n)), u1(u1), u2(u2) {
     this->wi = solve(m2w, wi);
   }
-  MaterialSampleCtx(const Interaction& it, vec3 wi, float u1, vec2 u2)
+  MaterialSampleCtx(const SurfaceInteraction& it, vec3 wi, float u1, vec2 u2)
       : MaterialSampleCtx(it.p, it.n, it.uv, wi, u1, u2){};
 
   vec3 wi;
@@ -23,7 +23,7 @@ struct MaterialSampleCtx : NodeEvalCtx {
 
 struct MaterialEvalCtx : NodeEvalCtx {
 public:
-  MaterialEvalCtx(const Interaction& it, vec3 wi, vec3 wo)
+  MaterialEvalCtx(const SurfaceInteraction& it, vec3 wi, vec3 wo)
       : NodeEvalCtx(it.p, it.n, it.uv), wi(it.to_local(wi)), wo(it.to_local(wo)) {
   }
 
@@ -34,7 +34,7 @@ public:
 struct LeEvalCtx : NodeEvalCtx {
   LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv), wo(wo) {
   }
-  LeEvalCtx(const Interaction& it, vec3 wo) : NodeEvalCtx(it.p, it.n, it.uv), wo(wo) {
+  LeEvalCtx(const SurfaceInteraction& it, vec3 wo) : NodeEvalCtx(it.p, it.n, it.uv), wo(wo) {
   }
 
   vec3 wo;

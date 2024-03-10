@@ -35,7 +35,7 @@ Voxels voxelize(const Scene& scene, AABB aabb, vec3i resolution) {
         ray.o[i1] = psl::lerp(p[1], aabb.lower[i1], aabb.upper[i1]);
         ray.o[i2] = aabb.upper[i2] + epsilon;
         ray.d[i2] = -1;
-        auto it = Interaction();
+        auto it = SurfaceInteraction();
         while (accel.intersect(ray, it)) {
           it.n = face_same_hemisphere(it.n, -ray.d);
           auto ip = vec3i(floor(aabb.relative_position(it.p) * resolution));

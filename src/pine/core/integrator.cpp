@@ -22,12 +22,30 @@ RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel
   samplers.push_back(psl::move(sampler));
 }
 void RTIntegrator::render(Scene& scene) {
+  this->scene = &scene;
   auto sampler = samplers.consume_back();
   sampler.init(scene.camera.film().size());
   for (int i = 0; i < n_threads(); i++)
     samplers.push_back(sampler);
   accel.build(&scene);
   set_progress(0);
+}
+bool RTIntegrator::intersect(Ray& ray, SurfaceInteraction& it) const {
+  auto is_hit = accel.intersect(ray, it);
+  if (is_hit)
+    it.compute_transformation();
+  return is_hit;
+}
+Interaction RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
+  auto sit = SurfaceInteraction();
+  auto hit_surface = intersect(ray, sit);
+  auto ms = scene->medium.sample(sampler.get1d());
+
+  if (!hit_surface || ms.t < ray.tmax) {
+    return MediumInteraction{.t = ms.t};
+  } else {
+    return sit;
+  }
 }
 
 void RayIntegrator::render(Scene& scene) {

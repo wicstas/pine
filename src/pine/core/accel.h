@@ -2,6 +2,7 @@
 #include <pine/impl/accel/embree.h>
 #include <pine/impl/accel/bvh.h>
 
+#include <psl/variant.h>
 #include <psl/span.h>
 
 namespace pine {
@@ -18,7 +19,7 @@ struct Accel : psl::variant<BVH, EmbreeAccel> {
   uint8_t hit8(psl::span<const Ray> rays) const {
     return dispatch([&](auto&& x) { return x.hit8(rays); });
   }
-  bool intersect(Ray& ray, Interaction& it) const {
+  bool intersect(Ray& ray, SurfaceInteraction& it) const {
     return dispatch([&](auto&& x) { return x.intersect(ray, it); });
   }
 };

@@ -26,7 +26,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
   // });
   // CustomRayIntegrator(
   //     accel, samplers[0],
-  //     [](CustomRayIntegrator&, Scene&, Ray, Interaction it, bool is_hit, Sampler&) -> vec3 {
+  //     [](CustomRayIntegrator&, Scene&, Ray, SurfaceInteraction it, bool is_hit, Sampler&) -> vec3 {
   //       if (!is_hit)
   //         return vec3(0.0f);
   //       return it.material()->f({it, it.n, it.n}) * Pi;
@@ -44,7 +44,7 @@ void VoxelConeIntegrator::render(Scene& scene) {
     sampler.start_pixel(p, 0);
     auto p_film = vec2(p) / film.size();
     auto ray = scene.camera.gen_ray(p_film, sampler.get2d());
-    auto it = Interaction();
+    auto it = SurfaceInteraction();
     auto is_hit = intersect(ray, it);
     auto L = radiance(ray, it, is_hit, sampler);
     scene.camera.film().add_sample(p, L);
@@ -107,7 +107,7 @@ static const vec3 cone_sample_directions[cone_sample_count]{
     vec3(-0.182696, -0.388844, -0.903007), vec3(0.182696, 0.388844, -0.903007),
     vec3(-0.182696, 0.388844, 0.903007),   vec3(0.182696, -0.388844, 0.903007)};
 
-vec3 VoxelConeIntegrator::radiance(Ray ray, Interaction it, bool is_hit, Sampler& sampler) {
+vec3 VoxelConeIntegrator::radiance(Ray ray, SurfaceInteraction it, bool is_hit, Sampler& sampler) {
   if (is_hit) {
     it.n = face_same_hemisphere(it.n, -ray.d);
 

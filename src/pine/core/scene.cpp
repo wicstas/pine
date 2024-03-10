@@ -82,6 +82,7 @@ void scene_context(Context& ctx) {
   ctx.type<Scene>("Scene")
       .ctor<>()
       .member("camera", &Scene::camera)
+      .member("medium", &Scene::medium)
       .method("add", &Scene::add_material)
       .method("add", overloaded<Shape, psl::string>(&Scene::add_geometry))
       .method("add", overloaded<Shape, Material>(&Scene::add_geometry))

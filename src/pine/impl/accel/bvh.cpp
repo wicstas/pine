@@ -411,7 +411,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 }
 
 template <typename F>
-bool BVHImpl::Intersect(Ray& ray, Interaction& it, F&& f) const {
+bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
   if (this->nodes.size() == 0)
     return false;
   RayOctant rayOctant = RayOctant(ray);
@@ -546,16 +546,16 @@ bool BVH::hit(Ray ray) const {
   });
 }
 
-bool BVH::intersect(Ray& ray, Interaction& it) const {
+bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
   if (scene->geometries.size() == 0)
     return false;
 
-  return tbvh.Intersect(ray, it, [&](Ray& ray, Interaction& it, int i_lbvh) {
+  return tbvh.Intersect(ray, it, [&](Ray& ray, SurfaceInteraction& it, int i_lbvh) {
     auto& geometry = scene->geometries[indices[i_lbvh]];
 
     if (i_lbvh < int(lbvh.size())) {
       auto& mesh = geometry->shape.as<TriangleMesh>();
-      auto hit = lbvh[i_lbvh].Intersect(ray, it, [&](Ray& ray, Interaction& it, int index) {
+      auto hit = lbvh[i_lbvh].Intersect(ray, it, [&](Ray& ray, SurfaceInteraction& it, int index) {
         return mesh.intersect(ray, it, index);
       });
       if (hit)

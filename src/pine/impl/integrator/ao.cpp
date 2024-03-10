@@ -16,7 +16,7 @@ AOIntegrator::AOIntegrator(Accel accel, Sampler sampler)
   spp = psl::max(spp / 8, 1);
 }
 vec3 AOIntegrator::radiance(Scene&, Ray ray, Sampler& sampler) {
-  auto it = Interaction();
+  auto it = SurfaceInteraction();
   if (intersect(ray, it)) {
     it.n = face_same_hemisphere(it.n, -ray.d);
     Ray rays[8];

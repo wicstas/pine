@@ -1287,8 +1287,11 @@ inline mat3 coordinate_system(vec3 n) {
 }
 
 inline vec3 spherical_to_cartesian(float phi, float theta) {
-  float sinTheta = psl::sin(theta);
-  return vec3(sinTheta * psl::cos(phi), sinTheta * psl::sin(phi), psl::cos(theta));
+  float sin_theta = psl::sin(theta);
+  return vec3(sin_theta * psl::cos(phi), sin_theta * psl::sin(phi), psl::cos(theta));
+}
+inline vec3 spherical_to_cartesian(float phi, float sin_theta, float cos_theta) {
+  return vec3(sin_theta * psl::cos(phi), sin_theta * psl::sin(phi), cos_theta);
 }
 inline vec3 unit_square_to_cartesian(vec2 sc) {
   return spherical_to_cartesian(sc[0] * Pi * 2, sc[1] * Pi);

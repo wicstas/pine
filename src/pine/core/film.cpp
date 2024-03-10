@@ -40,7 +40,7 @@ void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
 }
 void Film::apply_tone_mapping() {
   for (auto& pixel : pixels)
-    pixel = vec4{uncharted2_filmic(vec3{pixel}), pixel.w};
+    pixel = vec4{uncharted2_filmic(vec3(pixel)), pixel.w};
 }
 void Film::apply_gamma_correction() {
   for (auto& pixel : pixels)

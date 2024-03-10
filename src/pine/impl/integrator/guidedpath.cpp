@@ -143,7 +143,6 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
   Profiler _("[GuidedPath]Render");
 
-  // auto initial_samples = area(film.size()) / 4;
   auto initial_samples = area(film.size());
   auto spatial_k = 8000;
   guide = SpatialTree(scene.get_aabb(), initial_samples, spatial_k);
@@ -156,7 +155,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   auto position = Array2d3f(film.size());
   parallel_for(film.size(), [&](vec2i p) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
-    if (auto it = Interaction(); intersect(ray, it)) {
+    if (auto it = SurfaceInteraction(); intersect(ray, it)) {
       albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
       position[p] = it.p;
@@ -205,7 +204,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
 
     if (iter->image_size == film.size()) {
       if (!psl::exchange(I_estimate_populated, true)) {
-        denoise(DenoiseQuality::Medium, I_estimate, I, albedo, normal);
+        denoise(DenoiseQuality::High, I_estimate, I, albedo, normal);
         parallel_for(film.size(),
                      [&](vec2i p) { or_variance.set(p, I[p], I_estimate[p], vec3(0.01f)); });
       }
@@ -217,7 +216,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       combine_inplace(acc_I, I, acc_weight, weight);
       acc_weight += weight;
       if (iter->prime_hit)
-        denoise(DenoiseQuality::Medium, I_estimate, acc_I, albedo, normal);
+        denoise(DenoiseQuality::High, I_estimate, acc_I, albedo, normal);
 
       if (!iter->is_final) {
         guide.refine(spatial_ratio * psl::pow<float>(iter->spp * area(iter->image_size), 0.4f));
@@ -263,7 +262,7 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
   auto& Lo = result.Lo;
   auto wi = -ray.d;
 
-  auto it = Interaction();
+  auto it = SurfaceInteraction();
   result.cost += 1;
   if (!intersect(ray, it)) {
     if (scene.env_light && pv.length == 0)
@@ -296,8 +295,8 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       ni = n;
     else
       ni = int(psl::floor(n)) + (sampler.get1d() < psl::fract(n) ? 1 : 0);
-    if (pv.length == 0)
-      stats.value = bin.estimate / bin.n;
+    // if (pv.length == 0)
+    //   stats.value = bin.estimate / bin.n;
     // stats.value = color_map(n / 10.0f);
   }
 
@@ -324,7 +323,7 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
       }
     if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto nray = it.spawn_ray(bs->wo);
-      auto nit = Interaction();
+      auto nit = SurfaceInteraction();
       cost_total += 1;
       if (intersect(nray, nit)) {
         if (nit.material()->is<EmissiveMaterial>()) {
@@ -360,9 +359,9 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
         cost_total += cost;
         if (collect_radiance_sample)
           guide.add_sample(leaf, it.p,
-                           RadianceSample(gs->wo, luminance(Li / gs->pdf * mis_indirect / prob_a),
+                           RadianceSample(gs->wo, luminance(Li) / gs->pdf * mis_indirect / prob_a,
                                           cosine * luminance(Li * f), psl::nullopt),
-                           sampler.get3d(), {});
+                           sampler.get3d());
       }
     } else {
       if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
@@ -376,9 +375,9 @@ GuidedPathIntegrator::RadianceResult GuidedPathIntegrator::radiance(Scene& scene
         if (collect_radiance_sample && !it.material()->is_delta())
           guide.add_sample(
               leaf, it.p,
-              RadianceSample(bs->wo, luminance(Li / bs->pdf * mis_indirect / (1 - prob_a)),
+              RadianceSample(bs->wo, luminance(Li) / bs->pdf * mis_indirect / (1 - prob_a),
                              psl::nullopt, cosine * luminance(Li * bs->f)),
-              sampler.get3d(), {});
+              sampler.get3d());
       }
     }
     estimate += lo;

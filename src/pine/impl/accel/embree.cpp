@@ -28,7 +28,7 @@ void intersect_func(const RTCIntersectFunctionNArguments* args) {
 
   auto ray = Ray(vec3(ray_.org_x, ray_.org_y, ray_.org_z), vec3(ray_.dir_x, ray_.dir_y, ray_.dir_z),
                  ray_.tnear, ray_.tfar);
-  auto it = Interaction();
+  auto it = SurfaceInteraction();
   if (shape.intersect(ray, it)) {
     ray_.tfar = ray.tmax;
     hit_.Ng_x = it.n.x;
@@ -157,7 +157,7 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
 
   return result;
 }
-bool EmbreeAccel::intersect(Ray& ray, Interaction& it) const {
+bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
   RTCRayHit rayhit;
   rayhit.ray.org_x = ray.o.x;
   rayhit.ray.org_y = ray.o.y;

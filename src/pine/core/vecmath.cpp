@@ -267,7 +267,8 @@ void vecmath_context(Context& ctx) {
   ctx("max_axis") = overloaded<vec3>(max_axis<float>);
   ctx("min_axis") = overloaded<vec3i>(min_axis<int>);
   ctx("min_axis") = overloaded<vec3>(min_axis<float>);
-  ctx("spherical_to_cartesian") = spherical_to_cartesian;
+  ctx("spherical_to_cartesian") = overloaded_r<vec3, float, float>(spherical_to_cartesian);
+  ctx("spherical_to_cartesian") = overloaded_r<vec3, float, float, float>(spherical_to_cartesian);
   ctx("unit_square_to_cartesian") = unit_square_to_cartesian;
   ctx("cartesian_to_spherical") = cartesian_to_spherical;
   ctx("cartesian_to_unit_square") = cartesian_to_unit_square;

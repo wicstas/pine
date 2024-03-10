@@ -44,6 +44,24 @@ struct QuadNode {
     if (!is_leaf()) [[likely]]
       child(sc).add_sample(sc, flux);
   }
+  void add_sample(vec2 sc, float flux, float half_footprint, float inv_area,
+                  bool terminate_recursion) {
+    this->flux += flux;
+    if (!terminate_recursion && !is_leaf()) {
+      auto i = 0;
+      for (float y = 0; y < 1; y += 0.5f) {
+        for (float x = 0; x < 1; x += 0.5f) {
+          auto x0 = psl::max(x, sc.x - half_footprint);
+          auto x1 = psl::min(x + 0.5f, sc.x + half_footprint);
+          auto y0 = psl::max(y, sc.y - half_footprint);
+          auto y1 = psl::min(y + 0.5f, sc.y + half_footprint);
+          auto overlap = psl::max(x1 - x0, 0.0f) * psl::max(y1 - y0, 0.0f) * inv_area;
+          auto c_sc = vec2(2 * sc.x - x * 2, 2 * sc.y - y * 2);
+          child(i++).add_sample(c_sc, flux * overlap, half_footprint, inv_area, overlap < 0.05f);
+        }
+      }
+    }
+  }
   psl::optional<PgSample> sample(vec2 u, vec2 p = vec2(0.0f), float pdf = 1) const {
     if (is_leaf()) [[unlikely]] {
       return PgSample(uniform_sphere(p + u * length()), pdf / (4 * Pi));
@@ -168,14 +186,13 @@ struct QuadTree {
   QuadTree() : root(0) {
   }
 
-  void add_sample(vec3 w, float flux, vec2) {
+  void add_sample(vec3 w, float flux) {
+    if (flux == 0.0f)
+      return;
     auto sc = inverse_uniform_sphere(w);
-    // auto footprint = root.footprint(sc);
-    // sc += footprint * (u - vec2(0.5f));
-    // sc.x = psl::fract(sc.x);
-    // sc.y = psl::clamp(sc.y, 0.0f, 1.0f);
-    root.add_sample(sc, flux);
-    n_samples += 1;
+    auto footprint = root.footprint(sc);
+    root.add_sample(sc, flux, footprint / 2, 1.0f / sqr(footprint), false);
+    // n_samples += 1;
   }
   psl::optional<PgSample> sample(vec2d u) const {
     return root.sample(u);
@@ -184,7 +201,7 @@ struct QuadTree {
     return root.pdf(inverse_uniform_sphere(w));
   }
   void prepare_next_iter() {
-    n_samples = n_samples / 2;
+    // n_samples = n_samples / 2;
     root.prepare_next_iter();
   }
   void prepare_for_initial_refine() {
@@ -193,12 +210,13 @@ struct QuadTree {
   void refine() {
     root.refine(root.flux);
   }
-  float flux_density(vec2 sc) const {
-    return root.flux_density(sc) / n_samples;
+  float flux_density(vec2) const {
+    return 0.0f;
+    // return root.flux_density(sc) / n_samples;
   }
 
   QuadNode root;
-  Atomic<int> n_samples{0};
+  // Atomic<int> n_samples{0};
 };
 
 struct DirectionalBin {
@@ -375,12 +393,12 @@ struct SpatialTree {
     root.initial_refinement(initial_samples, threshold);
   }
 
-  void add_sample(SpatialNode& leaf, vec3 p, RadianceSample s, vec3 u, vec2 ud) {
+  void add_sample(SpatialNode& leaf, vec3 p, RadianceSample s, vec3 u) {
     p += leaf.footprint() * (u - vec3(0.5f));
     p = clamp(p, aabb.lower, aabb.upper);
     auto& chosen_leaf = traverse(p);
     chosen_leaf.n_samples += 1;
-    chosen_leaf.collector->add_sample(s.w, s.flux, ud);
+    chosen_leaf.collector->add_sample(s.w, s.flux);
     if (s.weight_a) {
       chosen_leaf.weight_a += *s.weight_a;
       chosen_leaf.alpha_a += 1;

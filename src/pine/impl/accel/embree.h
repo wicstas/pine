@@ -1,5 +1,7 @@
 #pragma once
-#include <pine/core/defines.h>
+#include <pine/core/interaction.h>
+#include <pine/core/aabb.h>
+#include <pine/core/ray.h>
 
 #include <psl/function.h>
 #include <psl/span.h>
@@ -13,7 +15,7 @@ public:
 
   bool hit(Ray ray) const;
   uint8_t hit8(psl::span<const Ray> rays) const;
-  bool intersect(Ray& ray, Interaction& it) const;
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
 
 private:
   const Scene* scene;

@@ -1,11 +1,13 @@
 #pragma once
-
+#include <pine/core/medium.h>
 #include <pine/core/ray.h>
 #include <pine/core/log.h>
 
+#include <psl/variant.h>
+
 namespace pine {
 
-struct Interaction {
+struct SurfaceInteraction {
   Ray spawn_ray(vec3 wo, float distance = float_max) const {
     Ray ray;
     ray.d = wo;
@@ -31,6 +33,15 @@ struct Interaction {
 
   const Geometry* geometry = nullptr;
   float bvh = 0.0f;
+};
+
+struct MediumInteraction {
+  float t;
+  PhaseFunction pg;
+};
+
+struct Interaction : psl::variant<SurfaceInteraction, MediumInteraction> {
+  using variant::variant;
 };
 
 }  // namespace pine

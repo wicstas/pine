@@ -2,6 +2,7 @@
 
 #include <pine/core/geometry.h>
 #include <pine/core/camera.h>
+#include <pine/core/medium.h>
 #include <pine/core/light.h>
 
 #include <psl/memory.h>
@@ -27,6 +28,7 @@ struct Scene {
   psl::vector<Light> lights;
   psl::optional<EnvironmentLight> env_light;
   Camera camera;
+  Medium medium;
 };
 
 void add_box(Scene& scene, mat4 m, Material material);

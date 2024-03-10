@@ -1,6 +1,7 @@
 #pragma once
-
-#include <pine/core/scene.h>
+#include <pine/core/interaction.h>
+#include <pine/core/aabb.h>
+#include <pine/core/ray.h>
 
 #include <psl/memory.h>
 #include <psl/vector.h>
@@ -44,7 +45,7 @@ public:
   template <typename F>
   bool hit(const Ray& ray, F&& f) const;
   template <typename F>
-  bool Intersect(Ray& ray, Interaction& it, F&& f) const;
+  bool Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const;
 
   AABB get_aabb() const {
     return union_(nodes[rootIndex].aabbs[0], nodes[rootIndex].aabbs[1]);
@@ -68,7 +69,7 @@ public:
         result |= 1 << i;
     return result;
   }
-  bool intersect(Ray& ray, Interaction& it) const;
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
 
 private:
   psl::vector<BVHImpl> lbvh;

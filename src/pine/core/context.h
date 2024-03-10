@@ -441,6 +441,12 @@ struct Context {
              trait.type_name(),
              +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type&&>(arg)); }),
          ...);
+        (ctx.add_f(
+             "=",
+             +[](T& x, typename Ts::Type arg) -> T& {
+               return x = T(static_cast<typename Ts::Type&&>(arg));
+             }),
+         ...);
       }(psl::make_indexed_type_sequence<Args...>());
 
       return *this;
@@ -482,6 +488,12 @@ struct Context {
         (ctx.add_f(
              trait.type_name(),
              +[](typename Ts::Type arg) { return T(static_cast<typename Ts::Type&&>(arg)); }),
+         ...);
+        (ctx.add_f(
+             "=",
+             +[](T& x, typename Ts::Type arg) -> T& {
+               return x = T(static_cast<typename Ts::Type&&>(arg));
+             }),
          ...);
       }(psl::make_indexed_type_sequence<Args...>());
 

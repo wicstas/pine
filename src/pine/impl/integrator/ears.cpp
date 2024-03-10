@@ -284,7 +284,7 @@ void EARSIntegrator::render(Scene& scene) {
   auto normal = Array2d3f(film.size());
   parallel_for(film.size(), [&](vec2i p) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
-    auto it = Interaction();
+    auto it = SurfaceInteraction();
     if (intersect(ray, it)) {
       albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
@@ -411,7 +411,7 @@ EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene, Ray ray, S
   auto wi = -ray.d;
   auto& Lo = result.Lo;
 
-  auto it = Interaction();
+  auto it = SurfaceInteraction();
   global_stats.record_intersection_test();
   result.cost += 1;
   if (pv.length == 1)

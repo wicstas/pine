@@ -125,7 +125,7 @@ void CachedPathIntegrator::render(Scene& scene) {
   auto normal = Array2d3f(film.size());
   parallel_for(film.size(), [&](vec2i p) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
-    if (auto it = Interaction(); intersect(ray, it)) {
+    if (auto it = SurfaceInteraction(); intersect(ray, it)) {
       albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
     }
@@ -173,7 +173,7 @@ void CachedPathIntegrator::render(Scene& scene) {
 vec3 CachedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, int depth, Vertex v,
                                     int ssp) {
   auto wi = -ray.d;
-  auto it = Interaction{};
+  auto it = SurfaceInteraction{};
 
   if (!intersect(ray, it)) {
     if (scene.env_light) {
