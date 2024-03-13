@@ -26,6 +26,12 @@ struct Film {
   vec2i size() const {
     return pixels.size();
   }
+  int width() const {
+    return size().x;
+  }
+  int height() const {
+    return size().y;
+  }
   vec4* data() {
     return pixels.data();
   }

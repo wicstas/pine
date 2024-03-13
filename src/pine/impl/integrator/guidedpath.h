@@ -13,20 +13,17 @@ public:
   void render(Scene& scene) override;
 
   struct Vertex;
-  struct RadianceResult {
-    vec3 Lo;
-    float cost = 0.0f;
-  };
   struct Stats {
     vec3 value;
   };
-  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex, Stats& stats);
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex, Stats& stats);
 
 private:
   LightSampler light_sampler;
   int max_path_length;
   bool collect_radiance_sample;
   float use_learned_ratio;
+  bool enable_adrrs;
 };
 
 }  // namespace pine

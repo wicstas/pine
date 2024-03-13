@@ -123,6 +123,10 @@ inline constexpr T clamp(T val, T a, T b) {
   return psl::min(psl::max(val, a), b);
 }
 
+inline constexpr bool inside(auto val, auto min_inclusive, auto max_exclusive) {
+  return val >= min_inclusive && val < max_exclusive;
+}
+
 template <typename T, typename U>
 inline constexpr U lerp(T t, U a, U b) {
   return a * ((T)1 - t) + b * t;

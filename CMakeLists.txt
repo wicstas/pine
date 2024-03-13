@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(pine LANGUAGES CXX)
+project(pine LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,6 +63,7 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
+src/pine/core/gui.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
@@ -74,6 +75,20 @@ src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 )
+
+add_library(pine_gui
+src/contrib/glad/glad.c
+src/contrib/imgui/imgui.cpp
+src/contrib/imgui/imgui_demo.cpp
+src/contrib/imgui/imgui_draw.cpp
+src/contrib/imgui/imgui_tables.cpp
+src/contrib/imgui/imgui_widgets.cpp
+src/contrib/imgui/backends/imgui_impl_glfw.cpp
+src/contrib/imgui/backends/imgui_impl_opengl3.cpp
+)
+find_package(glfw3 REQUIRED)
+target_include_directories(pine_gui PRIVATE src/contrib/)
+target_link_libraries(pine_gui PRIVATE glfw)
 
 target_include_directories(pinelib PUBLIC src/)
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -91,7 +106,8 @@ FIND_PACKAGE(embree 4 REQUIRED)
 FIND_PACKAGE(TBB REQUIRED)
 FIND_PACKAGE(OpenImageDenoise REQUIRED)
 
-target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise)
+target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise pine_gui)
+target_include_directories(pinelib PRIVATE src/contrib)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)

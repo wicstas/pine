@@ -104,6 +104,12 @@ struct Array2d {
   vec2i size() const {
     return size_;
   }
+  int width() const {
+    return size().x;
+  }
+  int height() const {
+    return size().y;
+  }
 
   auto begin() {
     return data_.begin();
