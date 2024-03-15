@@ -72,13 +72,11 @@ void hit8_func(const RTCOccludedFunctionNArguments* args) {
 }
 void EmbreeAccel::build(const Scene* scene) {
   this->scene = scene;
-  psl::initialize_with(
-      rtc_device, (psl::Empty*)rtcNewDevice(nullptr),
-      +[](void* ptr) { rtcReleaseDevice(RTCDevice(ptr)); });
+  rtc_device = psl::opaque_shared_ptr(
+      rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
-  psl::initialize_with(
-      rtc_scene, (psl::Empty*)rtcNewScene(rtc_device),
-      +[](void* ptr) { rtcReleaseScene(RTCScene(ptr)); });
+  rtc_scene = psl::opaque_shared_ptr(
+      rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); });
   auto rtc_scene = RTCScene(this->rtc_scene.get());
   rtcSetSceneBuildQuality(rtc_scene, RTC_BUILD_QUALITY_HIGH);
 

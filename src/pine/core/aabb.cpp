@@ -60,37 +60,27 @@ bool AABB::hit(const Ray& ray) const {
   if (tmin > tmax)
     return false;
   for (int i = 0; i < 3; i++) {
-    float invRayDir = 1.0f / ray.d[i];
-    float tNear = (lower[i] - ray.o[i]) * invRayDir;
-    float tFar = (upper[i] - ray.o[i]) * invRayDir;
-    if (ray.d[i] < 0.0f) {
-      float temp = tNear;
-      tNear = tFar;
-      tFar = temp;
-    }
-    tmin = tNear > tmin ? tNear : tmin;
-    tmax = tFar < tmax ? tFar : tmax;
+    float inv_d = 1.0f / ray.d[i];
+    float t_near = (lower[i] - ray.o[i]) * inv_d;
+    float t_far = (upper[i] - ray.o[i]) * inv_d;
+    if (ray.d[i] < 0.0f)
+      psl::swap(t_far, t_near);
+    tmin = psl::max(t_near, tmin);
+    tmax = psl::min(t_far, tmax);
     if (tmin > tmax)
       return false;
   }
   return true;
 }
-bool AABB::hit(Ray ray, float& tmin, float& tmax) const {
-  tmin = ray.tmin;
-  tmax = ray.tmax;
-  if (tmin > tmax)
-    return false;
+bool AABB::intersect(Ray ray, float& tmin, float& tmax) const {
   for (int i = 0; i < 3; i++) {
-    float invRayDir = 1.0f / ray.d[i];
-    float tNear = (lower[i] - ray.o[i]) * invRayDir;
-    float tFar = (upper[i] - ray.o[i]) * invRayDir;
-    if (ray.d[i] < 0.0f) {
-      float temp = tNear;
-      tNear = tFar;
-      tFar = temp;
-    }
-    tmin = tNear > tmin ? tNear : tmin;
-    tmax = tFar < tmax ? tFar : tmax;
+    float inv_d = 1.0f / ray.d[i];
+    float t_near = (lower[i] - ray.o[i]) * inv_d;
+    float t_far = (upper[i] - ray.o[i]) * inv_d;
+    if (ray.d[i] < 0.0f)
+      psl::swap(t_far, t_near);
+    tmin = psl::max(t_near, tmin);
+    tmax = psl::min(t_far, tmax);
     if (tmin > tmax)
       return false;
   }

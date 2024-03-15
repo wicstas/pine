@@ -5,11 +5,17 @@
 
 namespace pine {
 
-struct PathIntegrator : public RayIntegrator {
+struct PathIntegrator : public RTIntegrator {
   PathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler, int max_path_length);
 
   void render(Scene& scene) override;
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override;
+
+  struct RadianceResult {
+    vec3 Lo;
+    psl::optional<float> light_pdf;
+  };
+  struct Vertex;
+  RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv);
 
 private:
   LightSampler light_sampler;

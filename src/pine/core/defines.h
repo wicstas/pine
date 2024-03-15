@@ -29,6 +29,7 @@ struct Function;
 struct Material;
 struct Geometry;
 struct Context;
+struct Sampler;
 struct Camera;
 struct Scene;
 struct Light;

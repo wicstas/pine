@@ -32,6 +32,8 @@ public:
   }
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   Interaction intersect_tr(Ray& ray, Sampler& sampler) const;
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  psl::optional<MediumSample> sample_medium(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
 
   bool intersect_cases(Ray& ray, Sampler& sampler, auto f_escape, auto f_surface,
                        auto f_medium) const {

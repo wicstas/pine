@@ -121,7 +121,7 @@ struct Variable {
 
   friend struct VariableConcept;
 
-  Variable() : Variable(psl::Empty()) {
+  Variable() : Variable(psl::Any()) {
   }
   template <typename T>
   Variable(T x) : model(psl::make_unique<VariableModel<T, T>>(psl::move(x))) {

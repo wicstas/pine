@@ -52,7 +52,7 @@ struct AABB {
   bool contains(vec3 p) const;
 
   bool hit(const Ray& ray) const;
-  bool hit(Ray ray, float& tmin, float& tmax) const;
+  bool intersect(Ray ray, float& tmin, float& tmax) const;
 
   PINE_ALWAYS_INLINE bool hit(const RayOctant& r, float tmin, float& tmax) const {
     auto p = &lower[0];

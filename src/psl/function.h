@@ -42,9 +42,40 @@ struct _is_psl_function<function<T>> : TrueType {};
 template <typename T>
 constexpr bool is_psl_function = _is_psl_function<T>::value;
 
+struct opaque_unique_ptr : unique_ptr<Any, function<void(void*)>> {
+  opaque_unique_ptr() = default;
+  template <typename T>
+  opaque_unique_ptr(T* x) : unique_ptr((Any*)x, [](void* ptr) { delete (T*)ptr; }) {
+  }
+  template <typename T>
+  opaque_unique_ptr(T* x, auto f) : unique_ptr((Any*)x, [f](void* ptr) { f((T*)ptr); }) {
+  }
+};
+struct opaque_shared_ptr : shared_ptr<Any, function<void(void*)>> {
+  opaque_shared_ptr() = default;
+  template <typename T>
+  opaque_shared_ptr(T* x) : shared_ptr((Any*)x, [](void* ptr) { delete (T*)ptr; }) {
+  }
+  template <typename T>
+  opaque_shared_ptr(T* x, auto f) : shared_ptr((Any*)x, [f](void* ptr) { f((T*)ptr); }) {
+  }
+};
+
 template <typename T>
-using unique_ptr_with_custom_deleter = unique_ptr<T, psl::function<void(T*)>>;
+opaque_unique_ptr make_opaque_unique_ptr(T x, auto f) {
+  return opaque_unique_ptr(new T(psl::move(x)), f);
+}
 template <typename T>
-using shared_ptr_with_custom_deleter = shared_ptr<T, psl::function<void(T*)>>;
+opaque_unique_ptr make_opaque_unique_ptr(T x) {
+  return opaque_unique_ptr(new T(psl::move(x)));
+}
+template <typename T>
+opaque_shared_ptr make_opaque_shared_ptr(T x, auto f) {
+  return opaque_shared_ptr(new T(psl::move(x)), f);
+}
+template <typename T>
+opaque_shared_ptr make_opaque_shared_ptr(T x) {
+  return opaque_shared_ptr(new T(psl::move(x)));
+}
 
 }  // namespace psl

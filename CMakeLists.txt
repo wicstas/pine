@@ -101,12 +101,13 @@ set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_INSTALL OFF)  
 set(ASSIMP_INSTALL_PDB OFF)
 add_subdirectory(src/contrib/assimp)
+add_subdirectory(src/contrib/nanovdb)
 
 FIND_PACKAGE(embree 4 REQUIRED)
 FIND_PACKAGE(TBB REQUIRED)
 FIND_PACKAGE(OpenImageDenoise REQUIRED)
 
-target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise pine_gui)
+target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise pine_gui nanovdb)
 target_include_directories(pinelib PRIVATE src/contrib)
 
 #Pine executable

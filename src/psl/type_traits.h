@@ -4,7 +4,7 @@
 
 namespace psl {
 
-struct Empty {};
+struct Any {};
 
 struct TrueType {
   static constexpr bool value = true;

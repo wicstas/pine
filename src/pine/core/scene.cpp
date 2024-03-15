@@ -30,6 +30,11 @@ void Scene::add_light(Light light) {
   std::lock_guard<std::mutex> lock{mutex};
   lights.push_back(psl::move(light));
 }
+void Scene::add_medium(Medium medium) {
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> lock{mutex};
+  mediums.push_back(psl::move(medium));
+}
 void Scene::set_camera(Camera camera) {
   this->camera = psl::move(camera);
 }
@@ -82,13 +87,14 @@ void scene_context(Context& ctx) {
   ctx.type<Scene>("Scene")
       .ctor<>()
       .member("camera", &Scene::camera)
-      .member("medium", &Scene::medium)
       .method("add", &Scene::add_material)
       .method("add", overloaded<Shape, psl::string>(&Scene::add_geometry))
       .method("add", overloaded<Shape, Material>(&Scene::add_geometry))
-      .method("add", overloaded<Light>(&Scene::add_light))
+      .method("add", &Scene::add_light)
+      .method("add", &Scene::add_medium)
       .method("set", &Scene::set_camera)
       .method("set", &Scene::set_env_light)
+      .method("get_aabb", &Scene::get_aabb)
       .method("reset", &Scene::reset);
   ctx("add_box") = overloaded<Scene&, mat4, Material>(add_box);
   ctx("add_box") = overloaded<Scene&, mat4, psl::string>(add_box);

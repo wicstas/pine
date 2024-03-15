@@ -10,7 +10,7 @@ Context::Context() {
   auto& context = *this;
   context.type<Any>("any");
   context.type<Variable>("variable");
-  context.type<psl::Empty>("void");
+  context.type<psl::Any>("void");
   context.type<void>("void");
   context.type<Function>("function");
   context.type<psl::span<const Variable*>>("@args");

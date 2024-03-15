@@ -597,6 +597,10 @@ void geometry_context(Context& ctx) {
       .member("n", &SurfaceInteraction::n)
       .member("p", &SurfaceInteraction::p)
       .member("uv", &SurfaceInteraction::uv);
+  ctx.type<AABB>("AABB")
+      .ctor<vec3, vec3>()
+      .member("lower", &AABB::lower)
+      .member("upper", &AABB::upper);
   ctx.type<Sphere>("Sphere").ctor<vec3, float>();
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();

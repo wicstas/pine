@@ -62,7 +62,7 @@ struct QuadNode {
     auto y0 = psl::max(0.0f, sc.y - half_footprint);
     auto y1 = psl::min(1.0f, sc.y + half_footprint);
     auto overlap = psl::max(x1 - x0, 0.0f) * psl::max(y1 - y0, 0.0f) * inv_area;
-    if (overlap > 0.05f) {
+    if (overlap > 0.01f) {
       this->flux += flux * overlap;
       this->nsamples += overlap;
       if (!is_leaf()) {

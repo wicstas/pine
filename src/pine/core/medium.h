@@ -1,6 +1,8 @@
 #pragma once
 #include <pine/core/vecmath.h>
+#include <pine/core/aabb.h>
 
+#include <psl/function.h>
 #include <psl/variant.h>
 
 namespace pine {
@@ -19,21 +21,7 @@ inline float henyey_greenstein(float cos_theta, float g) {
 struct HgPhaseFunction {
   HgPhaseFunction(float g) : g(g) {
   }
-  PhaseFunctionSample sample(vec3 wi, vec2 u) const {
-    auto ps = PhaseFunctionSample();
-    auto cos_theta = 0.0f;
-    if (std::abs(g) < 1e-3f)
-      cos_theta = 1 - 2 * u[0];
-    else
-      cos_theta = -1 / (2 * g) * (1 + sqr(g) - sqr((1 - sqr(g)) / (1 + g - 2 * g * u[0])));
-
-    auto sin_theta = psl::safe_sqrt(1 - sqr(cos_theta));
-    auto phi = 2 * Pi * u[1];
-    auto m = coordinate_system(wi);
-    ps.wo = m * spherical_to_cartesian(phi, sin_theta, cos_theta);
-    ps.f = ps.pdf = henyey_greenstein(dot(wi, ps.wo), g);
-    return ps;
-  }
+  PhaseFunctionSample sample(vec3 wi, vec2 u) const;
   float f(vec3 wi, vec3 wo) const {
     return henyey_greenstein(dot(wi, wo), g);
   }
@@ -46,6 +34,8 @@ private:
 };
 
 struct PhaseFunction : psl::variant<HgPhaseFunction> {
+  using variant::variant;
+
   PhaseFunctionSample sample(vec3 wi, vec2 u) const {
     return dispatch([&](auto&& x) { return x.sample(wi, u); });
   }
@@ -59,20 +49,55 @@ struct PhaseFunction : psl::variant<HgPhaseFunction> {
 
 struct MediumSample {
   float t;
+  vec3 p;
+  float tr;
+  float pdf;
+  float sigma;
   PhaseFunction pg;
 };
 
 struct HomogeneousMedium {
-  MediumSample sample(float u) const {
-    return {-psl::log(u) / density, {}};
+  HomogeneousMedium(AABB aabb, float sigma_a, float sigma_s)
+      : aabb(aabb), sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
   }
 
-  float density;
+  psl::optional<MediumSample> sample(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+
+private:
+  AABB aabb;
+  float sigma_s;
+  float sigma_z;
 };
 
-struct Medium : psl::variant<HomogeneousMedium> {
-  MediumSample sample(float u) const {
-    return dispatch([&](auto&& x) { return x.sample(u); });
+struct VDBMedium {
+  VDBMedium(psl::string filename, mat4 transform, float sigma_s, float sigma_z);
+  psl::optional<MediumSample> sample(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  float density(vec3 p) const;
+
+private:
+  psl::opaque_shared_ptr handle;
+  void* grid;
+  mat4 transform;
+  AABB aabb;
+  float sigma_maj;
+  float sigma_maj_inv;
+  float sigma_s;
+  float sigma_z;
+  vec3 index_start;
+  vec3 index_end;
+};
+
+struct Medium : psl::variant<HomogeneousMedium, VDBMedium> {
+  psl::optional<MediumSample> sample(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
+    auto ms = dispatch([&](auto&& x) { return x.sample(p, d, tmax, sampler); });
+    if (ms)
+      ms->p = p + d * ms->t;
+    return ms;
+  }
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
+    return dispatch([&](auto&& x) { return x.transmittance(p, d, tmax, sampler); });
   }
 };
 

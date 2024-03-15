@@ -6,15 +6,15 @@ namespace pine {
 
 struct Ray {
   Ray() = default;
-  Ray(vec3 o, vec3 d, float tmin = 0.0f, float tmax = float_max)
-      : o(o), d(d), tmin(tmin), tmax(tmax){};
+  Ray(vec3 o, vec3 d) : o(o), d(d), tmin(0.0f), tmax(float_max){};
+  Ray(vec3 o, vec3 d, float tmin, float tmax) : o(o), d(d), tmin(tmin), tmax(tmax){};
 
   vec3 operator()(float t) const {
     return o + t * d;
   }
 
   psl::string to_string() const {
-    return psl::to_string("Ray(o=", o, ", d=", d, ", tmin=", tmin, ", tmax=", tmax, ")");
+    return psl::to_string("Ray{o=", o, ", d=", d, ", tmin=", tmin, ", tmax=", tmax, "}");
   }
 
   vec3 o;

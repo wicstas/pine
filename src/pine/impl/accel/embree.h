@@ -19,8 +19,8 @@ public:
 
 private:
   const Scene* scene;
-  psl::shared_ptr_with_custom_deleter<psl::Empty> rtc_device;
-  psl::shared_ptr_with_custom_deleter<psl::Empty> rtc_scene;
+  psl::opaque_shared_ptr rtc_device;
+  psl::opaque_shared_ptr rtc_scene;
 };
 
 }  // namespace pine

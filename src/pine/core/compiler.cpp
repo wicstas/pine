@@ -1118,7 +1118,7 @@ void ClassDefinition::emit(Context& context, Bytecodes& bytecodes) const {
   context("__" + name) =
       Function(tag<InternalClass, psl::span<const Variable*>>(
                    [n = members.size()](psl::span<const Variable*>) {
-                     return InternalClass{psl::vector_n_of(n, Variable(psl::Empty()))};
+                     return InternalClass{psl::vector_n_of(n, Variable(psl::Any()))};
                    }),
                TypeTag(name, false), context.tags<>());
 

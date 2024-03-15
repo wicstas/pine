@@ -16,6 +16,7 @@ struct Scene {
   void add_geometry(Shape shape, psl::string material_name);
   void add_geometry(Shape shape, Material material);
   void add_light(Light light);
+  void add_medium(Medium medium);
   void set_camera(Camera camera);
   void set_env_light(EnvironmentLight env_light);
 
@@ -26,9 +27,9 @@ struct Scene {
   psl::map<psl::string, psl::shared_ptr<Material>> materials;
   psl::vector<psl::shared_ptr<Geometry>> geometries;
   psl::vector<Light> lights;
+  psl::vector<Medium> mediums;
   psl::optional<EnvironmentLight> env_light;
   Camera camera;
-  Medium medium;
 };
 
 void add_box(Scene& scene, mat4 m, Material material);
