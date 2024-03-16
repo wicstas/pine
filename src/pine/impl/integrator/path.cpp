@@ -14,13 +14,14 @@ PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_
     Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 struct PathIntegrator::Vertex {
-  Vertex(int length, vec3 n, vec3 p, float pdf, bool is_delta = false)
-      : length(length), n(n), p(p), pdf(pdf), is_delta(is_delta) {
+  Vertex(int length, vec3 throughput, vec3 n, vec3 p, float pdf, bool is_delta = false)
+      : length(length), throughput(throughput), n(n), p(p), pdf(pdf), is_delta(is_delta) {
   }
   static Vertex first_vertex() {
-    return Vertex(0, vec3(0), vec3(0), 0.0f, true);
+    return Vertex(0, vec3(1), vec3(0), vec3(0), 0.0f, true);
   }
   int length;
+  vec3 throughput;
   vec3 n;
   vec3 p;
   float pdf;
@@ -50,26 +51,10 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   auto wi = -ray.d;
   auto& Lo = result.Lo;
 
-  auto tr0 = transmittance(ray.o, ray.d, ray.tmax, sampler);
-  auto discontinue_path = false;
-
-  auto it = SurfaceInteraction();
-  if (!intersect(ray, it)) {
-    if (scene.env_light) {
-      Lo += tr0 * scene.env_light->color(ray.d);
-      if (!pv.is_delta)
-        result.light_pdf = scene.env_light->pdf(pv.n, ray.d);
-    }
-    discontinue_path = true;
-  } else if (it.material()->is<EmissiveMaterial>()) {
-    Lo += tr0 * it.material()->le({it, wi});
-    if (!pv.is_delta)
-      result.light_pdf = light_sampler.pdf(it.geometry, it, ray, pv.n);
-    discontinue_path = true;
-  }
-
-  if (pv.length + 1 < max_path_length)
-    if (auto ms = sample_medium(ray.o, ray.d, ray.tmax, sampler)) {
+  auto ms = sample_medium(ray.o, ray.d, ray.tmax, sampler);
+  if (ms) {
+    ray.tmax = ms->t;
+    if (pv.length + 1 < max_path_length) {
       if (auto ls = light_sampler.sample(ms->p, vec3(0.0f), sampler.get1d(), sampler.get2d())) {
         if (!hit(Ray(ms->p, ls->wo, 0.0f, ls->distance))) {
           auto tr = transmittance(ms->p, ls->wo, ls->distance, sampler);
@@ -83,13 +68,33 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
         }
       }
       auto ps = ms->pg.sample(wi, sampler.get2d());
-      auto nv = Vertex(pv.length + 1, vec3(0.0f), ms->p, ps.pdf);
-      auto [Li, light_pdf] = radiance(scene, Ray(ms->p, ps.wo), sampler, nv);
-      auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
-      Lo += ms->tr * Li * ms->sigma * ps.f / ps.pdf * mis / ms->pdf;
+      auto nv = Vertex(pv.length + 1, pv.throughput * ms->tr * ms->sigma * ps.f / ps.pdf / ms->pdf,
+                       vec3(0.0f), ms->p, ps.pdf);
+      auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(nv.throughput), 0.05f);
+      if (rr >= 1 || sampler.get1d() < rr) {
+        auto [Li, light_pdf] = radiance(scene, Ray(ms->p, ps.wo), sampler, nv);
+        auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
+        Lo += Li * (ms->tr * ms->sigma * ps.f / ps.pdf * mis / ms->pdf / psl::min(1.0f, rr));
+      }
     }
+  }
 
-  if (discontinue_path || pv.length + 1 >= max_path_length)
+  auto it = SurfaceInteraction();
+  if (!intersect(ray, it)) {
+    if (!ms && scene.env_light) {
+      Lo += scene.env_light->color(ray.d);
+      if (!pv.is_delta)
+        result.light_pdf = scene.env_light->pdf(pv.n, ray.d);
+    }
+    return result;
+  } else if (it.material()->is<EmissiveMaterial>()) {
+    Lo += it.material()->le({it, wi});
+    if (!pv.is_delta)
+      result.light_pdf = light_sampler.pdf(it.geometry, it, ray, pv.n);
+    return result;
+  }
+
+  if (pv.length + 1 >= max_path_length)
     return result;
 
   if (!it.material()->is_delta()) {
@@ -99,11 +104,11 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
         auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
         if (ls->light->is_delta()) {
           auto f = it.material()->f({it, wi, ls->wo});
-          Lo += tr0 * ls->le * tr * cosine * f / ls->pdf;
+          Lo += ls->le * tr * cosine * f / ls->pdf;
         } else {
           auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
           auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-          Lo += tr0 * ls->le * tr * cosine * f / ls->pdf * mis;
+          Lo += ls->le * tr * cosine * f / ls->pdf * mis;
         }
       }
     }
@@ -111,10 +116,14 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
 
   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
     auto cosine = absdot(bs->wo, it.n);
-    auto nv = Vertex(pv.length + 1, it.n, it.p, bs->pdf, it.material()->is_delta());
-    auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
-    auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
-    Lo += tr0 * Li * cosine * bs->f / bs->pdf * mis;
+    auto nv = Vertex(pv.length + 1, pv.throughput * cosine * bs->f / bs->pdf, it.n, it.p, bs->pdf,
+                     it.material()->is_delta());
+    auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(nv.throughput), 0.05f);
+    if (rr >= 1 || sampler.get1d() < rr) {
+      auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
+      auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
+      Lo += Li * bs->f * (cosine / bs->pdf * mis / psl::min(1.0f, rr));
+    }
   }
 
   return result;

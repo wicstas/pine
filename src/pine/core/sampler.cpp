@@ -108,16 +108,16 @@ void MltSampler::ensure_ready(int dim) {
   PrimarySample& Xi = X[dim];
 
   if (Xi.lastModificationIndex < lastLargeStepIndex) {
-    Xi.value = rng.uniformf();
+    Xi.value = rng.nextf();
     Xi.lastModificationIndex = lastLargeStepIndex;
   }
 
   Xi.backup();
   if (largeStep) {
-    Xi.value = rng.uniformf();
+    Xi.value = rng.nextf();
   } else {
     int64_t nSmall = sample_index - Xi.lastModificationIndex;
-    float normalSample = psl::sqrt(2.0f) * erf_inv(2 * rng.uniformf() - 1);
+    float normalSample = psl::sqrt(2.0f) * erf_inv(2 * rng.nextf() - 1);
     float effSigma = sigma * psl::sqrt((float)nSmall);
     Xi.value = psl::fract(Xi.value + normalSample * effSigma);
   }

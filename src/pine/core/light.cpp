@@ -124,14 +124,20 @@ float Atmosphere::pdf(vec3, vec3 wo) const {
   return distr.pdf(ic) / (4 * Pi);
 }
 
-ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint)
+ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint, float elevation, float rotation)
     : image{psl::move(image_)}, tint{tint} {
   CHECK(image);
   auto density = Array2d<float>{image->size()};
   for_2d(image->size(), [&](auto p) { density[p] = length((*image)[p]); });
   distr = Distribution2D(density, 20);
+  if (elevation != 90.0f || rotation != 0.0f) {
+    l2w = rotate_x((1 - elevation) * Pi) * rotate_y(rotation * Pi * 2);
+    w2l = inverse(*l2w);
+  }
 }
 vec3 ImageSky::color(vec3 wo) const {
+  if (w2l)
+    wo = *w2l * wo;
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
@@ -143,12 +149,16 @@ LightSample ImageSky::sample(vec3, vec3, vec2 u2) const {
   auto sc = ic2sc(ds.p, image->size());
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
+  if (l2w)
+    ls.wo = *l2w * ls.wo;
   ls.distance = float_max;
   ls.pdf = ds.pdf / (4 * Pi);
   ls.le = tint * (*image)[ds.p];
   return ls;
 }
 float ImageSky::pdf(vec3, vec3 wo) const {
+  if (w2l)
+    wo = *w2l * wo;
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
@@ -166,7 +176,7 @@ void light_context(Context& ctx) {
   ctx.type<Atmosphere>("Atmosphere").ctor<vec3, vec3>();
   ctx.type<ImageSky>("ImageSky")
       .ctor<psl::shared_ptr<Image>>()
-      .ctor<psl::shared_ptr<Image>, vec3>();
+      .ctor<psl::shared_ptr<Image>, vec3, float, float>();
   ctx.type<EnvironmentLight>("EnvironmentLight").ctor_variant<Atmosphere, Sky, ImageSky>();
 }
 

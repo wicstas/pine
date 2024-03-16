@@ -280,7 +280,7 @@ void BVHImpl::optimize() {
       for (int i = 0; i < (int)nodes.size() / 100; i++) {
         int nodeIndex = -1;
         do {
-          nodeIndex = sampler.uniform64u() % nodes.size();
+          nodeIndex = sampler.next64u() % nodes.size();
         } while ((nodes[nodeIndex].primitiveIndices.size() != 0 || nodes[nodeIndex].removed ||
                   nodes[nodeIndex].parent == -1 || nodes[nodes[nodeIndex].parent].removed ||
                   nodes[nodes[nodeIndex].parent].parent == -1 ||

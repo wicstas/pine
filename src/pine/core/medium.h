@@ -79,7 +79,7 @@ struct VDBMedium {
 private:
   psl::opaque_shared_ptr handle;
   void* grid;
-  mat4 transform;
+  mat4 l2w, w2l;
   AABB aabb;
   float sigma_maj;
   float sigma_maj_inv;

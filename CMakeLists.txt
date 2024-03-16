@@ -34,7 +34,6 @@ src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/interaction.cpp
 src/pine/core/integrator.cpp
-src/pine/core/voxelizer.cpp
 src/pine/core/geometry.cpp
 src/pine/core/material.cpp
 src/pine/core/profiler.cpp
@@ -67,7 +66,6 @@ src/pine/core/gui.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
-src/pine/impl/integrator/voxelcone.cpp
 src/pine/impl/integrator/denoiser.cpp
 src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp

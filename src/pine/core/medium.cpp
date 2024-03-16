@@ -46,7 +46,7 @@ vec3 HomogeneousMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler&) cons
 }
 
 VDBMedium::VDBMedium(psl::string filename, mat4 transform, float sigma_a, float sigma_s)
-    : transform(transform), sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
+    : l2w(transform), w2l(inverse(l2w)), sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
   using Handle = nanovdb::GridHandle<nanovdb::HostBuffer>;
   auto handle = nanovdb::io::readGrid(filename.c_str());
   auto grid = handle.grid<float>();
@@ -79,19 +79,26 @@ float ln(float x) {
 }
 
 psl::optional<MediumSample> VDBMedium::sample(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
+  auto p_end = p + d * tmax;
+  p = vec3(w2l * vec4(p, 1.0f));
+  p_end = vec3(w2l * vec4(p_end, 1.0f));
+  d = vec3(mat3(w2l) * d);
+  auto i = max_axis(abs(d));
+  tmax = (p_end - p)[i] / d[i];
   auto tmin = 0.0f;
   if (!aabb.intersect(Ray(p, d), tmin, tmax))
     return psl::nullopt;
 
   auto ms = MediumSample{.pg = HgPhaseFunction(0.0f)};
 
-  auto u = sampler.get1d();
-  ms.t = tmin - ln(1 - sampler.get1d()) * sigma_maj_inv;
+  auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
+  auto u = rng.nextf();
+  ms.t = tmin - ln(1 - rng.nextf()) * sigma_maj_inv;
   while (ms.t < tmax) {
     auto sigma_n = sigma_maj - sigma_z * density(p + d * ms.t);
     auto dd = sigma_n * sigma_maj_inv;
     if (u < dd) {
-      ms.t += -ln(1 - sampler.get1d()) * sigma_maj_inv;
+      ms.t += -ln(1 - rng.nextf()) * sigma_maj_inv;
       u /= dd;
     } else {
       break;
@@ -100,17 +107,45 @@ psl::optional<MediumSample> VDBMedium::sample(vec3 p, vec3 d, float tmax, Sample
   if (ms.t >= tmax)
     return psl::nullopt;
 
-  ms.sigma = sigma_s * density(p + d * ms.t);
-  ms.tr = (1.0f - transmittance(p, d, tmax, sampler).x) / ms.sigma;
+  ms.sigma = sigma_s;
+  ms.tr = 1.0f / sigma_z;
   ms.pdf = 1.0f;
   return ms;
+
+  // auto optic_thickness = -psl::log(1 - sampler.get1d());
+  // auto dt = 3.0f * psl::max(sampler.get1d(), 0.2f) * sigma_maj_inv;
+  // while (true) {
+  //   if (tmin >= tmax)
+  //     return psl::nullopt;
+  //   auto sigma_t = sigma_z * density(p + d * (tmin + dt / 2));
+  //   optic_thickness -= sigma_t * dt;
+  //   if (optic_thickness <= 0) {
+  //     tmin += dt + optic_thickness / sigma_t;
+  //     break;
+  //   } else {
+  //     tmin += dt;
+  //   }
+  // }
+  // ms.t = tmin;
+  // ms.sigma = sigma_s;
+  // ms.tr = 1.0f / sigma_z;
+  // ms.pdf = 1.0f;
+  // return ms;
 }
 vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler [[maybe_unused]]) const {
+  auto p_end = p + d * tmax;
+  p = vec3(w2l * vec4(p, 1.0f));
+  p_end = vec3(w2l * vec4(p_end, 1.0f));
+  d = vec3(mat3(w2l) * d);
+  auto i = max_axis(abs(d));
+  tmax = (p_end - p)[i] / d[i];
+
   auto tmin = 0.0f;
   if (aabb.intersect(Ray(p, d), tmin, tmax)) {
-    auto u = sampler.get1d();
+    auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
+    auto u = rng.nextf();
     while (true) {
-      tmin += -ln(1 - sampler.get1d()) * sigma_maj_inv;
+      tmin += -ln(1 - rng.nextf()) * sigma_maj_inv;
       if (tmin >= tmax)
         return vec3(1.0f);
 

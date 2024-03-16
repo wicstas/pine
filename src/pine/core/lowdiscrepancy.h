@@ -53,7 +53,7 @@ inline uint64_t inverse_radical_inverse(uint64_t inverse, int base, int nDigits)
 template <typename T>
 void shuffle(T* samp, int count, int nDimensions, RNG& rng) {
   for (int i = 0; i < count; i++) {
-    auto other = i + rng.uniform32u(count - i);
+    auto other = i + rng.next32u(count - i);
     for (int j = 0; j < nDimensions; j++)
       psl::swap(samp[nDimensions * i + j], samp[nDimensions * other + j]);
   }
@@ -121,7 +121,7 @@ inline void GrayCodeSample(const uint32_t* C0, const uint32_t* C1, uint32_t n, v
 }
 
 inline void VanDerCorput(int nPixelSamples, float* samples, RNG& rng) {
-  uint32_t scramble = rng.uniform32u();
+  uint32_t scramble = rng.next32u();
   const uint32_t CVanDerCorput[32] = {
       // clang-format off
         0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000,
@@ -137,7 +137,7 @@ inline void VanDerCorput(int nPixelSamples, float* samples, RNG& rng) {
 }
 
 inline void Sobol2D(int nPixelSamples, vec2* samples, RNG& rng) {
-  vec2u32 scramble = {rng.uniform32u(), rng.uniform32u()};
+  vec2u32 scramble = {rng.next32u(), rng.next32u()};
   const uint32_t CSobol[2][32] = {
       {0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000, 0x2000000, 0x1000000,
        0x800000,   0x400000,   0x200000,   0x100000,   0x80000,   0x40000,   0x20000,   0x10000,

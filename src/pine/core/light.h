@@ -84,7 +84,8 @@ private:
   Distribution2D distr;
 };
 struct ImageSky {
-  ImageSky(psl::shared_ptr<Image> image, vec3 tint = vec3{1});
+  ImageSky(psl::shared_ptr<Image> image, vec3 tint = vec3{1}, float elevation = 1.0f,
+           float rotation = 0.0f);
 
   vec3 color(vec3 wo) const;
   LightSample sample(vec3 p, vec3 n, vec2 u2) const;
@@ -94,6 +95,7 @@ private:
   psl::shared_ptr<Image> image;
   Distribution2D distr;
   vec3 tint;
+  psl::optional<mat3> l2w, w2l;
 };
 
 struct Light

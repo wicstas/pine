@@ -28,10 +28,10 @@ struct UniformSampler {
   void start_next_sample() {
   }
   float get1d() {
-    return rng.uniformf();
+    return rng.nextf();
   }
   vec2 get2d() {
-    return rng.uniform2f();
+    return rng.next2f();
   }
 
 private:
@@ -176,7 +176,7 @@ struct MltSampler {
     sample_index++;
     streamIndex = 0;
     dimension = 0;
-    largeStep = rng.uniformf() < largeStepProbability;
+    largeStep = rng.nextf() < largeStepProbability;
   }
 
   void start_stream(int index) {

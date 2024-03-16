@@ -100,20 +100,20 @@ struct RNG {
     s[1] = split_mix_64(seed);
   }
 
-  uint64_t uniform64u(uint64_t max) {
-    return uniform64u() % max;
+  uint64_t next64u(uint64_t max) {
+    return next64u() % max;
   }
 
-  uint32_t uniform32u(uint32_t max) {
-    return uniform32u() % max;
+  uint32_t next32u(uint32_t max) {
+    return next32u() % max;
   }
 
-  uint32_t uniform32u() {
-    uint64_t h = uniform64u();
+  uint32_t next32u() {
+    uint64_t h = next64u();
     return h ^ (h >> 32);
   }
 
-  uint64_t uniform64u() {
+  uint64_t next64u() {
     const auto s0 = s[0];
     auto s1 = s[1];
     const auto result = s0 + s1;
@@ -125,15 +125,15 @@ struct RNG {
     return result;
   }
 
-  float uniformf() {
-    auto u64 = uniform64u();
+  float nextf() {
+    auto u64 = next64u();
     return psl::min(uint32_t(u64 ^ (u64 >> 32)) * 0x1p-32f, one_minus_epsilon);
   }
-  vec2 uniform2f() {
-    return {uniformf(), uniformf()};
+  vec2 next2f() {
+    return {nextf(), nextf()};
   }
-  vec3 uniform3f() {
-    return {uniformf(), uniformf(), uniformf()};
+  vec3 next3f() {
+    return {nextf(), nextf(), nextf()};
   }
 
   uint64_t s[2];
