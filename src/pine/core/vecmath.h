@@ -809,19 +809,15 @@ psl::string to_string(Vector4<T> x) {
 }
 template <typename T>
 psl::string to_string(Matrix2<T> x) {
-  return psl::to_string('[', x[0][1], ' ', x[1][1], "; ", x[0][0], ' ', x[1][0], ']');
+  return psl::to_string('[', x[0], "; ", x[1], ']');
 }
 template <typename T>
 psl::string to_string(Matrix3<T> x) {
-  return psl::to_string('[', x[0][2], ' ', x[1][2], ' ', x[2][2], "; ", x[0][1], ' ', x[1][1], ' ',
-                        x[2][1], "; ", x[0][0], ' ', x[1][0], ' ', x[2][0], ']');
+  return psl::to_string('[', x[0], "; ", x[1], "; ", x[2], ']');
 }
 template <typename T>
 psl::string to_string(Matrix4<T> x) {
-  return psl::to_string('[', x[0][3], ' ', x[1][3], ' ', x[2][3], ' ', x[3][3], "; ", x[0][2], ' ',
-                        x[1][2], ' ', x[2][2], ' ', x[3][2], "; ", x[0][1], ' ', x[1][1], ' ',
-                        x[2][1], ' ', x[3][1], "; ", x[0][0], ' ', x[1][0], ' ', x[2][0], ' ',
-                        x[3][0], ']');
+  return psl::to_string('[', x[0], "; ", x[1], "; ", x[2], "; ", x[3], ']');
 }
 
 template <typename T>

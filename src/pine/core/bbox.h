@@ -26,6 +26,9 @@ struct AABB {
   float centroid(int dim) const {
     return (lower[dim] + upper[dim]) / 2;
   }
+  float diagonal(int dim) const {
+    return upper[dim] - lower[dim];
+  }
   vec3 diagonal() const {
     return upper - lower;
   }
@@ -74,6 +77,16 @@ struct AABB {
 
   vec3 lower = vec3{float_max};
   vec3 upper = vec3{-float_max};
+};
+
+struct OBB {
+  OBB() = default;
+  OBB(AABB aabb, mat4 m);
+  bool intersect(vec3 o, vec3 d, float& tmin, float& tmax) const;
+
+  vec3 p;
+  vec3 dim;
+  vec3 n[3];
 };
 
 }  // namespace pine

@@ -28,6 +28,7 @@ target_link_libraries(psl_test psl)
 
 #Pine Core Library
 add_library(pinelib
+src/pine/core/phase_function.cpp
 src/pine/core/lowdiscrepancy.cpp
 src/pine/core/sobolmatrices.cpp
 src/pine/core/lightsampler.cpp
@@ -55,7 +56,7 @@ src/pine/core/accel.cpp
 src/pine/core/array.cpp
 src/pine/core/color.cpp
 src/pine/core/image.cpp
-src/pine/core/aabb.cpp
+src/pine/core/bbox.cpp
 src/pine/core/node.cpp
 src/pine/core/film.cpp
 src/pine/core/bxdf.cpp

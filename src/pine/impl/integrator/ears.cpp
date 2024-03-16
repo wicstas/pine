@@ -405,115 +405,119 @@ void EARSIntegrator::render(Scene& scene) {
   set_progress(1.0f);
 }
 
-EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
-                                                        Vertex pv, Stats& stats) {
-  auto result = RadianceResult();
-  auto wi = -ray.d;
-  auto& Lo = result.Lo;
+EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene [[maybe_unused]],
+                                                        Ray ray [[maybe_unused]],
+                                                        Sampler& sampler [[maybe_unused]],
+                                                        Vertex pv [[maybe_unused]],
+                                                        Stats& stats [[maybe_unused]]) {
+  return {};
+  // auto result = RadianceResult();
+  // auto wi = -ray.d;
+  // auto& Lo = result.Lo;
 
-  auto it = SurfaceInteraction();
-  global_stats.record_intersection_test();
-  result.cost += 1;
-  if (pv.length == 1)
-    result.cost += 10;
-  if (!intersect(ray, it)) {
-    if (scene.env_light) {
-      Lo += scene.env_light->color(ray.d);
-      if (!pv.is_delta)
-        result.light_pdf = scene.env_light->pdf(pv.n, ray.d);
-    }
-    global_stats.record_path_length(pv.length + 1);
-    return result;
-  }
+  // auto it = SurfaceInteraction();
+  // global_stats.record_intersection_test();
+  // result.cost += 1;
+  // if (pv.length == 1)
+  //   result.cost += 10;
+  // if (!intersect(ray, it)) {
+  //   if (scene.env_light) {
+  //     Lo += scene.env_light->color(ray.d);
+  //     if (!pv.is_delta)
+  //       result.light_pdf = scene.env_light->pdf(pv.n, ray.d);
+  //   }
+  //   global_stats.record_path_length(pv.length + 1);
+  //   return result;
+  // }
 
-  if (it.material()->is<EmissiveMaterial>()) {
-    Lo += it.material()->le({it, wi});
-    if (!pv.is_delta)
-      result.light_pdf = light_sampler.pdf(it.geometry, it, ray, pv.n);
-    global_stats.record_path_length(pv.length + 1);
-    return result;
-  }
+  // if (it.material()->is<EmissiveMaterial>()) {
+  //   Lo += it.material()->le({it, wi});
+  //   if (!pv.is_delta)
+  //     result.light_pdf = light_sampler.pdf(it.geometry, it, ray, pv.n);
+  //   global_stats.record_path_length(pv.length + 1);
+  //   return result;
+  // }
 
-  if (pv.length + 1 >= max_path_length) {
-    global_stats.record_path_length(pv.length + 1);
-    return result;
-  }
+  // if (pv.length + 1 >= max_path_length) {
+  //   global_stats.record_path_length(pv.length + 1);
+  //   return result;
+  // }
 
-  auto& b = stree.traverse(it.p, wi);
-  auto n = 1.0f;
-  auto ni = 1;
-  if (b.valid) {
-    n = b.splitting_factor(pv.length == 1 ? pv.throughput : pv.throughput, cost_to_var);
-    n = psl::clamp(n, 0.05f, 20.0f);
-    if (psl::fract(n) == 0.0f)
-      ni = n;
-    else
-      ni = int(psl::floor(n)) + (sampler.get1d() < psl::fract(n) ? 1 : 0);
-    const auto stat_depth = 0;
-    if (pv.length == stat_depth) {
-      stats.value = color_map(b.splitting_factor(pv.throughput, cost_to_var) / 10.0f);
-    }
-  }
-  if (pv.length == 0)
-    global_stats.record_primary_split(n);
-  else if (pv.length == 1)
-    global_stats.record_secondary_split(n);
+  // auto& b = stree.traverse(it.p, wi);
+  // auto n = 1.0f;
+  // auto ni = 1;
+  // if (b.valid) {
+  //   n = b.splitting_factor(pv.length == 1 ? pv.throughput : pv.throughput, cost_to_var);
+  //   n = psl::clamp(n, 0.05f, 20.0f);
+  //   if (psl::fract(n) == 0.0f)
+  //     ni = n;
+  //   else
+  //     ni = int(psl::floor(n)) + (sampler.get1d() < psl::fract(n) ? 1 : 0);
+  //   const auto stat_depth = 0;
+  //   if (pv.length == stat_depth) {
+  //     stats.value = color_map(b.splitting_factor(pv.throughput, cost_to_var) / 10.0f);
+  //   }
+  // }
+  // if (pv.length == 0)
+  //   global_stats.record_primary_split(n);
+  // else if (pv.length == 1)
+  //   global_stats.record_secondary_split(n);
 
-  auto b_cost = 0.0f;
-  auto estimate = vec3(0);
-  auto moment2 = vec3(0);
+  // auto b_cost = 0.0f;
+  // auto estimate = vec3(0);
+  // auto moment2 = vec3(0);
 
-  for (int i = 0; i < ni; i++) {
-    auto W = vec3(0.0f);
-    auto cost = 0.0f;
-    if (!it.material()->is_delta()) {
-      if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
-        if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
-          auto cosine = absdot(ls->wo, it.n);
-          if (ls->light->is_delta()) {
-            auto f = it.material()->f({it, wi, ls->wo});
-            W += ls->le * cosine * f / ls->pdf;
-          } else {
-            auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
-            auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-            W += ls->le * cosine * f / ls->pdf * mis;
-          }
-        }
-      }
-      cost += 1.0f;
-    }
+  // for (int i = 0; i < ni; i++) {
+  //   auto W = vec3(0.0f);
+  //   auto cost = 0.0f;
+  //   if (!it.material()->is_delta()) {
+  //     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
+  //       if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
+  //         auto cosine = absdot(ls->wo, it.n);
+  //         if (ls->light->is_delta()) {
+  //           auto f = it.material()->f({it, wi, ls->wo});
+  //           W += ls->le * cosine * f / ls->pdf;
+  //         } else {
+  //           auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+  //           auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+  //           W += ls->le * cosine * f / ls->pdf * mis;
+  //         }
+  //       }
+  //     }
+  //     cost += 1.0f;
+  //   }
 
-    if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-      auto cosine = absdot(bs->wo, it.n);
-      auto nv = Vertex(pv.length + 1, pv.throughput / n * bs->f / bs->pdf * cosine,
-                       pv.throughput * bs->f / bs->pdf * cosine, it.n, it.p, bs->pdf,
-                       it.material()->is_delta());
-      auto [Li, light_pdf, Li_cost] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv, stats);
-      auto mis = 1.0f;
-      if (light_pdf)
-        mis = balance_heuristic(bs->pdf, *light_pdf);
-      W += Li * cosine * bs->f / bs->pdf * mis;
-      cost += Li_cost;
-    }
-    Lo += W;
-    b_cost += cost;
-    estimate += W;
-    moment2 += W * W;
-  }
-  Lo /= n < 1 ? n : ni;
-  if (ni != 0) {
-    b.cost += b_cost;
-    b.estimate += estimate;
-    b.moment2 += moment2;
-    b.n += ni;
-    result.cost += b_cost;
-  }
+  //   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+  //     auto cosine = absdot(bs->wo, it.n);
+  //     auto nv = Vertex(pv.length + 1, pv.throughput / n * bs->f / bs->pdf * cosine,
+  //                      pv.throughput * bs->f / bs->pdf * cosine, it.n, it.p, bs->pdf,
+  //                      it.material()->is_delta());
+  //     auto [Li, light_pdf, Li_cost] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv, stats);
+  //     auto mis = 1.0f;
+  //     if (light_pdf)
+  //       mis = balance_heuristic(bs->pdf, *light_pdf);
+  //     W += Li * cosine * bs->f / bs->pdf * mis;
+  //     cost += Li_cost;
+  //   }
+  //   Lo += W;
+  //   b_cost += cost;
+  //   estimate += W;
+  //   moment2 += W * W;
+  // }
+  // Lo /= n < 1 ? n : ni;
+  // if (ni != 0) {
+  //   b.cost += b_cost;
+  //   b.estimate += estimate;
+  //   b.moment2 += moment2;
+  //   b.n += ni;
+  //   result.cost += b_cost;
+  // }
 
-  if (ni == 0) {
-    global_stats.record_path_length(pv.length + 1);
-  }
+  // if (ni == 0) {
+  //   global_stats.record_path_length(pv.length + 1);
+  // }
 
-  return result;
+  // return result;
 }
 
 }  // namespace pine

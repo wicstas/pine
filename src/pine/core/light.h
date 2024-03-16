@@ -26,7 +26,7 @@ struct LightLeSample {
 struct PointLight {
   PointLight(vec3 position, vec3 color) : position(position), color(color){};
 
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
+  LightSample sample(const Interaction& it, vec2 u2) const;
 
   vec3 position;
   vec3 color;
@@ -35,7 +35,7 @@ struct SpotLight {
   SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_radian,
             float cutoff_additonal_radian = 0.0f);
 
-  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const;
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
 
   vec3 position;
   vec3 direction;
@@ -46,7 +46,7 @@ struct SpotLight {
 struct DirectionalLight {
   DirectionalLight(vec3 direction, vec3 color) : direction(normalize(direction)), color(color){};
 
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
+  LightSample sample(const Interaction& it, vec2 u2) const;
 
   vec3 direction;
   vec3 color;
@@ -54,7 +54,7 @@ struct DirectionalLight {
 struct AreaLight {
   AreaLight(psl::shared_ptr<Geometry> geometry) : geometry{psl::move(geometry)} {};
 
-  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const;
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
 
   psl::shared_ptr<Geometry> geometry;
 };
@@ -64,8 +64,8 @@ struct Sky {
   }
 
   vec3 color(vec3 wo) const;
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
-  float pdf(vec3 n, vec3 wo) const;
+  LightSample sample(const Interaction& it, vec2 u2) const;
+  float pdf(const Interaction& it, vec3 wo) const;
 
 private:
   vec3 sun_color;
@@ -74,8 +74,8 @@ struct Atmosphere {
   Atmosphere(vec3 sun_direction, vec3 sun_color, vec2i image_size = {1024, 1024});
 
   vec3 color(vec3 wo) const;
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
-  float pdf(vec3 n, vec3 wo) const;
+  LightSample sample(const Interaction& it, vec2 u2) const;
+  float pdf(const Interaction& it, vec3 wo) const;
 
 private:
   vec3 sun_direction;
@@ -88,8 +88,8 @@ struct ImageSky {
            float rotation = 0.0f);
 
   vec3 color(vec3 wo) const;
-  LightSample sample(vec3 p, vec3 n, vec2 u2) const;
-  float pdf(vec3 n, vec3 wo) const;
+  LightSample sample(const Interaction& it, vec2 u2) const;
+  float pdf(const Interaction& it, vec3 wo) const;
 
 private:
   psl::shared_ptr<Image> image;
@@ -102,8 +102,8 @@ struct Light
     : psl::variant<PointLight, SpotLight, DirectionalLight, AreaLight, Atmosphere, Sky, ImageSky> {
   using variant::variant;
 
-  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const {
-    return dispatch([&](auto&& x) -> psl::optional<LightSample> { return x.sample(p, n, u2); });
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const {
+    return dispatch([&](auto&& x) -> psl::optional<LightSample> { return x.sample(it, u2); });
   }
   bool is_delta() const {
     return is<PointLight>() || is<SpotLight>() || is<DirectionalLight>();
@@ -115,11 +115,11 @@ struct EnvironmentLight : psl::variant<Atmosphere, Sky, ImageSky> {
   vec3 color(vec3 wo) const {
     return dispatch([&](auto&& x) { return x.color(wo); });
   }
-  psl::optional<LightSample> sample(vec3 p, vec3 n, vec2 u2) const {
-    return dispatch([&](auto&& x) { return x.sample(p, n, u2); });
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const {
+    return dispatch([&](auto&& x) { return x.sample(it, u2); });
   }
-  float pdf(vec3 n, vec3 wo) const {
-    return dispatch([&](auto&& x) { return x.pdf(n, wo); });
+  float pdf(const Interaction& it, vec3 wo) const {
+    return dispatch([&](auto&& x) { return x.pdf(it, wo); });
   }
 };
 

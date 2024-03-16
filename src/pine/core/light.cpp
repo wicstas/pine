@@ -8,9 +8,9 @@
 
 namespace pine {
 
-LightSample PointLight::sample(vec3 p, vec3, vec2) const {
+LightSample PointLight::sample(const Interaction& it, vec2) const {
   LightSample ls;
-  ls.wo = normalize(position - p, ls.distance);
+  ls.wo = normalize(position - it.p(), ls.distance);
   ls.pdf = psl::sqr(ls.distance);
   ls.le = color;
   return ls;
@@ -31,9 +31,9 @@ SpotLight::SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_ra
   if (falloff_radian + cutoff_additonal_radian > Pi2)
     Fatal("`SpotLight` invalid cutoff angle(please use radian, not degree)");
 };
-psl::optional<LightSample> SpotLight::sample(vec3 p, vec3, vec2) const {
+psl::optional<LightSample> SpotLight::sample(const Interaction& it, vec2) const {
   LightSample ls;
-  ls.wo = normalize(position - p, ls.distance);
+  ls.wo = normalize(position - it.p(), ls.distance);
   auto cos = -dot(ls.wo, direction);
   if (cos > falloff_cos)
     ls.le = color;
@@ -44,7 +44,7 @@ psl::optional<LightSample> SpotLight::sample(vec3 p, vec3, vec2) const {
   ls.pdf = psl::sqr(ls.distance);
   return ls;
 }
-LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
+LightSample DirectionalLight::sample(const Interaction&, vec2) const {
   LightSample ls;
   ls.distance = 1e+10f;
   ls.wo = direction;
@@ -52,10 +52,10 @@ LightSample DirectionalLight::sample(vec3, vec3, vec2) const {
   ls.le = color;
   return ls;
 }
-psl::optional<LightSample> AreaLight::sample(vec3 p, vec3, vec2 u) const {
+psl::optional<LightSample> AreaLight::sample(const Interaction& it, vec2 u) const {
   CHECK(geometry);
   LightSample ls;
-  auto gs = geometry->sample(p, u);
+  auto gs = geometry->sample(it.p(), u);
   ls.wo = gs.w;
   ls.pdf = gs.pdf;
   ls.distance = gs.distance;
@@ -68,19 +68,24 @@ psl::optional<LightSample> AreaLight::sample(vec3 p, vec3, vec2 u) const {
 vec3 Sky::color(vec3 wo) const {
   return sun_color * sky_color(wo);
 }
-LightSample Sky::sample(vec3, vec3 n, vec2 u2) const {
+LightSample Sky::sample(const Interaction& it, vec2 u2) const {
   auto ls = LightSample{};
-  ls.wo = coordinate_system(n) * uniform_hemisphere(u2);
+  if (it.is<SurfaceInteraction>()) {
+    ls.wo = coordinate_system(it.surface_n()) * uniform_hemisphere(u2);
+    ls.pdf = 1 / (2 * Pi);
+  } else {
+    ls.wo = uniform_sphere(u2);
+    ls.pdf = 1 / (4 * Pi);
+  }
   ls.distance = float_max;
-  ls.pdf = 1 / (2 * Pi);
   ls.le = color(ls.wo);
   return ls;
 }
-float Sky::pdf(vec3 n, vec3 wo) const {
-  if (dot(n, wo) > 0.0f)
-    return 1 / (2 * Pi);
+float Sky::pdf(const Interaction& it, vec3 wo) const {
+  if (it.is<SurfaceInteraction>())
+    return dot(it.surface_n(), wo) > 0.0f ? 1 / (2 * Pi) : 0.0f;
   else
-    return 0.0f;
+    return 1 / (4 * Pi);
 }
 
 static vec2i sc2ic(vec2 sc, vec2i image_size) {
@@ -106,7 +111,7 @@ Atmosphere::Atmosphere(vec3 sun_direction_, vec3 sun_color, vec2i image_size)
 vec3 Atmosphere::color(vec3 wo) const {
   return sun_color * atmosphere_color(wo, sun_direction, 8);
 }
-LightSample Atmosphere::sample(vec3, vec3, vec2 u2) const {
+LightSample Atmosphere::sample(const Interaction&, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
   auto sc = ic2sc(ds.p, image_size);
@@ -117,7 +122,7 @@ LightSample Atmosphere::sample(vec3, vec3, vec2 u2) const {
   ls.le = sun_color * atmosphere_color(ls.wo, sun_direction, 8, true);
   return ls;
 }
-float Atmosphere::pdf(vec3, vec3 wo) const {
+float Atmosphere::pdf(const Interaction&, vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image_size);
@@ -143,7 +148,7 @@ vec3 ImageSky::color(vec3 wo) const {
   auto ic = sc2ic(sc, image->size());
   return tint * (*image)[ic];
 }
-LightSample ImageSky::sample(vec3, vec3, vec2 u2) const {
+LightSample ImageSky::sample(const Interaction&, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
   auto sc = ic2sc(ds.p, image->size());
@@ -156,7 +161,7 @@ LightSample ImageSky::sample(vec3, vec3, vec2 u2) const {
   ls.le = tint * (*image)[ds.p];
   return ls;
 }
-float ImageSky::pdf(vec3, vec3 wo) const {
+float ImageSky::pdf(const Interaction&, vec3 wo) const {
   if (w2l)
     wo = *w2l * wo;
   psl::swap(wo.y, wo.z);

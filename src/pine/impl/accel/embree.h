@@ -1,6 +1,6 @@
 #pragma once
 #include <pine/core/interaction.h>
-#include <pine/core/aabb.h>
+#include <pine/core/bbox.h>
 #include <pine/core/ray.h>
 
 #include <psl/function.h>

@@ -1,4 +1,4 @@
-#include <pine/core/aabb.h>
+#include <pine/core/bbox.h>
 #include <pine/core/log.h>
 
 namespace pine {
@@ -60,6 +60,8 @@ bool AABB::hit(const Ray& ray) const {
   if (tmin > tmax)
     return false;
   for (int i = 0; i < 3; i++) {
+    if (psl::abs(ray.d[i]) < 1e-6f)
+      continue;
     float inv_d = 1.0f / ray.d[i];
     float t_near = (lower[i] - ray.o[i]) * inv_d;
     float t_far = (upper[i] - ray.o[i]) * inv_d;
@@ -74,6 +76,8 @@ bool AABB::hit(const Ray& ray) const {
 }
 bool AABB::intersect(Ray ray, float& tmin, float& tmax) const {
   for (int i = 0; i < 3; i++) {
+    if (psl::abs(ray.d[i]) < 1e-6f)
+      continue;
     float inv_d = 1.0f / ray.d[i];
     float t_near = (lower[i] - ray.o[i]) * inv_d;
     float t_far = (upper[i] - ray.o[i]) * inv_d;
@@ -84,6 +88,37 @@ bool AABB::intersect(Ray ray, float& tmin, float& tmax) const {
     if (tmin > tmax)
       return false;
   }
+  return true;
+}
+
+OBB::OBB(AABB aabb, mat4 m) {
+  auto c = aabb.centroid();
+  p = vec3(m * vec4(c, 1.0f));
+  dim[0] = length(vec3(m[0])) * aabb.diagonal(0);
+  dim[1] = length(vec3(m[1])) * aabb.diagonal(1);
+  dim[2] = length(vec3(m[2])) * aabb.diagonal(2);
+  n[0] = normalize(cross(vec3(m[1]), vec3(m[2])));
+  n[1] = normalize(cross(vec3(m[2]), vec3(m[0])));
+  n[2] = normalize(cross(vec3(m[0]), vec3(m[1])));
+}
+bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
+  auto po = p - o;
+#pragma unroll
+  for (int i = 0; i < 3; i++) {
+    auto denom = dot(d, n[i]);
+    if (psl::abs(denom) < 1e-6f)
+      continue;
+    denom = 1.0f / denom;
+    auto tnear = (dot(po, n[i]) - dim[i] / 2) * denom;
+    auto tfar = tnear + dim[i] * denom;
+    if (denom < 0)
+      psl::swap(tnear, tfar);
+    tmin = psl::max(tmin, tnear);
+    tmax = psl::min(tmax, tfar);
+    if (tmin >= tmax)
+      return false;
+  }
+
   return true;
 }
 

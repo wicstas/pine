@@ -8,7 +8,6 @@
 #include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
-#include <pine/impl/integrator/voxelcone.h>
 #include <pine/impl/integrator/denoiser.h>
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
@@ -36,12 +35,8 @@ Context get_default_context() {
   sampler_context(ctx);
   fileio_context(ctx);
   parallel_context(ctx);
-  ctx.type<psl::shared_ptr<Timer>>("Timer")
-      .ctor(+[]() { return psl::make_shared<Timer>(); })
-      .method(
-          "elapsed", +[](psl::shared_ptr<Timer>& x) { return float(x->elapsed_ms()); })
-      .method(
-          "reset", +[](psl::shared_ptr<Timer>& x) { return float(x->reset()); });
+  ctx("print") = +[](const psl::string& x) { Logr(x); };
+  ctx("println") = +[](const psl::string& x) { Log(x); };
   ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<BVH, EmbreeAccel>();
@@ -88,16 +83,8 @@ Context get_default_context() {
         return EARSIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
       })
       .method("render", &EARSIntegrator::render);
-  ctx.type<VoxelConeIntegrator>("VoxelConeIntegrator")
-      .ctor<Accel, Sampler, LightSampler>()
-      .ctor(+[](Sampler sampler) {
-        return VoxelConeIntegrator(EmbreeAccel(), sampler, UniformLightSampler());
-      })
-      .method("render", &VoxelConeIntegrator::render);
   ctx("denoise") =
       +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
-  ctx("print") = +[](const psl::string& x) { Logr(x); };
-  ctx("println") = +[](const psl::string& x) { Log(x); };
 
   return ctx;
 }

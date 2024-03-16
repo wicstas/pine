@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/lightsampler.h>
 #include <pine/core/integrator.h>
 

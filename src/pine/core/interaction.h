@@ -1,5 +1,5 @@
 #pragma once
-#include <pine/core/medium.h>
+#include <pine/core/phase_function.h>
 #include <pine/core/ray.h>
 #include <pine/core/log.h>
 
@@ -36,12 +36,21 @@ struct SurfaceInteraction {
 };
 
 struct MediumInteraction {
-  float t;
+  MediumInteraction(vec3 p, float sigma, PhaseFunction pg) : p(p), sigma(sigma), pg(psl::move(pg)) {
+  }
+  vec3 p;
+  float sigma;
   PhaseFunction pg;
 };
 
 struct Interaction : psl::variant<SurfaceInteraction, MediumInteraction> {
   using variant::variant;
+  vec3 p() const {
+    return dispatch([](auto&& x) { return x.p; });
+  }
+  vec3 surface_n() const {
+    return as<SurfaceInteraction>().n;
+  }
 };
 
 }  // namespace pine

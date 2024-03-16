@@ -2,7 +2,7 @@
 
 #include <pine/core/interaction.h>
 #include <pine/core/material.h>
-#include <pine/core/aabb.h>
+#include <pine/core/bbox.h>
 #include <pine/core/ray.h>
 
 #include <psl/function.h>
@@ -25,7 +25,7 @@ struct Plane {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3 p, vec2 u) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return float_max;
   }
@@ -43,7 +43,7 @@ struct Sphere {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return 4 * Pi * r * r;
   }
@@ -59,7 +59,7 @@ struct Disk {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return Pi * r * r;
   }
@@ -78,7 +78,7 @@ struct Line {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return thickness * 2 * Pi * len;
   }
@@ -91,7 +91,7 @@ private:
 };
 
 struct Rect {
-  Rect(vec3 position, vec3 ex, vec3 ey, bool flip_normal=false);
+  Rect(vec3 position, vec3 ex, vec3 ey, bool flip_normal = false);
   static Rect from_vertex(vec3 v0, vec3 v1, vec3 v2);
   Rect& apply(mat4 m);
 
@@ -99,7 +99,7 @@ struct Rect {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return lx * ly;
   }
@@ -125,7 +125,7 @@ struct Triangle {
 
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return length(cross(v1 - v0, v2 - v0)) / 2;
   }
@@ -153,7 +153,7 @@ struct TriangleMesh {
   ShapeSample sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
-  float pdf(const SurfaceInteraction&, const Ray&, vec3) const {
+  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
     PINE_UNREACHABLE;
   }
 
@@ -214,15 +214,16 @@ struct Shape : psl::variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleM
   ShapeSample sample(vec3 p, vec2 u) const {
     return dispatch([&](auto&& x) { return x.sample(p, u); });
   }
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const {
-    return dispatch([&](auto&& x) { return x.pdf(it, ray, n); });
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
+    return dispatch([&](auto&& x) { return x.pdf(it, git, ray); });
   }
 };
 
 struct Geometry {
-  Geometry() = default;
+  Geometry() : id(global_id++) {
+  }
   Geometry(Shape shape, psl::shared_ptr<Material> material)
-      : shape{psl::move(shape)}, material{psl::move(material)} {
+      : id(global_id++), shape{psl::move(shape)}, material{psl::move(material)} {
   }
 
   bool hit(const Ray& ray) const {
@@ -233,13 +234,17 @@ struct Geometry {
     return shape.get_aabb();
   }
   ShapeSample sample(vec3 p, vec2 u) const;
-  float pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const;
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
   float area() const {
     return shape.area();
   }
 
+  int id;
   Shape shape;
   psl::shared_ptr<Material> material;
+
+private:
+  static int global_id;
 };
 
 void geometry_context(Context& ctx);

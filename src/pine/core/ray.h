@@ -9,6 +9,9 @@ struct Ray {
   Ray(vec3 o, vec3 d) : o(o), d(d), tmin(0.0f), tmax(float_max){};
   Ray(vec3 o, vec3 d, float tmin, float tmax) : o(o), d(d), tmin(tmin), tmax(tmax){};
 
+  vec3 operator()() const {
+    return o + tmax * d;
+  }
   vec3 operator()(float t) const {
     return o + t * d;
   }

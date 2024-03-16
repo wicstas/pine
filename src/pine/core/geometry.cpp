@@ -45,7 +45,7 @@ ShapeSample Plane::sample(vec3 p, vec2 u2) const {
   ss.pdf = 1.0f / (2 * Pi);
   return ss;
 }
-float Plane::pdf(const SurfaceInteraction&, const Ray&, vec3) const {
+float Plane::pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
   return 1.0f / (2 * Pi);
 }
 
@@ -90,8 +90,8 @@ ShapeSample Sphere::sample(vec3 p, vec2 u) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Sphere::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
+float Sphere::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
 }
 AABB Sphere::get_aabb() const {
   return {c - vec3(r), c + vec3(r)};
@@ -141,8 +141,8 @@ ShapeSample Disk::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Disk::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
+float Disk::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
 }
 AABB Disk::get_aabb() const {
   return {position - vec3(r, 0.0f, r), position + vec3(r, 0.0f, r)};
@@ -211,8 +211,8 @@ ShapeSample Line::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Line::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
+float Line::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
 }
 AABB Line::get_aabb() const {
   AABB aabb;
@@ -360,8 +360,8 @@ ShapeSample Rect::sample(vec3 o, vec2 u) const {
   ss.pdf = 1.0f / S;
   return ss;
 }
-float Rect::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
-  return psl::max(psl::sqr(ray.tmax), epsilon) / psl::max(area() * absdot(it.n, -ray.d), epsilon);
+float Rect::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
+  return psl::max(psl::sqr(ray.tmax), epsilon) / psl::max(area() * absdot(git.n, -ray.d), epsilon);
 
   auto p = position - ex * lx / 2 - ey * ly / 2;
   auto ez = cross(ex, ey);
@@ -474,8 +474,8 @@ ShapeSample Triangle::sample(vec3 p, vec2 u) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Triangle::pdf(const SurfaceInteraction& it, const Ray& ray, vec3) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(it.n, -ray.d));
+float Triangle::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
 }
 AABB Triangle::get_aabb() const {
   AABB aabb;
@@ -583,9 +583,11 @@ bool Geometry::intersect(Ray& ray, SurfaceInteraction& it) const {
 ShapeSample Geometry::sample(vec3 p, vec2 u) const {
   return shape.sample(p, u);
 }
-float Geometry::pdf(const SurfaceInteraction& it, const Ray& ray, vec3 n) const {
-  return shape.pdf(it, ray, n);
+float Geometry::pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
+  return shape.pdf(it, git, ray);
 }
+
+int Geometry::global_id = 0;
 
 void geometry_context(Context& ctx) {
   ctx.type<Ray>("Ray")
