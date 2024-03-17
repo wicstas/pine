@@ -22,12 +22,14 @@ void Film::finalize(float scale) {
   apply_tone_mapping();
   apply_gamma_correction();
 }
-void Film::add_sample(vec2i p_film, vec3 color) {
+void Film::add_sample(vec2i p_film, vec3 color, float weight) {
+  if (weight == 0.0f)
+    return;
   DCHECK_RANGE(p_film.x, 0, size().x - 1);
   DCHECK_RANGE(p_film.y, 0, size().y - 1);
   auto& pixel = pixels[p_film];
-  const auto alpha = pixel.w + 1;
-  pixel = vec4((vec3(pixel) * pixel.w + color) / alpha, alpha);
+  const auto alpha = pixel.w + weight;
+  pixel = vec4((vec3(pixel) * pixel.w + color * weight) / alpha, alpha);
 }
 void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
   DCHECK_RANGE(p_film.x, 0, size().x - 1);

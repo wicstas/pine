@@ -15,6 +15,9 @@ struct HomogeneousMedium {
 
   psl::optional<MediumInteraction> intersect_tr(Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  AABB get_aabb() const {
+    return aabb;
+  }
 
 private:
   AABB aabb;
@@ -26,6 +29,9 @@ struct VDBMedium {
   VDBMedium(psl::string filename, mat4 transform, float sigma_s, float sigma_z);
   psl::optional<MediumInteraction> intersect_tr(Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  AABB get_aabb() const {
+    return AABB(bbox);
+  }
 
 private:
   psl::opaque_shared_ptr handle;
@@ -47,6 +53,10 @@ struct Medium : psl::variant<HomogeneousMedium, VDBMedium> {
   }
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
     return dispatch([&](auto&& x) { return x.transmittance(p, d, tmax, sampler); });
+  }
+
+  AABB get_aabb() const {
+    return dispatch([&](auto&& x) { return x.get_aabb(); });
   }
 };
 

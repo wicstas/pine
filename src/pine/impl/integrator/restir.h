@@ -4,9 +4,9 @@
 
 namespace pine {
 
-struct CachedPathIntegrator : public RTIntegrator {
-  CachedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
-                       int max_path_length, int max_axis_resolution, int starting_depth = 1);
+struct RestirIntegrator : public RTIntegrator {
+  RestirIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler, int max_path_length);
+
   void render(Scene& scene) override;
 
   struct RadianceResult {
@@ -19,10 +19,6 @@ struct CachedPathIntegrator : public RTIntegrator {
 private:
   LightSampler light_sampler;
   int max_path_length;
-  int max_axis_resolution;
-  int starting_depth;
-  float footprint;
-  bool learning_phase;
 };
 
 }  // namespace pine

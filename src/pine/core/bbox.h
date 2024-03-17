@@ -19,6 +19,7 @@ struct AABB {
   AABB() = default;
   AABB(vec3 lower, vec3 upper) : lower(lower), upper(upper){};
   AABB(vec3 p) : lower(p), upper(p){};
+  explicit AABB(struct OBB);
 
   vec3 centroid() const {
     return (lower + upper) / 2;
@@ -86,7 +87,7 @@ struct OBB {
 
   vec3 p;
   vec3 dim;
-  vec3 n[3];
+  mat3 n;
 };
 
 }  // namespace pine

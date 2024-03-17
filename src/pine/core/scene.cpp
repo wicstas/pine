@@ -62,6 +62,8 @@ AABB Scene::get_aabb() const {
   auto aabb = AABB{};
   for (const auto& g : geometries)
     aabb.extend(g->get_aabb());
+  for (const auto& m : mediums)
+    aabb.extend(m.get_aabb());
   return aabb;
 }
 

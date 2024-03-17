@@ -68,6 +68,7 @@ src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/denoiser.cpp
+src/pine/impl/integrator/restir.cpp
 src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp

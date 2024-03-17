@@ -12,14 +12,6 @@
 namespace pine {
 
 namespace {
-struct RadianceSample {
-  RadianceSample() = default;
-  RadianceSample(vec3 p, vec3 w, vec3 flux) : p(p), w(w), flux(flux) {
-  }
-  vec3 p;
-  vec3 w;
-  vec3 flux;
-};
 
 struct DirectionalBin {
   void add_flux(vec3 l) {
@@ -55,13 +47,15 @@ struct SpatialNode {
 
 struct SpatialTree {
   SpatialTree() = default;
-  SpatialTree(AABB aabb, vec3i64 resolution) : aabb(aabb), grid(resolution) {
+  SpatialTree(AABB aabb, vec3i64 resolution) : tight_aabb(aabb), aabb(aabb), grid(resolution) {
     this->aabb.extend_by(1e-4f);
   }
-  void add_sample(RadianceSample s) {
-    bin_of(s.p, s.w).add_flux(s.flux);
+  void add_sample(vec3 p, vec3 w, vec3 flux) {
+    bin_of(p, w).add_flux(flux);
   }
-  vec3 flux_estimate(vec3 p, vec3 w) const {
+  vec3 flux_estimate(vec3 p, vec3 w, vec3 up) const {
+    p += (up - vec3(0.5f)) * tight_aabb.diagonal() / grid.size();
+    p = clamp(p, tight_aabb.lower, tight_aabb.upper);
     return bin_of(p, w).flux_estimate();
   }
 
@@ -73,6 +67,7 @@ private:
     return const_cast<SpatialTree*>(this)->bin_of(p, w);
   }
 
+  AABB tight_aabb;
   AABB aabb;
   Array3d<SpatialNode> grid;
 };
@@ -80,7 +75,6 @@ private:
 }  // namespace
 
 static SpatialTree stree;
-static bool use_estimate = false;
 
 CachedPathIntegrator::CachedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                                            int max_path_length, int max_axis_resolution,
@@ -98,6 +92,18 @@ CachedPathIntegrator::CachedPathIntegrator(Accel accel, Sampler sampler, LightSa
   if (starting_depth < 0)
     Fatal("`CachedPathIntegrator` expect `starting_depth` to be non-negative, get", starting_depth);
 }
+struct CachedPathIntegrator::Vertex {
+  Vertex(int length, Interaction it, float pdf, bool is_delta = false)
+      : length(length), it(psl::move(it)), pdf(pdf), is_delta(is_delta) {
+  }
+  static Vertex first_vertex() {
+    return Vertex(0, {}, 0.0f, true);
+  }
+  int length;
+  Interaction it;
+  float pdf;
+  bool is_delta;
+};
 void CachedPathIntegrator::render(Scene& scene) {
   RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
@@ -119,7 +125,6 @@ void CachedPathIntegrator::render(Scene& scene) {
   Profiler _("[CachedPath]Render");
 
   set_progress(0.0f);
-  auto primary_spp = psl::max(spp / 2 / primary_ratio, 1);
 
   auto albedo = Array2d3f(film.size());
   auto normal = Array2d3f(film.size());
@@ -131,30 +136,33 @@ void CachedPathIntegrator::render(Scene& scene) {
     }
   });
 
-  use_estimate = false;
+  auto learning_spp = psl::max(spp / 4, 1);
+  auto rendering_spp = psl::max(spp - learning_spp, 1);
+
+  learning_phase = true;
   parallel_for(film.size(), [&](vec2i p) {
     Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
     auto L = vec3(0.0f);
-    for (int i = 0; i < primary_spp; i++) {
+    for (int si = 0; si < learning_spp; si++, sampler.start_next_sample()) {
       auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
-      L += radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
+      L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
-    image0[p] = L / primary_spp;
-    if (p.x == 0)
+    image0[p] = L / learning_spp;
+    if (p.x % 64 == 0)
       set_progress(float(p.x + p.y * film.size().x) / area(film.size()) / 2);
   });
 
-  use_estimate = true;
+  learning_phase = false;
   parallel_for(film.size(), [&](vec2i p) {
-    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, spp);
     auto L = vec3(0.0f);
-    for (int i = 0; i < primary_spp; i++) {
+    for (int si = 0; si < rendering_spp; si++, sampler.start_next_sample()) {
       auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
-      L += radiance(scene, ray, sampler, 0, Vertex{}, primary_ratio);
+      L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
-    image1[p] = L / primary_spp;
-    if (p.x == 0)
-      set_progress(0.5f + float(p.x + p.y * film.size().x) / area(film.size()));
+    image1[p] = L / rendering_spp;
+    if (p.x % 64 == 0)
+      set_progress(0.5f + float(p.x + p.y * film.size().x) / area(film.size()) / 2);
   });
 
   denoise(DenoiseQuality::High, image0_estimate, image0, albedo, normal);
@@ -169,86 +177,100 @@ void CachedPathIntegrator::render(Scene& scene) {
   film.pixels = Array2d4f::from(combine(image0, image1, 1.0f / variance0, 1.0f / variance1));
   set_progress(1.0f);
 }
+CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene, Ray ray,
+                                                                    Sampler& sampler, Vertex pv) {
+  auto result = RadianceResult();
+  auto wi = -ray.d;
+  auto& Lo = result.Lo;
 
-vec3 CachedPathIntegrator::radiance(Scene& scene [[maybe_unused]], Ray ray [[maybe_unused]],
-                                    Sampler& sampler [[maybe_unused]], int depth [[maybe_unused]],
-                                    Vertex v [[maybe_unused]], int ssp [[maybe_unused]]) {
-  return {};
-  // auto wi = -ray.d;
-  // auto it = SurfaceInteraction{};
+  if (auto ittr = intersect_tr(ray, sampler); !ittr) {
+    if (scene.env_light) {
+      Lo += scene.env_light->color(ray.d);
+      if (!pv.is_delta)
+        result.light_pdf = scene.env_light->pdf(pv.it, ray.d);
+    }
+    return result;
+  } else if (ittr->is<MediumInteraction>()) {
+    const auto& ms = ittr->as<MediumInteraction>();
+    if (!learning_phase && (pv.length == 0 || !pv.is_delta) && pv.length >= starting_depth) {
+      Lo = stree.flux_estimate(ms.p, wi, sampler.get3d());
+      return result;
+    }
 
-  // if (!intersect(ray, it)) {
-  //   if (scene.env_light) {
-  //     auto le = scene.env_light->color(ray.d);
-  //     if (v.bsdf_is_delta)
-  //       return le;
-  //     auto light_pdf = scene.env_light->pdf(v.n, ray.d);
-  //     auto mis_term = balance_heuristic(v.sample_pdf, light_pdf);
-  //     return le * mis_term;
-  //   }
-  //   return vec3(0.0f);
-  // }
+    if (pv.length + 1 < max_path_length) {
+      if (auto ls = light_sampler.sample(ms, sampler.get1d(), sampler.get2d())) {
+        if (!hit(Ray(ms.p, ls->wo, 0.0f, ls->distance))) {
+          auto tr = transmittance(ms.p, ls->wo, ls->distance, sampler);
+          auto f = ms.pg.f(wi, ls->wo);
+          if (ls->light->is_delta()) {
+            Lo += ls->le * ms.sigma * tr * f / ls->pdf;
+          } else {
+            auto mis = balance_heuristic(ls->pdf, ms.pg.pdf(wi, ls->wo));
+            Lo += ls->le * ms.sigma * tr * f / ls->pdf * mis;
+          }
+        }
+      }
+      auto ps = ms.pg.sample(wi, sampler.get2d());
+      auto nv = Vertex(pv.length + 1, *ittr, ps.pdf);
+      auto rr = pv.length <= 1 ? 1.0f : psl::max(ms.sigma * ps.f / ps.pdf, 0.05f);
+      if (rr >= 1 || sampler.get1d() < rr) {
+        auto [Li, light_pdf] = radiance(scene, Ray(ms.p, ps.wo), sampler, nv);
+        auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
+        Lo += Li * (ms.sigma * ps.f / ps.pdf * mis / psl::min(1.0f, rr));
+      }
+    }
+    if (learning_phase)
+      stree.add_sample(ms.p, wi, Lo);
+    return result;
+  } else {
+    auto& it = ittr->as<SurfaceInteraction>();
+    if (it.material()->is<EmissiveMaterial>()) {
+      Lo += it.material()->le({it, wi});
+      if (!pv.is_delta)
+        result.light_pdf = light_sampler.pdf(pv.it, it, ray);
+      return result;
+    }
 
-  // if (it.material()->is<EmissiveMaterial>()) {
-  //   auto le = it.material()->le({it, wi});
-  //   if (v.bsdf_is_delta)
-  //     return le;
-  //   auto light_pdf = light_sampler.pdf(it.geometry, it, ray, v.n);
-  //   auto mis_term = balance_heuristic(v.sample_pdf, light_pdf);
-  //   return le * mis_term;
-  // }
+    if (!learning_phase && (pv.length == 0 || !pv.is_delta) && pv.length >= starting_depth) {
+      Lo = stree.flux_estimate(it.p, wi, sampler.get3d());
+      return result;
+    }
 
-  // if (depth + 1 == max_path_length)
-  //   return vec3(0.0f);
+    if (pv.length + 1 >= max_path_length)
+      return result;
 
-  // if (use_estimate && v.non_delta_path_length >= starting_depth && !it.material()->is_delta())
-  //   return stree.flux_estimate(it.p, wi);
+    if (!it.material()->is_delta()) {
+      if (auto ls = light_sampler.sample(*ittr, sampler.get1d(), sampler.get2d())) {
+        if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
+          auto cosine = absdot(ls->wo, it.n);
+          auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
+          if (ls->light->is_delta()) {
+            auto f = it.material()->f({it, wi, ls->wo});
+            Lo += ls->le * tr * cosine * f / ls->pdf;
+          } else {
+            auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+            auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+            Lo += ls->le * tr * cosine * f / ls->pdf * mis;
+          }
+        }
+      }
+    }
 
-  // auto direct_light = [&](const LightSample& ls, float pdf_g) {
-  //   if (!hit(it.spawn_ray(ls.wo, ls.distance))) {
-  //     auto mec = MaterialEvalCtx(it, -ray.d, ls.wo);
-  //     auto f = it.material()->f(mec);
-  //     auto cosine = absdot(ls.wo, it.n);
-  //     auto mis_term = balance_heuristic(ls.pdf, pdf_g);
-  //     return ls.le * cosine * f / ls.pdf * mis_term;
-  //   } else {
-  //     return vec3(0.0f);
-  //   }
-  // };
+    if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+      auto cosine = absdot(bs->wo, it.n);
+      auto nv = Vertex(pv.length + 1, *ittr, bs->pdf, it.material()->is_delta());
+      auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
+      if (rr >= 1 || sampler.get1d() < rr) {
+        auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
+        auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
+        Lo += Li * bs->f * (cosine / bs->pdf * mis / psl::min(1.0f, rr));
+      }
+    }
 
-  // auto lo = vec3(0.0f);
-  // for (int sp = 0; sp < ssp; sp++) {
-  //   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-  //     auto cosine = absdot(it.n, bs->wo);
-  //     auto li = radiance(scene, it.spawn_ray(bs->wo), sampler, depth + 1,
-  //                        Vertex{
-  //                            .n = it.n,
-  //                            .bsdf_is_delta = it.material()->is_delta(),
-  //                            .sample_pdf = bs->pdf,
-  //                            .non_delta_path_length =
-  //                                v.non_delta_path_length + (it.material()->is_delta() ? 0 : 1),
-  //                        },
-  //                        1);
-  //     auto sl = li * cosine * bs->f / bs->pdf;
-  //     lo += sl;
-  //     if (!use_estimate)
-  //       stree.add_sample(RadianceSample(it.p, bs->wo, sl * 2));
-  //   }
-
-  //   if (!it.material()->is_delta())
-  //     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
-  //       auto sl = direct_light(*ls, it.material()->pdf({it, wi, ls->wo}));
-  //       lo += sl;
-  //       if (!use_estimate)
-  //         stree.add_sample(RadianceSample(it.p, ls->wo, sl * 2));
-  //     }
-
-  //   if (depth == 0)
-  //     sampler.start_next_sample();
-  // }
-  // lo /= ssp;
-
-  // return lo;
+    if (learning_phase)
+      stree.add_sample(it.p, wi, Lo);
+    return result;
+  }
 }
 
 }  // namespace pine

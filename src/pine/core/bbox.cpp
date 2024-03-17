@@ -3,6 +3,15 @@
 
 namespace pine {
 
+AABB::AABB(OBB obb) {
+  for (int i = 0; i < 8; i++) {
+    auto dim = obb.dim / 2;
+    dim[0] *= (i % 2 < 1) ? 1 : -1;
+    dim[1] *= (i % 4 < 2) ? 1 : -1;
+    dim[2] *= (i % 8 < 4) ? 1 : -1;
+    extend(obb.p + obb.n * dim);
+  }
+}
 AABB AABB::extend_to_max_axis() const {
   auto c = centroid();
   auto d = vec3(max_value(diagonal()) / 2);
