@@ -6,7 +6,7 @@
 
 namespace pine {
 
-void bounds_func(const RTCBoundsFunctionArguments* args) {
+static void bounds_func(const RTCBoundsFunctionArguments* args) {
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   RTCBounds* bounds_o = args->bounds_o;
   auto aabb = shape.get_aabb();
@@ -18,7 +18,7 @@ void bounds_func(const RTCBoundsFunctionArguments* args) {
   bounds_o->upper_z = aabb.upper.z;
 }
 
-void intersect_func(const RTCIntersectFunctionNArguments* args) {
+static void intersect_func(const RTCIntersectFunctionNArguments* args) {
   if (!args->valid[0])
     return;
 
@@ -42,7 +42,7 @@ void intersect_func(const RTCIntersectFunctionNArguments* args) {
   }
 }
 
-void hit_func(const RTCOccludedFunctionNArguments* args) {
+static void hit_func(const RTCOccludedFunctionNArguments* args) {
   if (!args->valid[0])
     return;
 
@@ -56,7 +56,7 @@ void hit_func(const RTCOccludedFunctionNArguments* args) {
     args->valid[0] = -1;
   }
 }
-void hit8_func(const RTCOccludedFunctionNArguments* args) {
+static void hit8_func(const RTCOccludedFunctionNArguments* args) {
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   auto& ray_ = *reinterpret_cast<RTCRay8*>(args->ray);
 
@@ -70,8 +70,8 @@ void hit8_func(const RTCOccludedFunctionNArguments* args) {
     }
   }
 }
-void EmbreeAccel::build(const Scene* scene) {
-  this->scene = scene;
+void EmbreeAccel::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries) {
+  this->geometries = geometries;
   rtc_device = psl::opaque_shared_ptr(
       rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
@@ -80,9 +80,9 @@ void EmbreeAccel::build(const Scene* scene) {
   auto rtc_scene = RTCScene(this->rtc_scene.get());
   rtcSetSceneBuildQuality(rtc_scene, RTC_BUILD_QUALITY_HIGH);
 
-  for (uint32_t i = 0; i < scene->geometries.size(); i++) {
-    if (scene->geometries[i]->shape.is<TriangleMesh>()) {
-      auto mesh = scene->geometries[i]->shape.as<TriangleMesh>();
+  for (uint32_t i = 0; i < geometries->size(); i++) {
+    if ((*geometries)[i]->shape.is<TriangleMesh>()) {
+      auto mesh = (*geometries)[i]->shape.as<TriangleMesh>();
       RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_TRIANGLE);
 
       float* vb = (float*)rtcSetNewGeometryBuffer(
@@ -98,7 +98,7 @@ void EmbreeAccel::build(const Scene* scene) {
     } else {
       RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_USER);
       rtcSetGeometryUserPrimitiveCount(geom, 1);
-      rtcSetGeometryUserData(geom, &scene->geometries[i]->shape);
+      rtcSetGeometryUserData(geom, &(*geometries)[i]->shape);
       rtcSetGeometryBoundsFunction(geom, bounds_func, nullptr);
       rtcCommitGeometry(geom);
       CHECK_EQ(i, rtcAttachGeometry(rtc_scene, geom));
@@ -178,7 +178,7 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
     return false;
 
   ray.tmax = rayhit.ray.tfar;
-  it.geometry = scene->geometries[rayhit.hit.geomID].get();
+  it.geometry = (*geometries)[rayhit.hit.geomID].get();
 
   if (it.geometry->shape.is<TriangleMesh>()) {
     const auto& mesh = it.geometry->shape.as<TriangleMesh>();

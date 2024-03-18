@@ -60,7 +60,7 @@ private:
 class BVH {
 public:
   BVH() = default;
-  void build(const Scene* scene);
+  void build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries);
   bool hit(Ray ray) const;
   uint8_t hit8(psl::span<const Ray> rays) const {
     auto result = uint8_t(0);
@@ -75,7 +75,7 @@ private:
   psl::vector<BVHImpl> lbvh;
   BVHImpl tbvh;
   psl::vector<int> indices;
-  const Scene* scene;
+  const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries;
 };
 
 }  // namespace pine

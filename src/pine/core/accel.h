@@ -10,8 +10,8 @@ namespace pine {
 struct Accel : psl::variant<BVH, EmbreeAccel> {
   using variant::variant;
 
-  void build(const Scene* scene) {
-    return dispatch([&](auto&& x) { return x.build(scene); });
+  void build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries) {
+    return dispatch([&](auto&& x) { return x.build(geometries); });
   }
   bool hit(Ray ray) const {
     return dispatch([&](auto&& x) { return x.hit(ray); });

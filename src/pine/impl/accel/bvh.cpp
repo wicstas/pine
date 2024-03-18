@@ -483,17 +483,17 @@ bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
   return hit;
 }
 
-void BVH::build(const Scene* scene_) {
+void BVH::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries) {
   lbvh = {};
   tbvh = {};
   indices = {};
-  scene = scene_;
-  if (scene->geometries.size() == 0)
+  this->geometries = geometries;
+  if (geometries->size() == 0)
     return;
 
-  for (size_t i = 0; i < scene->geometries.size(); i++) {
-    if (scene->geometries[i]->shape.is<TriangleMesh>()) {
-      auto& mesh = scene->geometries[i]->shape.as<TriangleMesh>();
+  for (size_t i = 0; i < geometries->size(); i++) {
+    if ((*geometries)[i]->shape.is<TriangleMesh>()) {
+      auto& mesh = (*geometries)[i]->shape.as<TriangleMesh>();
       if (mesh.num_triangles() == 0)
         continue;
       auto primitives = psl::vector<BVHImpl::Primitive>{};
@@ -517,10 +517,10 @@ void BVH::build(const Scene* scene_) {
     primitive.index = int(primitives.size());
     primitives.push_back(primitive);
   }
-  for (size_t i = 0; i < scene->geometries.size(); i++) {
-    if (!scene->geometries[i]->shape.is<TriangleMesh>()) {
+  for (size_t i = 0; i < (*geometries).size(); i++) {
+    if (!(*geometries)[i]->shape.is<TriangleMesh>()) {
       auto primitive = BVHImpl::Primitive{};
-      primitive.aabb = scene->geometries[i]->get_aabb();
+      primitive.aabb = (*geometries)[i]->get_aabb();
       primitive.index = int(primitives.size());
       primitives.push_back(primitive);
       indices.push_back(int(i));
@@ -530,11 +530,11 @@ void BVH::build(const Scene* scene_) {
 }
 
 bool BVH::hit(Ray ray) const {
-  if (scene->geometries.size() == 0)
+  if ((*geometries).size() == 0)
     return false;
 
   return tbvh.hit(ray, [&](const Ray& ray, int lbvhIndex) {
-    auto& geometry = scene->geometries[indices[lbvhIndex]];
+    auto& geometry = (*geometries)[indices[lbvhIndex]];
 
     if (lbvhIndex < int(lbvh.size())) {
       return lbvh[lbvhIndex].hit(ray, [&](const Ray& ray, int index) {
@@ -547,11 +547,11 @@ bool BVH::hit(Ray ray) const {
 }
 
 bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
-  if (scene->geometries.size() == 0)
+  if ((*geometries).size() == 0)
     return false;
 
   return tbvh.Intersect(ray, it, [&](Ray& ray, SurfaceInteraction& it, int i_lbvh) {
-    auto& geometry = scene->geometries[indices[i_lbvh]];
+    auto& geometry = (*geometries)[indices[i_lbvh]];
 
     if (i_lbvh < int(lbvh.size())) {
       auto& mesh = geometry->shape.as<TriangleMesh>();
