@@ -52,7 +52,7 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   auto [mit, it] = intersect_tr(ray, sampler);
 
   if (mit) {
-    auto Tr = transmittance(ray.o, ray.d, mit->t, sampler);
+    auto Tr = vec3(1.0f);
     if (pv.length + 1 < max_path_length) {
       if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
         if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {

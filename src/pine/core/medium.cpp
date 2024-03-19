@@ -88,7 +88,8 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
     Fatal("[VDBMedium]Expect a grid of float density from: `", filename, '`');
   this->grid = grid;
   this->handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
-  sigma_maj = sigma_z * grid->tree().root().getMax();
+  // sigma_maj = sigma_z * grid->tree().root().getMax();
+  sigma_maj = vec3(max_value(sigma_z)) * grid->tree().root().getMax();
   sigma_maj_inv = vec3(1.0f) / sigma_maj;
   auto aabb = AABB();
   for (int i = 0; i < 3; i++) {
@@ -113,22 +114,25 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
   auto u = rng.nextf();
-  auto pdf = 1.0f;
+  auto coef = vec3(1.0f);
 
-  auto channel = int(sampler.get1d() * 3);
+  // auto channel = int(sampler.get1d() * 3);
+  auto channel = 0;
   while (true) {
     auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_inv[channel];
     tmin += dt;
     if (tmin >= tmax)
       return psl::nullopt;
     auto cr = pi0 + tmin * di;
-    auto sigma = sigma_z[channel] * density(cr.x, cr.y, cr.z);
+    auto D = density(cr.x, cr.y, cr.z);
+    auto sigma = sigma_z[channel] * D;
     auto dd = 1.0f - sigma * sigma_maj_inv[channel];
-    if (u <= dd) {
+    if (u < dd) {
+      coef *= (sigma_maj - sigma_z * D) / (sigma_maj[channel] * dd);
       u /= dd;
     } else {
-      pdf *= sigma_maj[channel] * psl::exp(-sigma_maj[channel] * dt);
-      return MediumInteraction(tmin, ray(tmin), sigma_s / pdf, HgPhaseFunction(0.0f));
+      coef *= sigma_s * D / (sigma_maj[channel] * (1 - dd));
+      return MediumInteraction(tmin, ray(tmin), coef, HgPhaseFunction(0.0f));
     }
   }
 }
@@ -158,7 +162,7 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
     for (int channel = 0; channel < 3; channel++) {
       if (!active_channels[channel])
         continue;
-      if (u <= dd[channel]) {
+      if (u < dd[channel]) {
         u /= dd[channel];
       } else {
         tr[channel] = 0;
