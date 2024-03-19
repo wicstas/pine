@@ -28,8 +28,8 @@ struct LightSampler : private psl::variant<UniformLightSampler> {
   psl::optional<LightSample> sample(const Interaction& it, float u1, vec2 u2) const {
     return dispatch([&](auto&& x) { return x.sample(it, u1, u2); });
   }
-  float pdf(const Interaction& it, const SurfaceInteraction& light_it, const Ray& ray) const {
-    return dispatch([&](auto&& x) { return x.pdf(it, light_it, ray); });
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
+    return dispatch([&](auto&& x) { return x.pdf(it, git, ray); });
   }
 };
 

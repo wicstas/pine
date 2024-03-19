@@ -14,7 +14,8 @@ PhaseFunctionSample HgPhaseFunction::sample(vec3 wi, vec2 u) const {
   auto phi = 2 * Pi * u[1];
   auto m = coordinate_system(wi);
   ps.wo = m * spherical_to_cartesian(phi, sin_theta, cos_theta);
-  ps.f = ps.pdf = henyey_greenstein(dot(wi, ps.wo), g);
+  ps.pdf = henyey_greenstein(dot(wi, ps.wo), g);
+  ps.f = ps.pdf;
   return ps;
 }
 

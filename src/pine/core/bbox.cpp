@@ -1,3 +1,4 @@
+#include <pine/core/interaction.h>
 #include <pine/core/bbox.h>
 #include <pine/core/log.h>
 
@@ -83,14 +84,14 @@ bool AABB::hit(const Ray& ray) const {
   }
   return true;
 }
-bool AABB::intersect(Ray ray, float& tmin, float& tmax) const {
+bool AABB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   for (int i = 0; i < 3; i++) {
-    if (psl::abs(ray.d[i]) < 1e-6f)
+    if (psl::abs(d[i]) < 1e-6f)
       continue;
-    float inv_d = 1.0f / ray.d[i];
-    float t_near = (lower[i] - ray.o[i]) * inv_d;
-    float t_far = (upper[i] - ray.o[i]) * inv_d;
-    if (ray.d[i] < 0.0f)
+    float inv_d = 1.0f / d[i];
+    float t_near = (lower[i] - o[i]) * inv_d;
+    float t_far = (upper[i] - o[i]) * inv_d;
+    if (d[i] < 0.0f)
       psl::swap(t_far, t_near);
     tmin = psl::max(t_near, tmin);
     tmax = psl::min(t_far, tmax);
@@ -98,6 +99,21 @@ bool AABB::intersect(Ray ray, float& tmin, float& tmax) const {
       return false;
   }
   return true;
+}
+bool AABB::intersect(Ray& ray, SurfaceInteraction& it) const {
+  auto tmin = ray.tmin;
+  auto tmax = ray.tmax;
+  if (intersect(ray.o, ray.d, tmin, tmax)) {
+    ray.tmax = tmin > ray.tmin ? tmin : tmax;
+    it.p = ray();
+    auto pu = (it.p - centroid()) / diagonal();
+    auto axis = max_axis(abs(pu));
+    it.n = vec3(0.0f);
+    it.n[axis] = pu[axis] > 0 ? 1 : -1;
+    return true;
+  } else {
+    return false;
+  }
 }
 
 OBB::OBB(AABB aabb, mat4 m) {
@@ -109,6 +125,26 @@ OBB::OBB(AABB aabb, mat4 m) {
   n[0] = normalize(cross(vec3(m[1]), vec3(m[2])));
   n[1] = normalize(cross(vec3(m[2]), vec3(m[0])));
   n[2] = normalize(cross(vec3(m[0]), vec3(m[1])));
+}
+bool OBB::hit(Ray ray) const {
+  auto po = p - ray.o;
+#pragma unroll
+  for (int i = 0; i < 3; i++) {
+    auto denom = dot(ray.d, n[i]);
+    if (psl::abs(denom) < 1e-6f)
+      continue;
+    denom = 1.0f / denom;
+    auto tnear = (dot(po, n[i]) - dim[i] / 2) * denom;
+    auto tfar = tnear + dim[i] * denom;
+    if (denom < 0)
+      psl::swap(tnear, tfar);
+    ray.tmin = psl::max(ray.tmin, tnear);
+    ray.tmax = psl::min(ray.tmax, tfar);
+    if (ray.tmin >= ray.tmax)
+      return false;
+  }
+
+  return true;
 }
 bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   auto po = p - o;
@@ -129,6 +165,9 @@ bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   }
 
   return true;
+}
+bool OBB::intersect(Ray&, SurfaceInteraction&) const {
+  return false;
 }
 
 }  // namespace pine

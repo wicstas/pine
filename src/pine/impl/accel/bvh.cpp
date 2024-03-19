@@ -429,7 +429,6 @@ bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
         hit = true;
   } else {
     while (true) {
-      it.bvh += 1;
       const Node& node = nodes[next];
 
       int leftChildIndex = -1, rightChildIndex = -1;

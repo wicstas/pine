@@ -24,7 +24,7 @@ struct HgPhaseFunction {
     return henyey_greenstein(dot(wi, wo), g);
   }
   float pdf(vec3 wi, vec3 wo) const {
-    return f(wi, wo);
+    return henyey_greenstein(dot(wi, wo), g);
   }
 
 private:

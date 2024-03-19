@@ -265,6 +265,16 @@ struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSample
   }
 };
 
+// Helper function to save one call to `sampler.get1d()` in some cases
+inline bool with_probability(float prob, Sampler& sampler) {
+  if (prob == 0)
+    return false;
+  else if (prob == 1)
+    return true;
+  else
+    return sampler.get1d() < prob;
+}
+
 void sampler_context(Context& ctx);
 
 }  // namespace pine

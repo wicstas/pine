@@ -64,12 +64,12 @@ src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
 src/pine/core/gui.cpp
-src/pine/impl/integrator/randomwalk.cpp
-src/pine/impl/integrator/guidedpath.cpp
-src/pine/impl/integrator/cachedpath.cpp
+#src/pine/impl/integrator/randomwalk.cpp
+#src/pine/impl/integrator/guidedpath.cpp
+#src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/denoiser.cpp
-src/pine/impl/integrator/restir.cpp
-src/pine/impl/integrator/ears.cpp
+#src/pine/impl/integrator/restir.cpp
+#src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp

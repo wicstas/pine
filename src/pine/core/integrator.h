@@ -31,19 +31,9 @@ public:
     return accel.hit8(rays);
   }
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
-  psl::optional<Interaction> intersect_tr(Ray& ray, Sampler& sampler) const;
+  psl::pair<SpectralMediumInteraction, psl::optional<SurfaceInteraction>> intersect_tr(
+      Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
-
-  // bool intersect_cases(Ray& ray, Sampler& sampler, auto f_escape, auto f_surface,
-  //                      auto f_medium) const {
-  //   auto it_tr = intersect_tr(ray, sampler);
-  //   if (!it_tr.is_valid())
-  //     return f_escape();
-  //   else if (it_tr.is<SurfaceInteraction>())
-  //     return f_surface(it_tr.as<SurfaceInteraction>());
-  //   else
-  //     return f_medium(it_tr.as<MediumInteraction>());
-  // }
 
   void render(Scene& scene) override;
 

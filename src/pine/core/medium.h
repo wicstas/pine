@@ -1,6 +1,7 @@
 #pragma once
 #include <pine/core/interaction.h>
 #include <pine/core/vecmath.h>
+#include <pine/core/accel.h>
 #include <pine/core/bbox.h>
 
 #include <psl/function.h>
@@ -9,25 +10,28 @@
 namespace pine {
 
 struct HomogeneousMedium {
-  HomogeneousMedium(AABB aabb, float sigma_a, float sigma_s)
-      : aabb(aabb), sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
-  }
+  HomogeneousMedium(Shape shape, vec3 sigma_a, vec3 sigma_s);
 
-  psl::optional<MediumInteraction> intersect_tr(Ray& ray, Sampler& sampler) const;
+  void intersect_tr(const Ray& ray, vec3& tmax, SpectralMediumInteraction& mit,
+                    Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
   AABB get_aabb() const {
     return aabb;
   }
 
 private:
+  psl::shared_ptr<psl::vector<psl::shared_ptr<Geometry>>> geometry;
   AABB aabb;
-  float sigma_s;
-  float sigma_z;
+  Accel accel;
+  vec3 sigma_s;
+  vec3 sigma_z;
+  float max_dim;
 };
 
 struct VDBMedium {
-  VDBMedium(psl::string filename, mat4 transform, float sigma_s, float sigma_z);
-  psl::optional<MediumInteraction> intersect_tr(Ray& ray, Sampler& sampler) const;
+  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_s, vec3 sigma_z);
+  void intersect_tr(const Ray& ray, vec3& tmax, SpectralMediumInteraction& mit,
+                    Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
   AABB get_aabb() const {
     return AABB(bbox);
@@ -39,17 +43,17 @@ private:
   OBB bbox;
   float sigma_maj;
   float sigma_maj_inv;
-  float sigma_s;
-  float sigma_z;
+  vec3 sigma_s;
+  vec3 sigma_z;
   vec3 index_start;
   vec3 index_end;
   mat4 world2index;
 };
 
 struct Medium : psl::variant<HomogeneousMedium, VDBMedium> {
-  psl::optional<MediumInteraction> intersect_tr(Ray& ray, Sampler& sampler) const {
-    auto ms = dispatch([&](auto&& x) { return x.intersect_tr(ray, sampler); });
-    return ms;
+  void intersect_tr(const Ray& ray, vec3& tmax, SpectralMediumInteraction& mit,
+                    Sampler& sampler) const {
+    return dispatch([&](auto&& x) { return x.intersect_tr(ray, tmax, mit, sampler); });
   }
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
     return dispatch([&](auto&& x) { return x.transmittance(p, d, tmax, sampler); });

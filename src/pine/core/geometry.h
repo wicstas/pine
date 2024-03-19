@@ -10,15 +10,6 @@
 
 namespace pine {
 
-struct ShapeSample {
-  vec3 p;
-  vec3 n;
-  vec2 uv;
-  vec3 w;
-  float distance = 0.0f;
-  float pdf = 0.0f;
-};
-
 struct Plane {
   Plane(vec3 position, vec3 normal);
   bool hit(const Ray& ray) const;
@@ -196,7 +187,7 @@ struct TriangleMesh {
 TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
 TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> height_function);
 
-struct Shape : psl::variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
+struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using variant::variant;
 
   bool hit(const Ray& ray) const {
@@ -220,8 +211,6 @@ struct Shape : psl::variant<Sphere, Plane, Triangle, Rect, Disk, Line, TriangleM
 };
 
 struct Geometry {
-  Geometry() : id(global_id++) {
-  }
   Geometry(Shape shape, psl::shared_ptr<Material> material)
       : id(global_id++), shape{psl::move(shape)}, material{psl::move(material)} {
   }

@@ -17,11 +17,6 @@ struct LightSample {
   bool is_delta;
   const Light* light = nullptr;
 };
-struct LightLeSample {
-  vec3 Le;
-  Ray ray;
-  SpatialPdf pdf;
-};
 
 struct PointLight {
   PointLight(vec3 position, vec3 color) : position(position), color(color){};

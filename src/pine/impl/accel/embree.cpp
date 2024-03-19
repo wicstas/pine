@@ -72,6 +72,8 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
 }
 void EmbreeAccel::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries) {
   this->geometries = geometries;
+  if (geometries->size() == 0)
+    return;
   rtc_device = psl::opaque_shared_ptr(
       rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
@@ -108,6 +110,8 @@ void EmbreeAccel::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geom
   rtcCommitScene(rtc_scene);
 }
 bool EmbreeAccel::hit(Ray ray) const {
+  if (geometries->size() == 0)
+    return false;
   RTCRay ray_;
   ray_.org_x = ray.o.x;
   ray_.org_y = ray.o.y;
@@ -128,6 +132,8 @@ bool EmbreeAccel::hit(Ray ray) const {
   return ray_.tfar < 0;
 }
 uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
+  if (geometries->size() == 0)
+    return false;
   RTCRay8 ray_;
   for (int i = 0; i < 8; i++) {
     ray_.org_x[i] = rays[i].o.x;
@@ -156,6 +162,8 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
   return result;
 }
 bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
+  if (geometries->size() == 0)
+    return false;
   RTCRayHit rayhit;
   rayhit.ray.org_x = ray.o.x;
   rayhit.ray.org_y = ray.o.y;

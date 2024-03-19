@@ -1,7 +1,17 @@
 #pragma once
 #include <pine/core/ray.h>
+#include <pine/core/log.h>
 
 namespace pine {
+
+struct ShapeSample {
+  vec3 p;
+  vec3 n;
+  vec2 uv;
+  vec3 w;
+  float distance = 0.0f;
+  float pdf = 0.0f;
+};
 
 struct RayOctant {
   RayOctant(const Ray& ray)
@@ -56,7 +66,7 @@ struct AABB {
   bool contains(vec3 p) const;
 
   bool hit(const Ray& ray) const;
-  bool intersect(Ray ray, float& tmin, float& tmax) const;
+  bool intersect(vec3 o, vec3 d, float& tmin, float& tmax) const;
 
   PINE_ALWAYS_INLINE bool hit(const RayOctant& r, float tmin, float& tmax) const {
     auto p = &lower[0];
@@ -76,6 +86,20 @@ struct AABB {
     return psl::to_string("{", lower, ", ", upper, "}");
   }
 
+  bool intersect(Ray& ray, SurfaceInteraction&) const;
+  AABB get_aabb() const {
+    return *this;
+  }
+  ShapeSample sample(vec3, vec2) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+    PINE_UNREACHABLE;
+  }
+  float area() const {
+    PINE_UNREACHABLE;
+  }
+
   vec3 lower = vec3{float_max};
   vec3 upper = vec3{-float_max};
 };
@@ -83,7 +107,21 @@ struct AABB {
 struct OBB {
   OBB() = default;
   OBB(AABB aabb, mat4 m);
+  bool hit(Ray ray) const;
   bool intersect(vec3 o, vec3 d, float& tmin, float& tmax) const;
+  bool intersect(Ray& ray, SurfaceInteraction&) const;
+  AABB get_aabb() const {
+    return AABB(*this);
+  }
+  ShapeSample sample(vec3, vec2) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+    PINE_UNREACHABLE;
+  }
+  float area() const {
+    PINE_UNREACHABLE;
+  }
 
   vec3 p;
   vec3 dim;

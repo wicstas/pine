@@ -97,16 +97,14 @@ private:
 };
 
 struct GuidedPathIntegrator::Vertex {
-  Vertex(int length, vec3 throughput, vec3 n, vec3 p, float pdf, bool is_delta = false)
-      : length(length), throughput(throughput), n(n), p(p), pdf(pdf), is_delta(is_delta) {
+  Vertex(int length, vec3 throughput, float pdf, bool is_delta = false)
+      : length(length), throughput(throughput), pdf(pdf), is_delta(is_delta) {
   }
   static Vertex first_vertex(vec3 I) {
-    return Vertex(0, vec3(1.0f) / I, vec3(0), vec3(0), 0.0f, true);
+    return Vertex(0, vec3(1.0f) / I, 0.0f, true);
   }
   int length;
   vec3 throughput;
-  vec3 n;
-  vec3 p;
   float pdf;
   bool is_delta;
 };
@@ -159,8 +157,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
       auto L = vec3(0.0f);
       for (int si = 0; si < iter->spp; si++) {
         auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
-        auto stats = Stats();
-        L += radiance(scene, ray, sampler, Vertex::first_vertex(max(Ie, vec3(1e-2f))), stats);
+        L += radiance(scene, ray, sampler, Vertex::first_vertex(max(Ie, vec3(1e-2f))));
         sampler.start_next_sample();
       }
       I[p] = L / iter->spp;
@@ -250,105 +247,145 @@ void GuidedPathIntegrator::render(Scene& scene) {
   set_progress(1.0f);
 }
 
-vec3 GuidedPathIntegrator::radiance(Scene& scene [[maybe_unused]], Ray ray [[maybe_unused]],
-                                    Sampler& sampler [[maybe_unused]], Vertex pv [[maybe_unused]],
-                                    Stats& stats [[maybe_unused]]) {
-  return {};
-  // auto Lo = vec3(0.0f);
-  // auto wi = -ray.d;
+vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv) {
+  auto Lo = vec3(0.0f);
+  auto wi = -ray.d;
 
-  // auto it = SurfaceInteraction();
-  // if (!intersect(ray, it)) {
-  //   if (scene.env_light && pv.length == 0)
-  //     Lo += scene.env_light->color(ray.d);
-  //   return Lo;
-  // }
+  auto ittr = intersect_tr(ray, sampler);
+  if (!ittr) {
+    if (scene.env_light && pv.length == 0)
+      Lo += scene.env_light->color(ray.d);
+    return Lo;
+  }
+  if (ittr->is<MediumInteraction>()) {
+    auto& ms = ittr->as<MediumInteraction>();
+    if (pv.length + 1 >= max_path_length)
+      return Lo;
 
-  // if (it.material()->is<EmissiveMaterial>()) {
-  //   if (pv.length == 0)
-  //     Lo += it.material()->le({it, wi});
-  //   return Lo;
-  // }
+    // Sample direct lighting
+    if (auto ls = light_sampler.sample(ms, sampler.get1d(), sampler.get2d())) {
+      if (!hit(Ray(ms.p, ls->wo, 0.0f, ls->distance))) {
+        auto tr = transmittance(ms.p, ls->wo, ls->distance, sampler);
+        auto f = ms.pg.f(wi, ls->wo);
+        Lo += ls->le * tr * f / ls->pdf;
+      }
+    }
 
-  // if (pv.length + 1 >= max_path_length)
-  //   return Lo;
+    // Sample indirect lighting
+    auto& leaf = guide.traverse(ms.p);
+    auto prob_a = use_learned_ratio;
+    if (with_probability(prob_a, sampler)) {
+      if (auto gs = leaf.sample(sampler.get2d())) {
+        auto rr = pv.length <= 1 ? 1.0f : psl::max(gs->pdf, 0.05f);
+        if (rr >= 1 || sampler.get1d() < rr) {
+          auto f = ms.pg.f(wi, gs->wo);
+          auto nv = Vertex(pv.length + 1, pv.throughput * f / gs->pdf, gs->pdf);
+          auto mis = balance_heuristic(prob_a, gs->pdf, 1 - prob_a, ms.pg.pdf(wi, gs->wo));
+          auto Li = radiance(scene, ms.spawn_ray(gs->wo), sampler, nv);
+          Lo += Li * f / gs->pdf * mis / prob_a;
+          if (collect_radiance_sample)
+            guide.add_sample(leaf, ms.p,
+                             RadianceSample(gs->wo, average(Li) / gs->pdf * mis / prob_a),
+                             sampler.get3d());
+        }
+      }
+    } else {
+      auto ps = ms.pg.sample(wi, sampler.get2d());
+      auto rr = pv.length <= 1 ? 1.0f : psl::max(ps.f / ps.pdf, 0.05f);
+      if (rr >= 1 || sampler.get1d() < rr) {
+        auto nv = Vertex(pv.length + 1, pv.throughput * ps.f / ps.pdf, ps.pdf);
+        auto mis = balance_heuristic(1 - prob_a, ps.pdf, prob_a, leaf.pdf(ps.wo));
+        auto Li = radiance(scene, Ray(ms.p, ps.wo), sampler, nv);
+        Lo += Li * (ps.f / ps.pdf * mis / psl::min(1.0f, rr));
+        if (collect_radiance_sample)
+          guide.add_sample(leaf, ms.p, RadianceSample(ps.wo, average(Li) / ps.pdf * mis / prob_a),
+                           sampler.get3d());
+      }
+    }
 
-  // auto& leaf = guide.traverse(it.p);
-  // auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
-  // auto select_guide = prob_a == 1.0f || (prob_a > 0.0f && sampler.get1d() < prob_a);
+    return Lo;
+  } else {
+    auto& it = ittr->as<SurfaceInteraction>();
+    if (it.material()->is<EmissiveMaterial>()) {
+      if (pv.length == 0)
+        Lo += it.material()->le({it, wi});
+      return Lo;
+    }
+    if (pv.length + 1 >= max_path_length)
+      return Lo;
 
-  // auto lo = vec3(0.0f);
-  // // Sample direct lighting
-  // if (!it.material()->is_delta())
-  //   if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
-  //     if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
-  //       auto cosine = absdot(ls->wo, it.n);
-  //       if (ls->light->is_delta()) {
-  //         auto f = it.material()->f({it, wi, ls->wo});
-  //         lo += ls->le * cosine * f / ls->pdf;
-  //       } else {
-  //         auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
-  //         auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-  //         lo += ls->le * cosine * f / ls->pdf * mis;
-  //       }
-  //     }
-  //   }
-  // if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-  //   auto nray = it.spawn_ray(bs->wo);
-  //   if (auto nit = SurfaceInteraction(); intersect(nray, nit)) {
-  //     if (nit.material()->is<EmissiveMaterial>()) {
-  //       auto cosine = absdot(bs->wo, it.n);
-  //       auto mis = 1.0f;
-  //       if (!it.material()->is_delta()) {
-  //         auto light_pdf = light_sampler.pdf(nit.geometry, nit, nray, it.n);
-  //         mis = balance_heuristic(bs->pdf, light_pdf);
-  //       }
-  //       lo += nit.material()->le({nit, -bs->wo}) * cosine * bs->f / bs->pdf * mis;
-  //     }
-  //   } else if (scene.env_light) {
-  //     auto cosine = absdot(bs->wo, it.n);
-  //     auto mis = 1.0f;
-  //     if (!it.material()->is_delta()) {
-  //       auto light_pdf = scene.env_light->pdf(it.n, bs->wo);
-  //       mis = balance_heuristic(bs->pdf, light_pdf);
-  //     }
-  //     lo += scene.env_light->color(bs->wo) * cosine * bs->f / bs->pdf * mis;
-  //   }
-  // }
+    // Sample direct lighting
+    if (!it.material()->is_delta())
+      if (auto ls = light_sampler.sample(it, sampler.get1d(), sampler.get2d())) {
+        if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
+          auto cosine = absdot(ls->wo, it.n);
+          auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
+          if (ls->light->is_delta()) {
+            auto f = it.material()->f({it, wi, ls->wo});
+            Lo += ls->le * tr * cosine * f / ls->pdf;
+          } else {
+            auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+            auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+            Lo += ls->le * tr * cosine * f / ls->pdf * mis;
+          }
+        }
+      }
+    if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+      auto nray = it.spawn_ray(bs->wo);
+      if (auto nit = SurfaceInteraction(); intersect(nray, nit)) {
+        if (nit.material()->is<EmissiveMaterial>()) {
+          auto cosine = absdot(bs->wo, it.n);
+          auto mis = 1.0f;
+          if (!it.material()->is_delta()) {
+            auto light_pdf = light_sampler.pdf(it, nit, nray);
+            mis = balance_heuristic(bs->pdf, light_pdf);
+          }
+          Lo += nit.material()->le({nit, -bs->wo}) * cosine * bs->f / bs->pdf * mis;
+        }
+      } else if (scene.env_light) {
+        auto cosine = absdot(bs->wo, it.n);
+        auto mis = 1.0f;
+        if (!it.material()->is_delta()) {
+          auto light_pdf = scene.env_light->pdf(it, bs->wo);
+          mis = balance_heuristic(bs->pdf, light_pdf);
+        }
+        Lo += scene.env_light->color(bs->wo) * cosine * bs->f / bs->pdf * mis;
+      }
+    }
 
-  // // Sample indirect lighting
-  // if (select_guide) {
-  //   if (auto gs = leaf.sample(sampler.get2d())) {
-  //     auto cosine = absdot(gs->wo, it.n);
-  //     auto mec = MaterialEvalCtx(it, wi, gs->wo);
-  //     auto f = it.material()->f(mec);
-  //     auto nv = Vertex(pv.length + 1, pv.throughput * cosine * f / gs->pdf, it.n, it.p, gs->pdf);
-  //     auto li = radiance(scene, it.spawn_ray(gs->wo), sampler, nv, stats);
-  //     auto mis = balance_heuristic(prob_a, gs->pdf, 1 - prob_a, it.material()->pdf(mec));
-  //     lo += li * cosine * f / gs->pdf * mis / prob_a;
-  //     if (collect_radiance_sample)
-  //       guide.add_sample(leaf, it.p, RadianceSample(gs->wo, average(li) / gs->pdf * mis /
-  //       prob_a),
-  //                        sampler.get3d());
-  //   }
-  // } else {
-  //   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-  //     auto cosine = absdot(bs->wo, it.n);
-  //     auto nv = Vertex(pv.length + 1, pv.throughput * cosine * bs->f / bs->pdf, it.n, it.p,
-  //     bs->pdf,
-  //                      it.material()->is_delta());
-  //     auto li = radiance(scene, it.spawn_ray(bs->wo), sampler, nv, stats);
-  //     auto mis = balance_heuristic(1 - prob_a, bs->pdf, prob_a, leaf.pdf(bs->wo));
-  //     lo += li * cosine * bs->f / bs->pdf * mis / (1 - prob_a);
-  //     if (collect_radiance_sample && !it.material()->is_delta())
-  //       guide.add_sample(leaf, it.p,
-  //                        RadianceSample(bs->wo, average(li) / bs->pdf * mis / (1 - prob_a)),
-  //                        sampler.get3d());
-  //   }
-  // }
-  // Lo += lo;
+    // Sample indirect lighting
+    auto& leaf = guide.traverse(it.p);
+    auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
+    if (with_probability(prob_a, sampler)) {
+      if (auto gs = leaf.sample(sampler.get2d())) {
+        auto cosine = absdot(gs->wo, it.n);
+        auto mec = MaterialEvalCtx(it, wi, gs->wo);
+        auto f = it.material()->f(mec);
+        auto nv = Vertex(pv.length + 1, pv.throughput * cosine * f / gs->pdf, gs->pdf);
+        auto Li = radiance(scene, it.spawn_ray(gs->wo), sampler, nv);
+        auto mis = balance_heuristic(prob_a, gs->pdf, 1 - prob_a, it.material()->pdf(mec));
+        Lo += Li * cosine * f / gs->pdf * mis / prob_a;
+        if (collect_radiance_sample)
+          guide.add_sample(leaf, it.p, RadianceSample(gs->wo, average(Li) / gs->pdf * mis / prob_a),
+                           sampler.get3d());
+      }
+    } else {
+      if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+        auto cosine = absdot(bs->wo, it.n);
+        auto nv = Vertex(pv.length + 1, pv.throughput * cosine * bs->f / bs->pdf, bs->pdf,
+                         it.material()->is_delta());
+        auto Li = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
+        auto mis = balance_heuristic(1 - prob_a, bs->pdf, prob_a, leaf.pdf(bs->wo));
+        Lo += Li * cosine * bs->f / bs->pdf * mis / (1 - prob_a);
+        if (collect_radiance_sample && !it.material()->is_delta())
+          guide.add_sample(leaf, it.p,
+                           RadianceSample(bs->wo, average(Li) / bs->pdf * mis / (1 - prob_a)),
+                           sampler.get3d());
+      }
+    }
 
-  // return Lo;
+    return Lo;
+  }
 }
 
 }  // namespace pine

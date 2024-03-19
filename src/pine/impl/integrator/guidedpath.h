@@ -13,10 +13,7 @@ public:
   void render(Scene& scene) override;
 
   struct Vertex;
-  struct Stats {
-    vec3 value;
-  };
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex, Stats& stats);
+  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
 
 private:
   LightSampler light_sampler;

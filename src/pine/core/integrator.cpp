@@ -36,19 +36,20 @@ bool RTIntegrator::intersect(Ray& ray, SurfaceInteraction& it) const {
     it.compute_transformation();
   return is_hit;
 }
-psl::optional<Interaction> RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
-  auto ms = psl::optional<MediumInteraction>();
-  for (auto& medium : scene->mediums) {
-    if (auto ms_ = medium.intersect_tr(ray, sampler))
-      ms = *psl::move(ms_);
-  }
+psl::pair<SpectralMediumInteraction, psl::optional<SurfaceInteraction>> RTIntegrator::intersect_tr(
+    Ray& ray, Sampler& sampler) const {
   auto it = SurfaceInteraction();
-  if (intersect(ray, it))
-    return it;
-  else if (ms)
-    return *ms;
+  auto hit_surface = intersect(ray, it);
+
+  auto tmax = vec3(ray.tmax);
+  auto mit = SpectralMediumInteraction();
+  for (auto& medium : scene->mediums)
+    medium.intersect_tr(ray, tmax, mit, sampler);
+
+  if (hit_surface)
+    return {psl::move(mit), psl::move(it)};
   else
-    return psl::nullopt;
+    return {psl::move(mit), psl::nullopt};
 }
 vec3 RTIntegrator::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
   auto tr = vec3(1.0f);

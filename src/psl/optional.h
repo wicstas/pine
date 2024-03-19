@@ -46,6 +46,15 @@ struct optional {
     return *this;
   }
 
+  optional& accept(optional rhs) {
+    if (rhs) {
+      this->reset();
+      psl::construct_at(ptr(), psl::move(*rhs));
+      valid = true;
+    }
+    return *this;
+  }
+
   T& operator*() {
     return value();
   }

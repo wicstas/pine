@@ -1,6 +1,5 @@
 #pragma once
-
-#include <pine/core/vecmath.h>
+#include <pine/core/interaction.h>
 #include <pine/core/image.h>
 #include <pine/core/log.h>
 
@@ -12,6 +11,7 @@ namespace pine {
 
 struct NodeEvalCtx {
   NodeEvalCtx(vec3 p, vec3 n, vec2 uv) : p{p}, n{n}, uv{uv} {};
+  NodeEvalCtx(const SurfaceInteraction& it) : NodeEvalCtx(it.p, it.n, it.uv){};
   vec3 p;
   vec3 n;
   vec2 uv;

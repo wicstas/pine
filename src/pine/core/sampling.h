@@ -4,14 +4,6 @@
 
 namespace pine {
 
-struct SpatialPdf {
-  operator float() const {
-    return pos * dir;
-  }
-  float pos = 0.0f;
-  float dir = 0.0f;
-};
-
 inline vec2 sample_disk_polar(vec2 u) {
   float r = psl::sqrt(u[0]);
   float theta = 2 * Pi * u[1];

@@ -660,6 +660,9 @@ auto indirection(ARange&& range) {
   };
   return Ranger{psl::forward<ARange>(range)};
 }
+inline auto indirection_() {
+  return [](Range auto&& range) { return indirection(FWD(range)); };
+}
 
 template <typename T, Range ARange>
 T to(ARange&& range) {

@@ -183,7 +183,8 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
   auto wi = -ray.d;
   auto& Lo = result.Lo;
 
-  if (auto ittr = intersect_tr(ray, sampler); !ittr) {
+  auto ittr = intersect_tr(ray, sampler);
+  if (!ittr) {
     if (scene.env_light) {
       Lo += scene.env_light->color(ray.d);
       if (!pv.is_delta)
@@ -191,33 +192,34 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
     }
     return result;
   } else if (ittr->is<MediumInteraction>()) {
-    const auto& ms = ittr->as<MediumInteraction>();
+    auto& ms = ittr->as<MediumInteraction>();
     if (!learning_phase && (pv.length == 0 || !pv.is_delta) && pv.length >= starting_depth) {
       Lo = stree.flux_estimate(ms.p, wi, sampler.get3d());
       return result;
     }
 
-    if (pv.length + 1 < max_path_length) {
-      if (auto ls = light_sampler.sample(ms, sampler.get1d(), sampler.get2d())) {
-        if (!hit(Ray(ms.p, ls->wo, 0.0f, ls->distance))) {
-          auto tr = transmittance(ms.p, ls->wo, ls->distance, sampler);
-          auto f = ms.pg.f(wi, ls->wo);
-          if (ls->light->is_delta()) {
-            Lo += ls->le * ms.sigma * tr * f / ls->pdf;
-          } else {
-            auto mis = balance_heuristic(ls->pdf, ms.pg.pdf(wi, ls->wo));
-            Lo += ls->le * ms.sigma * tr * f / ls->pdf * mis;
-          }
+    if (pv.length + 1 >= max_path_length)
+      return result;
+
+    if (auto ls = light_sampler.sample(ms, sampler.get1d(), sampler.get2d())) {
+      if (!hit(Ray(ms.p, ls->wo, 0.0f, ls->distance))) {
+        auto tr = transmittance(ms.p, ls->wo, ls->distance, sampler);
+        auto f = ms.pg.f(wi, ls->wo);
+        if (ls->light->is_delta()) {
+          Lo += ls->le * tr * f / ls->pdf;
+        } else {
+          auto mis = balance_heuristic(ls->pdf, ms.pg.pdf(wi, ls->wo));
+          Lo += ls->le * tr * f / ls->pdf * mis;
         }
       }
-      auto ps = ms.pg.sample(wi, sampler.get2d());
-      auto nv = Vertex(pv.length + 1, *ittr, ps.pdf);
-      auto rr = pv.length <= 1 ? 1.0f : psl::max(ms.sigma * ps.f / ps.pdf, 0.05f);
-      if (rr >= 1 || sampler.get1d() < rr) {
-        auto [Li, light_pdf] = radiance(scene, Ray(ms.p, ps.wo), sampler, nv);
-        auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
-        Lo += Li * (ms.sigma * ps.f / ps.pdf * mis / psl::min(1.0f, rr));
-      }
+    }
+    auto ps = ms.pg.sample(wi, sampler.get2d());
+    auto nv = Vertex(pv.length + 1, *ittr, ps.pdf);
+    auto rr = pv.length <= 1 ? 1.0f : psl::max(ps.f / ps.pdf, 0.05f);
+    if (rr >= 1 || sampler.get1d() < rr) {
+      auto [Li, light_pdf] = radiance(scene, Ray(ms.p, ps.wo), sampler, nv);
+      auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
+      Lo += Li * (ps.f / ps.pdf * mis / psl::min(1.0f, rr));
     }
     if (learning_phase)
       stree.add_sample(ms.p, wi, Lo);

@@ -603,6 +603,7 @@ void geometry_context(Context& ctx) {
       .ctor<vec3, vec3>()
       .member("lower", &AABB::lower)
       .member("upper", &AABB::upper);
+  ctx.type<OBB>("OBB").ctor<AABB, mat4>();
   ctx.type<Sphere>("Sphere").ctor<vec3, float>();
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();
@@ -614,7 +615,8 @@ void geometry_context(Context& ctx) {
         return ctx.call<TriangleMesh>("load_mesh", filename);
       }))
       .method("apply", &TriangleMesh::apply);
-  ctx.type<Shape>("Shape").ctor_variant<Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
+  ctx.type<Shape>("Shape")
+      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2)>>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2i)>>(height_map_to_mesh);
