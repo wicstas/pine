@@ -2,4 +2,5 @@
 build/
 scenes/
 images/
+gallery/
 *.bpm

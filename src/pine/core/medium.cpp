@@ -88,9 +88,8 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
     Fatal("[VDBMedium]Expect a grid of float density from: `", filename, '`');
   this->grid = grid;
   this->handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
-  // sigma_maj = sigma_z * grid->tree().root().getMax();
-  sigma_maj = vec3(max_value(sigma_z)) * grid->tree().root().getMax();
-  sigma_maj_inv = vec3(1.0f) / sigma_maj;
+  sigma_maj = max_value(sigma_z) * grid->tree().root().getMax();
+  sigma_maj_inv = 1.0f / sigma_maj;
   auto aabb = AABB();
   for (int i = 0; i < 3; i++) {
     aabb.lower[i] = grid->worldBBox().min()[i];
@@ -114,25 +113,24 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
   auto u = rng.nextf();
-  auto coef = vec3(1.0f);
+  auto W = vec3(1.0f);
 
-  // auto channel = int(sampler.get1d() * 3);
-  auto channel = 0;
   while (true) {
-    auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_inv[channel];
-    tmin += dt;
+    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
     if (tmin >= tmax)
       return psl::nullopt;
     auto cr = pi0 + tmin * di;
     auto D = density(cr.x, cr.y, cr.z);
-    auto sigma = sigma_z[channel] * D;
-    auto dd = 1.0f - sigma * sigma_maj_inv[channel];
+    auto sig_s = sigma_s * D;
+    auto sig_t = sigma_z * D;
+    auto sig_n = vec3(sigma_maj) - sig_t;
+    auto dd = max_value(sig_n) / (max_value(sig_t) + max_value(sig_n));
     if (u < dd) {
-      coef *= (sigma_maj - sigma_z * D) / (sigma_maj[channel] * dd);
+      W *= sig_n * sigma_maj_inv / dd;
       u /= dd;
     } else {
-      coef *= sigma_s * D / (sigma_maj[channel] * (1 - dd));
-      return MediumInteraction(tmin, ray(tmin), coef, HgPhaseFunction(0.0f));
+      W *= sig_s * sigma_maj_inv / (1 - dd);
+      return MediumInteraction(tmin, ray(tmin), W, HgPhaseFunction(0.0f));
     }
   }
 }
@@ -154,11 +152,11 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   auto n_channel_remaining = 3;
   bool active_channels[]{true, true, true};
   while (n_channel_remaining) {
-    tmin += -psl::log(1 - rng.nextf()) * min_value(sigma_maj_inv);
+    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
     if (tmin >= tmax)
       break;
     auto cr = pi0 + di * tmin;
-    auto dd = vec3(1.0f) - sigma_z * density(cr.x, cr.y, cr.z) * min_value(sigma_maj_inv);
+    auto dd = vec3(1.0f) - sigma_z * density(cr.x, cr.y, cr.z) * sigma_maj_inv;
     for (int channel = 0; channel < 3; channel++) {
       if (!active_channels[channel])
         continue;
