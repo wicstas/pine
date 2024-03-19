@@ -36,42 +36,14 @@ struct SurfaceInteraction {
 
 struct MediumInteraction {
   MediumInteraction() = default;
-  MediumInteraction(vec3 p, float W, PhaseFunction pg) : p(p), W(W), pg(psl::move(pg)) {
+  MediumInteraction(float t, vec3 p, vec3 W, PhaseFunction pg)
+      : t(t), p(p), W(W), pg(psl::move(pg)) {
   }
 
+  float t;
   vec3 p;
-  float W;
+  vec3 W;
   PhaseFunction pg;
-};
-
-struct SpectralMediumInteraction {
-  vec3 tr() const {
-    return {mits[0] ? 0 : 1, mits[1] ? 0 : 1, mits[2] ? 0 : 1};
-  }
-  bool is_entire() const {
-    return mits[0] && mits[1] && mits[2];
-  }
-
-  psl::optional<MediumInteraction>& operator[](int i) {
-    return mits[i];
-  }
-  void iterate(float u, auto f) {
-    int indices[3];
-    auto pos = 0;
-    for (int channel = 0; channel < n_channels; channel++) {
-      if (mits[channel])
-        indices[pos++] = channel;
-    }
-    if (pos == 0)
-      return;
-    auto channel = indices[int(u * pos)];
-    auto s = vec3(0.0f);
-    s[channel] = 1;
-    f(s * pos, *mits[channel]);
-  }
-
-  static constexpr int n_channels = 3;
-  psl::optional<MediumInteraction> mits[n_channels];
 };
 
 struct Interaction : psl::variant<SurfaceInteraction, MediumInteraction> {

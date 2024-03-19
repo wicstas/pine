@@ -31,7 +31,7 @@ public:
     return accel.hit8(rays);
   }
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
-  psl::pair<SpectralMediumInteraction, psl::optional<SurfaceInteraction>> intersect_tr(
+  psl::pair<psl::optional<MediumInteraction>, psl::optional<SurfaceInteraction>> intersect_tr(
       Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
 

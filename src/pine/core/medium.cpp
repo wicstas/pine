@@ -20,8 +20,8 @@ HomogeneousMedium::HomogeneousMedium(Shape shape, vec3 sigma_a, vec3 sigma_s)
   accel = EmbreeAccel();
   accel.build(geometry.get());
 }
-void HomogeneousMedium::intersect_tr(const Ray& ray, vec3& tmax, SpectralMediumInteraction& mit,
-                                     Sampler& sampler) const {
+psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
+                                                                 Sampler& sampler) const {
   auto inside = false;
   auto it = SurfaceInteraction();
   {
@@ -31,20 +31,23 @@ void HomogeneousMedium::intersect_tr(const Ray& ray, vec3& tmax, SpectralMediumI
   }
 
   auto r = ray;
+  auto channel = int(sampler.get1d() * 3);
+  auto sigma = sigma_z[channel];
   while (true) {
     auto hit = accel.intersect(r, it);
     if (inside) {
-      for (int channel = 0; channel < 3; channel++) {
-        auto t = r.tmin - psl::log(1 - sampler.get1d()) / sigma_z[channel];
-        if (t < tmax[channel]) {
-          tmax[channel] = t;
-          mit[channel] =
-              MediumInteraction(ray(t), sigma_s[channel] / sigma_z[channel], HgPhaseFunction(0.0f));
-        }
+      auto t = r.tmin - psl::log(1 - sampler.get1d()) / sigma;
+      if (t < r.tmax) {
+        /*
+          pdf = sigma * exp(-sigma * t)
+          W = sigma_s / pdf
+        */
+        return MediumInteraction(t, ray(t), sigma_s / sigma * psl::exp(sigma * (t - r.tmin)),
+                                 HgPhaseFunction(0.0f));
       }
     }
     if (!hit)
-      break;
+      return psl::nullopt;
 
     inside = dot(r.d, it.n) < 0;
     r.tmin = r.tmax + max_dim * 1e-5f;
@@ -85,8 +88,8 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
     Fatal("[VDBMedium]Expect a grid of float density from: `", filename, '`');
   this->grid = grid;
   this->handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
-  sigma_maj = max_value(sigma_z) * grid->tree().root().getMax();
-  sigma_maj_inv = 1.0f / sigma_maj;
+  sigma_maj = sigma_z * grid->tree().root().getMax();
+  sigma_maj_inv = vec3(1.0f) / sigma_maj;
   auto aabb = AABB();
   for (int i = 0; i < 3; i++) {
     aabb.lower[i] = grid->worldBBox().min()[i];
@@ -98,42 +101,34 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
   world2index = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
                         scale(1.0f / (index_end - index_start)) * translate(-index_start));
 }
-void VDBMedium::intersect_tr(const Ray& ray [[maybe_unused]], vec3& tmax [[maybe_unused]],
-                             SpectralMediumInteraction& mit [[maybe_unused]],
-                             Sampler& sampler [[maybe_unused]]) const {
-  auto tmin = ray.tmin, tmax_ = max_value(tmax);
-  if (!bbox.intersect(ray.o, ray.d, tmin, tmax_))
-    return;
+psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler& sampler) const {
+  auto tmin = ray.tmin, tmax = ray.tmax;
+  if (!bbox.intersect(ray.o, ray.d, tmin, tmax))
+    return psl::nullopt;
   auto pi0 = vec3(world2index * vec4(ray(0), 1.0f));
-  auto pi1 = vec3(world2index * vec4(ray(tmax_), 1.0f));
-  auto di = (pi1 - pi0) / tmax_;
+  auto pi1 = vec3(world2index * vec4(ray(tmax), 1.0f));
+  auto di = (pi1 - pi0) / tmax;
   auto grid = (nanovdb::FloatGrid*)this->grid;
   auto density = grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
-  float u[3]{rng.nextf(), rng.nextf(), rng.nextf()};
+  auto u = rng.nextf();
+  auto pdf = 1.0f;
 
-  auto n_channel_remaining = 3;
-  bool active_channels[]{true, true, true};
-  while (n_channel_remaining) {
-    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+  auto channel = int(sampler.get1d() * 3);
+  while (true) {
+    auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_inv[channel];
+    tmin += dt;
+    if (tmin >= tmax)
+      return psl::nullopt;
     auto cr = pi0 + tmin * di;
-    auto dd = vec3(1.0f) - sigma_z * density(cr.x, cr.y, cr.z) * sigma_maj_inv;
-    for (int channel = 0; channel < 3; channel++) {
-      if (!active_channels[channel])
-        continue;
-      else if (tmin >= psl::min(tmax_, tmax[channel])) {
-        n_channel_remaining--;
-        active_channels[channel] = false;
-      } else if (u[channel] <= dd[channel]) {
-        u[channel] /= dd[channel];
-      } else {
-        tmax[channel] = tmin;
-        mit[channel] = MediumInteraction(ray(tmin), sigma_s[channel] / sigma_z[channel],
-                                         HgPhaseFunction(0.0f));
-        n_channel_remaining--;
-        active_channels[channel] = false;
-      }
+    auto sigma = sigma_z[channel] * density(cr.x, cr.y, cr.z);
+    auto dd = 1.0f - sigma * sigma_maj_inv[channel];
+    if (u <= dd) {
+      u /= dd;
+    } else {
+      pdf *= sigma_maj[channel] * psl::exp(-sigma_maj[channel] * dt);
+      return MediumInteraction(tmin, ray(tmin), sigma_s / pdf, HgPhaseFunction(0.0f));
     }
   }
 }
@@ -155,11 +150,11 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   auto n_channel_remaining = 3;
   bool active_channels[]{true, true, true};
   while (n_channel_remaining) {
-    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+    tmin += -psl::log(1 - rng.nextf()) * min_value(sigma_maj_inv);
     if (tmin >= tmax)
       break;
     auto cr = pi0 + di * tmin;
-    auto dd = vec3(1.0f) - sigma_z * density(cr.x, cr.y, cr.z) * sigma_maj_inv;
+    auto dd = vec3(1.0f) - sigma_z * density(cr.x, cr.y, cr.z) * min_value(sigma_maj_inv);
     for (int channel = 0; channel < 3; channel++) {
       if (!active_channels[channel])
         continue;
