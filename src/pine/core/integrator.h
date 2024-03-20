@@ -33,7 +33,8 @@ public:
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   psl::pair<psl::optional<MediumInteraction>, psl::optional<SurfaceInteraction>> intersect_tr(
       Ray& ray, Sampler& sampler) const;
-  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler,
+                     int skip_medium_index = -1) const;
 
   void render(Scene& scene) override;
 

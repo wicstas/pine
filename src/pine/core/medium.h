@@ -27,6 +27,24 @@ private:
   float max_dim;
 };
 
+struct MajorantGrid {
+  struct Node {
+    float majorant;
+  };
+
+  struct Traverer {
+    Ray ray;
+    MajorantGrid& grid;
+  };
+
+  Traverer traver(const Ray& ray) {
+    return Traverer{ray, *this};
+  }
+
+private:
+  Array3d<Node> grid;
+};
+
 struct VDBMedium {
   VDBMedium(psl::string filename, mat4 transform, vec3 sigma_s, vec3 sigma_z);
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;

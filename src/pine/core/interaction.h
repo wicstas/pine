@@ -44,6 +44,7 @@ struct MediumInteraction {
   vec3 p;
   vec3 W;
   PhaseFunction pg;
+  int medium_index = -1;
 };
 
 struct Interaction : psl::variant<SurfaceInteraction, MediumInteraction> {

@@ -124,7 +124,9 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
     auto sig_s = sigma_s * D;
     auto sig_t = sigma_z * D;
     auto sig_n = vec3(sigma_maj) - sig_t;
-    auto dd = max_value(sig_n) / (max_value(sig_t) + max_value(sig_n));
+    auto Pn = max_value(W * sig_n);
+    auto Ps = max_value(W * sig_t);
+    auto dd = Pn / (Pn + Ps);
     if (u < dd) {
       W *= sig_n * sigma_maj_inv / dd;
       u /= dd;
@@ -146,7 +148,7 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   auto density = grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
-  auto u = rng.nextf();
+  float u[]{rng.nextf(), rng.nextf(), rng.nextf()};
   auto tr = vec3(1.0f);
 
   auto n_channel_remaining = 3;
@@ -160,8 +162,8 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
     for (int channel = 0; channel < 3; channel++) {
       if (!active_channels[channel])
         continue;
-      if (u < dd[channel]) {
-        u /= dd[channel];
+      if (u[channel] < dd[channel]) {
+        u[channel] /= dd[channel];
       } else {
         tr[channel] = 0;
         n_channel_remaining--;
