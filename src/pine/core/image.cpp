@@ -3,17 +3,30 @@
 
 namespace pine {
 
+vec4 Image::operator[](vec2i p) const {
+  return dispatch([p](auto&& x) {
+    auto value = x[p];
+    if constexpr (psl::SameAs<decltype(value), vec3u8>)
+      return vec4(inverse_gamma_correction(value / 255.0f));
+    else if constexpr (psl::SameAs<decltype(value), vec4u8>)
+      return inverse_gamma_correction(value / 255.0f);
+    else
+      return vec4(value);
+  });
+}
+
 float mse(const Image& a, const Image& b) {
   CHECK_EQ(a.size(), b.size());
   auto error = 0.0;
-  for_2d(a.size(), [&](vec2i p) { error += average(psl::sqr(a[p] - b[p])); });
+  for_2d(a.size(), [&](vec2i p) { error += average(psl::sqr(vec3(a[p] - b[p]))); });
   return error / area(a.size());
 }
 float rmse(const Image& ref, const Image& b) {
   CHECK_EQ(ref.size(), b.size());
   auto error = 0.0;
-  for_2d(ref.size(),
-         [&](vec2i p) { error += average(psl::sqr((ref[p] - b[p]) / max(ref[p], vec3(1e-3f)))); });
+  for_2d(ref.size(), [&](vec2i p) {
+    error += average(psl::sqr(vec3(ref[p] - b[p]) / max(vec3(ref[p]), vec3(1e-3f))));
+  });
   return error / area(ref.size());
 }
 

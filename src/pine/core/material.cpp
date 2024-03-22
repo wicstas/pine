@@ -23,22 +23,23 @@ namespace pine {
 // }
 
 void material_context(Context& ctx) {
-  ctx.type<DiffuseBSDF>("DiffuseBSDF").ctor<Node3f>();
-  ctx.type<ConductorBSDF>("ConductorBSDF").ctor<Node3f, Nodef>();
-  ctx.type<DielectricBSDF>("DielectricBSDF").ctor<Node3f, Nodef, Nodef>();
-  ctx.type<SpecularReflectionBSDF>("SpecularReflectionBSDF").ctor<Node3f>();
-  ctx.type<SpecularRefrectionBSDF>("SpecularRefrectionBSDF").ctor<Node3f, Nodef>();
-  ctx.type<BSDF>("BSDF").ctor_variant<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
-  ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
-  ctx.type<MetalMaterial>("Metal").ctor<Node3f, Nodef>();
-  ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>();
-  ctx.type<GlossyMaterial>("Glossy").ctor<Node3f, Node3f, Nodef>();
-  ctx.type<MirrorMaterial>("Mirror").ctor<Node3f>();
-  ctx.type<WaterMaterial>("Transparent").ctor<Node3f, Nodef>();
+  // ctx.type<DiffuseBSDF>("DiffuseBSDF").ctor<Node3f>();
+  // ctx.type<ConductorBSDF>("ConductorBSDF").ctor<Node3f, Nodef>();
+  // ctx.type<SpecularReflectionBSDF>("SpecularReflectionBSDF").ctor<Node3f>();
+  // ctx.type<SpecularRefrectionBSDF>("SpecularRefrectionBSDF").ctor<Node3f, Nodef>();
+  // ctx.type<BSDF>("BSDF").ctor_variant<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
   ctx.type<EmissiveMaterial>("Emissive").ctor<Node3f>();
+  ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
+  ctx.type<MirrorMaterial>("Mirror").ctor<Node3f>();
+  ctx.type<SubsurfaceMaterial>("Subsurface").ctor<Node3f, Nodef, vec3>();
+  ctx.type<UberMaterial>("Uber")
+      .ctor<Node3f, Nodef>()
+      .ctor<Node3f, Nodef, Nodef>()
+      .ctor<Node3f, Nodef, Nodef, Nodef>()
+      .ctor<Node3f, Nodef, Nodef, Nodef, Nodef>();
   ctx.type<Material>("Material")
-      .ctor_variant<DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial, MirrorMaterial,
-                    WaterMaterial, EmissiveMaterial>();
+      .ctor_variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, UberMaterial,
+                    SubsurfaceMaterial>();
 }
 
 }  // namespace pine

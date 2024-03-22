@@ -13,7 +13,8 @@ namespace pine {
 struct Plane {
   Plane(vec3 position, vec3 normal);
   bool hit(const Ray& ray) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3 p, vec2 u) const;
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
@@ -31,7 +32,8 @@ struct Sphere {
   Sphere(vec3 position, float radius);
   static float compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r);
   bool hit(const Ray& ray) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
@@ -47,7 +49,8 @@ private:
 struct Disk {
   Disk(vec3 position, vec3 normal, float r);
   bool hit(const Ray& ray) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2) const;
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
@@ -66,7 +69,8 @@ struct Line {
   Line(vec3 p0, vec3 p1, float thickness);
 
   bool hit(const Ray& ray) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2) const;
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
@@ -87,7 +91,8 @@ struct Rect {
   Rect& apply(mat4 m);
 
   bool hit(const Ray& ray) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
@@ -107,12 +112,10 @@ struct Triangle {
   Triangle(vec3 v0, vec3 v1, vec3 v2);
 
   static bool hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2);
-  static bool intersect(Ray& ray, SurfaceInteraction& it, vec3 v0, vec3 v1, vec3 v2);
-
-  bool hit(const Ray& ray) const {
-    return hit(ray, v0, v1, v2);
-  }
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  static bool intersect(Ray& ray, vec3 v0, vec3 v1, vec3 v2);
+  bool hit(const Ray& ray) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
 
   AABB get_aabb() const;
   ShapeSample sample(vec3, vec2 u) const;
@@ -134,7 +137,10 @@ struct TriangleMesh {
   bool hit(const Ray&) const {
     PINE_UNREACHABLE;
   }
-  bool intersect(Ray&, SurfaceInteraction&) const {
+  bool intersect(Ray&) const {
+    PINE_UNREACHABLE;
+  }
+  void compute_surface_info(SurfaceInteraction&) const {
     PINE_UNREACHABLE;
   }
   AABB get_aabb() const;
@@ -149,12 +155,13 @@ struct TriangleMesh {
   }
 
   bool hit(const Ray& ray, int index) const;
-  bool intersect(Ray& ray, SurfaceInteraction& it, int index) const;
+  bool intersect(Ray& ray, int index) const;
+  void compute_surface_info(SurfaceInteraction& it, int index) const;
+  AABB get_aabb(size_t index) const;
 
   size_t num_triangles() const {
     return indices.size();
   }
-  AABB get_aabb(size_t index) const;
 
   TriangleMesh& apply(mat4 m) {
     for (auto& v : vertices)
@@ -193,8 +200,11 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line
   bool hit(const Ray& ray) const {
     return dispatch([&](auto&& x) { return x.hit(ray); });
   }
-  bool intersect(Ray& ray, SurfaceInteraction& it) const {
-    return dispatch([&](auto&& x) { return x.intersect(ray, it); });
+  bool intersect(Ray& ray) const {
+    return dispatch([&](auto&& x) { return x.intersect(ray); });
+  }
+  void compute_surface_info(SurfaceInteraction& it) const {
+    return dispatch([&](auto&& x) { return x.compute_surface_info(it); });
   }
   AABB get_aabb() const {
     return dispatch([&](auto&& x) { return x.get_aabb(); });
@@ -202,8 +212,11 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line
   float area() const {
     return dispatch([&](auto&& x) { return x.area(); });
   }
-  ShapeSample sample(vec3 p, vec2 u) const {
-    return dispatch([&](auto&& x) { return x.sample(p, u); });
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u) const {
+    auto ss = dispatch([&](auto&& x) { return x.sample(p, u); });
+    if (ss.pdf <= 0.0f)
+      return psl::nullopt;
+    return ss;
   }
   float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
     return dispatch([&](auto&& x) { return x.pdf(it, git, ray); });
@@ -218,12 +231,21 @@ struct Geometry {
   bool hit(const Ray& ray) const {
     return shape.hit(ray);
   }
-  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  bool intersect(Ray& ray) const {
+    return shape.intersect(ray);
+  }
+  void compute_surface_info(SurfaceInteraction& it) const {
+    shape.compute_surface_info(it);
+  }
   AABB get_aabb() const {
     return shape.get_aabb();
   }
-  ShapeSample sample(vec3 p, vec2 u) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u) const {
+    return shape.sample(p, u);
+  }
+  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
+    return shape.pdf(it, git, ray);
+  }
   float area() const {
     return shape.area();
   }

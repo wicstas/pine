@@ -15,35 +15,33 @@ vec3 RandomWalkIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler) {
 
   for (int depth = 0; depth < max_path_length; depth++) {
     auto wi = -ray.d;
-    auto ittr = intersect_tr(ray, sampler);
-    if (!ittr) {
+    auto [mit, it] = intersect_tr(ray, sampler);
+    // if (mit) {
+    //   if (depth + 1 >= max_path_length)
+    //     break;
+    //   auto ps = mit->pg.sample(wi, sampler.get2d());
+    //   beta *= ps.f / ps.pdf;
+    //   ray = Ray(mit->p, ps.wo);
+    // }
+
+    if (!it) {
       if (scene.env_light)
         L += beta * scene.env_light->color(ray.d);
       break;
-    } else if (ittr->is<MediumInteraction>()) {
-      if (depth + 1 >= max_path_length)
-        break;
-      auto& ms = ittr->as<MediumInteraction>();
-      auto ps = ms.pg.sample(wi, sampler.get2d());
-      beta *= ps.f / ps.pdf;
-      ray = Ray(ms.p, ps.wo);
+    }
+    if (it->material().is<EmissiveMaterial>()) {
+      L += beta * it->material().le({*it, wi});
+      break;
+    }
+    if (depth + 1 >= max_path_length)
+      break;
+
+    if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
+      auto cosine = absdot(bs->wo, it->n);
+      beta *= bs->f * (cosine / bs->pdf);
+      ray = it->spawn_ray(bs->wo);
     } else {
-      auto& it = ittr->as<SurfaceInteraction>();
-      if (it.material()->is<EmissiveMaterial>()) {
-        L += beta * it.material()->le({it, wi});
-        break;
-      }
-
-      if (depth + 1 >= max_path_length)
-        break;
-
-      if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-        auto cosine = absdot(bs->wo, it.n);
-        beta *= bs->f * (cosine / bs->pdf);
-        ray = it.spawn_ray(bs->wo);
-      } else {
-        break;
-      }
+      break;
     }
   }
   return L;

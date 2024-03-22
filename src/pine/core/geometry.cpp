@@ -6,8 +6,8 @@
 namespace pine {
 
 Plane::Plane(vec3 position, vec3 normal) : position(position), n(normalize(normal)) {
-  if (length(normal) == 0)
-    Fatal("`Plane` shouldn't have degenerated normal");
+  if (length(n) == 0)
+    Fatal("`Plane` can't have degenerated normal");
   coordinate_system(normal, u, v);
 }
 bool Plane::hit(const Ray& ray) const {
@@ -16,21 +16,25 @@ bool Plane::hit(const Ray& ray) const {
     return false;
   return t < ray.tmax;
 }
-bool Plane::intersect(Ray& ray, SurfaceInteraction& it) const {
+bool Plane::intersect(Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (t < ray.tmin)
-    return false;
-  if (t >= ray.tmax)
+  if (t < ray.tmin || t > ray.tmax)
     return false;
   ray.tmax = t;
-  it.p = ray.o + t * ray.d;
-  it.n = n;
-  it.uv = vec2(dot(it.p - position, u), dot(it.p - position, v));
-  it.p = position + it.uv.x * u + it.uv.y * v;
   return true;
 }
+void Plane::compute_surface_info(SurfaceInteraction& it) const {
+  it.n = n;
+  auto dp = it.p - position;
+  it.uv = vec2(dot(dp, u), dot(dp, v));
+  it.p = position + it.uv.x * u + it.uv.y * v;
+}
 AABB Plane::get_aabb() const {
-  return {vec3(-10.0f), vec3(10.0f)};
+  return {position + vec3(-100.0f), position + vec3(100.0f)};
+}
+static vec3 project_to_plane(vec3 plane_p, vec3 plane_ex, vec3 plane_ey, vec3 p) {
+  auto dp = p - plane_p;
+  return plane_p + plane_ex * dot(plane_ex, dp) + plane_ey * dot(plane_ey, dp);
 }
 ShapeSample Plane::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
@@ -38,9 +42,9 @@ ShapeSample Plane::sample(vec3 p, vec2 u2) const {
   auto l = absdot(p - position, n);
   auto ex = l * p_sphere.x / p_sphere.z;
   auto ey = l * p_sphere.y / p_sphere.z;
-  ss.p = position + u * ex + v * ey;
+  ss.p = project_to_plane(position, u, v, p) + u * ex + v * ey;
   ss.n = n;
-  ss.uv = vec2{ex, ey};
+  ss.uv = {ex, ey};
   ss.w = normalize(ss.p - p, ss.distance);
   ss.pdf = 1.0f / (2 * Pi);
   return ss;
@@ -50,8 +54,6 @@ float Plane::pdf(const Interaction&, const SurfaceInteraction&, const Ray&) cons
 }
 
 Sphere::Sphere(vec3 position, float radius) : c(position), r(radius) {
-  if (radius < 0.0f)
-    Fatal("`Sphere` shouldn't have negative radius ", radius);
 }
 float Sphere::compute_t(vec3 ro, vec3 rd, float tmin, vec3 p, float r) {
   auto ro_p = ro - p;
@@ -70,28 +72,39 @@ bool Sphere::hit(const Ray& ray) const {
   float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   return t > ray.tmin && t < ray.tmax;
 }
-bool Sphere::intersect(Ray& ray, SurfaceInteraction& it) const {
+bool Sphere::intersect(Ray& ray) const {
   float t = compute_t(ray.o, ray.d, ray.tmin, c, r);
   if (t < ray.tmin || t > ray.tmax)
     return false;
   ray.tmax = t;
-  it.n = normalize(ray(t) - this->c);
-  it.p = c + it.n * r;
-  auto [phi, theta] = cartesian_to_spherical(it.n);
-  it.uv = vec2(phi, theta);
   return true;
+}
+void Sphere::compute_surface_info(SurfaceInteraction& it) const {
+  it.n = normalize(it.p - this->c);
+  it.p = c + it.n * r;
+  it.uv = cartesian_to_spherical(it.n);
 }
 ShapeSample Sphere::sample(vec3 p, vec2 u) const {
   auto ss = ShapeSample{};
-  ss.n = uniform_sphere(u);
-  ss.p = offset_ray_origin(c + r * ss.n, ss.n);
-  ss.uv = u;
-  ss.w = normalize(ss.p - p, ss.distance);
-  ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
+  auto l = length(c - p);
+  auto cos_theta = psl::sqrt(1 - psl::sqr(r / l));
+  auto S = 2 * Pi * (1 - cos_theta);
+  auto cos_theta_wo = 1 - u.y * (1 - cos_theta);
+  auto sin_theta_wo = psl::sqrt(1 - cos_theta_wo * cos_theta_wo);
+  ss.w = spherical_to_cartesian(u.x * 2 * Pi, sin_theta_wo, cos_theta_wo);
+  ss.w = coordinate_system((c - p) / l) * ss.w;
+  ss.distance = compute_t(p, ss.w, 0.0f, c, r);
+  ss.pdf = 1.0f / S;
+  ss.p = p + ss.w * ss.distance;
+  ss.n = (ss.p - c) / r;
+  ss.uv = cartesian_to_spherical(ss.n);
   return ss;
 }
-float Sphere::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
+float Sphere::pdf(const Interaction& it, const SurfaceInteraction&, const Ray&) const {
+  auto l = length(c - it.p());
+  auto cos_theta = psl::sqrt(1 - psl::sqr(r / l));
+  auto S = 2 * Pi * (1 - cos_theta);
+  return 1.0f / S;
 }
 AABB Sphere::get_aabb() const {
   return {c - vec3(r), c + vec3(r)};
@@ -100,12 +113,15 @@ AABB Sphere::get_aabb() const {
 Disk::Disk(vec3 position, vec3 normal, float r) : position(position), n(normal), r(r) {
   coordinate_system(normal, u, v);
   if (r < 0.0f)
-    Fatal("`Disk` shouldn't have negative radius ", r);
-  if (length(normal) == 0.0f)
-    Fatal("`Disk` shouldn't have degenerated normal");
+    Fatal("`Disk` can't have negative radius ", r);
+  if (length(n) == 0.0f)
+    Fatal("`Disk` can't have degenerated normal");
 }
 bool Disk::hit(const Ray& ray) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
+  auto denom = dot(ray.d, n);
+  if (denom == 0.0f)
+    return false;
+  float t = (dot(position, n) - dot(ray.o, n)) / denom;
   if (t < ray.tmin)
     return false;
   if (t >= ray.tmax)
@@ -115,21 +131,26 @@ bool Disk::hit(const Ray& ray) const {
     return false;
   return true;
 }
-bool Disk::intersect(Ray& ray, SurfaceInteraction& it) const {
-  float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
-  if (t < ray.tmin)
+bool Disk::intersect(Ray& ray) const {
+  auto denom = dot(ray.d, n);
+  if (denom == 0.0f)
     return false;
-  if (t >= ray.tmax)
+  float t = (dot(position, n) - dot(ray.o, n)) / denom;
+  if (t < ray.tmin || t > ray.tmax)
     return false;
   vec3 p = ray.o + t * ray.d - position;
   if (length_squared(p) > psl::sqr(r))
     return false;
 
   ray.tmax = t;
-  it.p = ray.o + t * ray.d;
-  it.n = n;
-  it.uv = vec2(length(p), phi2pi(p.x, p.z));
   return true;
+}
+void Disk::compute_surface_info(SurfaceInteraction& it) const {
+  it.n = n;
+  auto ex = dot(it.p - position, u);
+  auto ey = dot(it.p - position, v);
+  it.uv = {ex, ey};
+  it.p = position + ex * u + ey * v;
 }
 ShapeSample Disk::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
@@ -138,7 +159,7 @@ ShapeSample Disk::sample(vec3 p, vec2 u2) const {
   ss.n = n;
   ss.uv = u2;
   ss.w = normalize(ss.p - p, ss.distance);
-  ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
+  ss.pdf = psl::sqr(ss.distance) / psl::max(absdot(ss.w, ss.n) * area(), epsilon);
   return ss;
 }
 float Disk::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
@@ -175,7 +196,7 @@ bool Line::hit(const Ray& ray) const {
 
   return D <= thickness;
 }
-bool Line::intersect(Ray& ray, SurfaceInteraction& it) const {
+bool Line::intersect(Ray& ray) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
   auto o2r = inverse(r2o);
   auto p0 = vec3(o2r * vec4(this->p0, 1.0f));
@@ -193,12 +214,14 @@ bool Line::intersect(Ray& ray, SurfaceInteraction& it) const {
     return false;
 
   ray.tmax = z;
-  it.p = ray(z);
+  return true;
+}
+void Line::compute_surface_info(SurfaceInteraction& it) const {
   auto lt = dot(it.p - this->p0, tbn.z);
   auto lp = lerp(lt, this->p0, this->p1);
   it.n = normalize(it.p - lp);
-
-  return true;
+  it.uv = {lt, 0.0f};
+  // TODO
 }
 ShapeSample Line::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
@@ -284,7 +307,7 @@ bool Rect::hit(const Ray& ray) const {
     return false;
   return true;
 }
-bool Rect::intersect(Ray& ray, SurfaceInteraction& it) const {
+bool Rect::intersect(Ray& ray) const {
   float denom = dot(ray.d, n);
   if (denom == 0.0f)
     return false;
@@ -299,10 +322,15 @@ bool Rect::intersect(Ray& ray, SurfaceInteraction& it) const {
   if (v < -0.5f || v > 0.5f)
     return false;
   ray.tmax = t;
+  return true;
+}
+void Rect::compute_surface_info(SurfaceInteraction& it) const {
+  vec3 p = it.p - position;
+  float u = dot(p, rx);
+  float v = dot(p, ry);
   it.p = position + lx * ex * u + ly * ey * v;
   it.n = n;
   it.uv = vec2(u, v) + vec2(0.5f);
-  return true;
 }
 ShapeSample Rect::sample(vec3 o, vec2 u) const {
   auto ss = ShapeSample{};
@@ -431,7 +459,7 @@ bool Triangle::hit(const Ray& ray, vec3 v0, vec3 v1, vec3 v2) {
     return false;
   return u + v < 1.0f;
 }
-bool Triangle::intersect(Ray& ray, SurfaceInteraction& it, vec3 v0, vec3 v1, vec3 v2) {
+bool Triangle::intersect(Ray& ray, vec3 v0, vec3 v1, vec3 v2) {
   vec3 E1 = v1 - v0;
   vec3 E2 = v2 - v0;
   vec3 T = ray.o - v0;
@@ -452,16 +480,20 @@ bool Triangle::intersect(Ray& ray, SurfaceInteraction& it, vec3 v0, vec3 v1, vec
   if (u + v > 1.0f)
     return false;
   ray.tmax = t;
-  it.uv = vec2(u, v);
   return true;
 }
-bool Triangle::intersect(Ray& ray, SurfaceInteraction& it) const {
-  bool hit = intersect(ray, it, v0, v1, v2);
-  if (hit) {
-    it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
-    it.n = n;
-  }
-  return hit;
+bool Triangle::hit(const Ray& ray) const {
+  return hit(ray, v0, v1, v2);
+}
+bool Triangle::intersect(Ray& ray) const {
+  return intersect(ray, v0, v1, v2);
+}
+void Triangle::compute_surface_info(SurfaceInteraction& it) const {
+  float u = dot(it.p - v0, v1 - v0);
+  float v = dot(it.p - v0, v2 - v0);
+  it.uv = vec2(u, v);
+  it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
+  it.n = n;
 }
 ShapeSample Triangle::sample(vec3 p, vec2 u) const {
   ShapeSample ss;
@@ -471,7 +503,7 @@ ShapeSample Triangle::sample(vec3 p, vec2 u) const {
   ss.n = n;
   ss.uv = u;
   ss.w = normalize(ss.p - p, ss.distance);
-  ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
+  ss.pdf = psl::sqr(ss.distance) / psl::max(absdot(ss.w, ss.n) * area(), epsilon);
   return ss;
 }
 float Triangle::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
@@ -501,21 +533,21 @@ bool TriangleMesh::hit(const Ray& ray, int index) const {
   auto face = indices[index];
   return Triangle::hit(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
 }
-bool TriangleMesh::intersect(Ray& ray, SurfaceInteraction& it, int index) const {
+bool TriangleMesh::intersect(Ray& ray, int index) const {
   DCHECK_LT(size_t(index), indices.size());
   auto face = indices[index];
+  return Triangle::intersect(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
+}
+void TriangleMesh::compute_surface_info(SurfaceInteraction& it, int index) const {
+  auto face = indices[index];
   auto v0 = vertices[face[0]], v1 = vertices[face[1]], v2 = vertices[face[2]];
-  auto hit = Triangle::intersect(ray, it, v0, v1, v2);
-  if (hit) {
-    it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
-    it.n = normalize(cross(v0 - v1, v0 - v2));
-    if (normals.size())
-      it.n =
-          normalize(lerp(it.uv[0], it.uv[1], normals[face[0]], normals[face[1]], normals[face[2]]));
-    if (texcoords.size())
-      it.uv = lerp(it.uv[0], it.uv[1], texcoords[face[0]], texcoords[face[1]], texcoords[face[2]]);
-  }
-  return hit;
+  it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
+  it.n = normalize(cross(v0 - v1, v0 - v2));
+  if (normals.size())
+    it.n =
+        normalize(lerp(it.uv[0], it.uv[1], normals[face[0]], normals[face[1]], normals[face[2]]));
+  if (texcoords.size())
+    it.uv = lerp(it.uv[0], it.uv[1], texcoords[face[0]], texcoords[face[1]], texcoords[face[2]]);
 }
 AABB TriangleMesh::get_aabb(size_t index) const {
   DCHECK_LT(index, indices.size());
@@ -571,20 +603,6 @@ TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> hei
   parallel_for(resolution,
                [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
   return height_map_to_mesh(height_map);
-}
-
-bool Geometry::intersect(Ray& ray, SurfaceInteraction& it) const {
-  auto hit = shape.intersect(ray, it);
-  if (hit) {
-    it.geometry = this;
-  }
-  return hit;
-}
-ShapeSample Geometry::sample(vec3 p, vec2 u) const {
-  return shape.sample(p, u);
-}
-float Geometry::pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
-  return shape.pdf(it, git, ray);
 }
 
 int Geometry::global_id = 0;

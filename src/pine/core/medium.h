@@ -57,6 +57,8 @@ private:
   psl::opaque_shared_ptr handle;
   void* grid;
   OBB bbox;
+  vec3 sigma_majs;
+  vec3 sigma_maj_invs;
   float sigma_maj;
   float sigma_maj_inv;
   vec3 sigma_s;

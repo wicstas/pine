@@ -28,14 +28,8 @@ static void intersect_func(const RTCIntersectFunctionNArguments* args) {
 
   auto ray = Ray(vec3(ray_.org_x, ray_.org_y, ray_.org_z), vec3(ray_.dir_x, ray_.dir_y, ray_.dir_z),
                  ray_.tnear, ray_.tfar);
-  auto it = SurfaceInteraction();
-  if (shape.intersect(ray, it)) {
+  if (shape.intersect(ray)) {
     ray_.tfar = ray.tmax;
-    hit_.Ng_x = it.n.x;
-    hit_.Ng_y = it.n.y;
-    hit_.Ng_z = it.n.z;
-    hit_.u = it.uv.x;
-    hit_.v = it.uv.y;
     hit_.geomID = args->geomID;
     hit_.primID = args->primID;
     args->valid[0] = -1;
@@ -201,11 +195,10 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
     if (auto texcoord = mesh.texcoord_of(face, uv))
       it.uv = *texcoord;
     else
-      it.uv = vec2(rayhit.hit.u, rayhit.hit.v);
+      it.uv = uv;
   } else {
-    it.p = ray(ray.tmax);
-    it.n = vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z);
-    it.uv = vec2(rayhit.hit.u, rayhit.hit.v);
+    it.p = ray();
+    (*geometries)[rayhit.hit.geomID]->compute_surface_info(it);
   }
 
   return true;

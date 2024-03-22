@@ -133,7 +133,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   parallel_for(film.size(), [&](vec2i p) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
     if (auto it = SurfaceInteraction(); intersect(ray, it)) {
-      albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
+      albedo[p] = it.material().albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
       position[p] = it.p;
     }
@@ -204,7 +204,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   //       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   //     }
   //     for_2d(film.size(), [&](vec2i p) {
-  //       images[0][p] = correct_gamma(uncharted2_filmic(vec3(film[{p.x, film.height() - 1 -
+  //       images[0][p] = gamma_correction(uncharted2_filmic(vec3(film[{p.x, film.height() - 1 -
   //       p.y}])));
   //     });
   //   }
@@ -220,7 +220,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   //       auto& sampler = samplers[threadIdx].start_pixel(p, 0);
   //       images[1][p] = color_map_auto(leaf.li_estimate(w) / 1.5f);
   //       images[2][p] = color_map_auto(leaf.li_estimate(w, false) / 1.5f);
-  //       images[3][p] = correct_gamma(
+  //       images[3][p] = gamma_correction(
   //           uncharted2_filmic(radiance(scene, Ray(position[{x, y}], w, 1e-4f), sampler,
   //                                      Vertex::first_vertex(I_estimate[p]), stats)));
   //     });
@@ -306,46 +306,46 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Ver
     return Lo;
   } else {
     auto& it = ittr->as<SurfaceInteraction>();
-    if (it.material()->is<EmissiveMaterial>()) {
+    if (it.material().is<EmissiveMaterial>()) {
       if (pv.length == 0)
-        Lo += it.material()->le({it, wi});
+        Lo += it.material().le({it, wi});
       return Lo;
     }
     if (pv.length + 1 >= max_path_length)
       return Lo;
 
     // Sample direct lighting
-    if (!it.material()->is_delta())
+    if (!it.material().is_delta())
       if (auto ls = light_sampler.sample(it, sampler.get1d(), sampler.get2d())) {
         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
           auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
           if (ls->light->is_delta()) {
-            auto f = it.material()->f({it, wi, ls->wo});
+            auto f = it.material().f({it, wi, ls->wo});
             Lo += ls->le * tr * cosine * f / ls->pdf;
           } else {
-            auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+            auto [f, bsdf_pdf] = it.material().f_pdf({it, wi, ls->wo});
             auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
             Lo += ls->le * tr * cosine * f / ls->pdf * mis;
           }
         }
       }
-    if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+    if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto nray = it.spawn_ray(bs->wo);
       if (auto nit = SurfaceInteraction(); intersect(nray, nit)) {
-        if (nit.material()->is<EmissiveMaterial>()) {
+        if (nit.material().is<EmissiveMaterial>()) {
           auto cosine = absdot(bs->wo, it.n);
           auto mis = 1.0f;
-          if (!it.material()->is_delta()) {
+          if (!it.material().is_delta()) {
             auto light_pdf = light_sampler.pdf(it, nit, nray);
             mis = balance_heuristic(bs->pdf, light_pdf);
           }
-          Lo += nit.material()->le({nit, -bs->wo}) * cosine * bs->f / bs->pdf * mis;
+          Lo += nit.material().le({nit, -bs->wo}) * cosine * bs->f / bs->pdf * mis;
         }
       } else if (scene.env_light) {
         auto cosine = absdot(bs->wo, it.n);
         auto mis = 1.0f;
-        if (!it.material()->is_delta()) {
+        if (!it.material().is_delta()) {
           auto light_pdf = scene.env_light->pdf(it, bs->wo);
           mis = balance_heuristic(bs->pdf, light_pdf);
         }
@@ -355,29 +355,29 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Ver
 
     // Sample indirect lighting
     auto& leaf = guide.traverse(it.p);
-    auto prob_a = it.material()->is_delta() ? 0.0f : use_learned_ratio;
+    auto prob_a = it.material().is_delta() ? 0.0f : use_learned_ratio;
     if (with_probability(prob_a, sampler)) {
       if (auto gs = leaf.sample(sampler.get2d())) {
         auto cosine = absdot(gs->wo, it.n);
         auto mec = MaterialEvalCtx(it, wi, gs->wo);
-        auto f = it.material()->f(mec);
+        auto f = it.material().f(mec);
         auto nv = Vertex(pv.length + 1, pv.throughput * cosine * f / gs->pdf, gs->pdf);
         auto Li = radiance(scene, it.spawn_ray(gs->wo), sampler, nv);
-        auto mis = balance_heuristic(prob_a, gs->pdf, 1 - prob_a, it.material()->pdf(mec));
+        auto mis = balance_heuristic(prob_a, gs->pdf, 1 - prob_a, it.material().pdf(mec));
         Lo += Li * cosine * f / gs->pdf * mis / prob_a;
         if (collect_radiance_sample)
           guide.add_sample(leaf, it.p, RadianceSample(gs->wo, average(Li) / gs->pdf * mis / prob_a),
                            sampler.get3d());
       }
     } else {
-      if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+      if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
         auto cosine = absdot(bs->wo, it.n);
         auto nv = Vertex(pv.length + 1, pv.throughput * cosine * bs->f / bs->pdf, bs->pdf,
-                         it.material()->is_delta());
+                         it.material().is_delta());
         auto Li = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
         auto mis = balance_heuristic(1 - prob_a, bs->pdf, prob_a, leaf.pdf(bs->wo));
         Lo += Li * cosine * bs->f / bs->pdf * mis / (1 - prob_a);
-        if (collect_radiance_sample && !it.material()->is_delta())
+        if (collect_radiance_sample && !it.material().is_delta())
           guide.add_sample(leaf, it.p,
                            RadianceSample(bs->wo, average(Li) / bs->pdf * mis / (1 - prob_a)),
                            sampler.get3d());

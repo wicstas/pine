@@ -11,14 +11,18 @@
 
 namespace pine {
 
-inline int n_threads() {
-  return std::thread::hardware_concurrency();
-}
+int n_threads();
 
 thread_local inline int threadIdx;
 
 template <typename F, typename... Args>
 void parallel_for_impl(int n_items, F&& f) {
+  if (n_threads() <= 1) {
+    for (int i = 0; i < n_items; i++)
+      f(i);
+    return;
+  }
+
   auto threads = psl::vector<std::thread>(n_threads());
   auto global_index = std::atomic<int>(0);
   auto tid = 0;

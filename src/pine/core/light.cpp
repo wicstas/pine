@@ -55,20 +55,23 @@ LightSample DirectionalLight::sample(const Interaction&, vec2) const {
 psl::optional<LightSample> AreaLight::sample(const Interaction& it, vec2 u) const {
   CHECK(geometry);
   LightSample ls;
-  auto gs = geometry->sample(it.p(), u);
-  ls.wo = gs.w;
-  ls.pdf = gs.pdf;
-  ls.distance = gs.distance;
-  ls.le = geometry->material->le(LeEvalCtx{gs.p, gs.n, gs.uv, -ls.wo});
-  if (ls.le.is_black())
+  if (auto gs = geometry->sample(it.p(), u)) {
+    ls.wo = gs->w;
+    ls.pdf = gs->pdf;
+    ls.distance = gs->distance;
+    ls.le = geometry->material->le(LeEvalCtx{gs->p, gs->n, gs->uv, -ls.wo});
+    if (ls.le.is_black())
+      return psl::nullopt;
+  } else {
     return psl::nullopt;
+  }
   return ls;
 }
 
 vec3 Sky::color(vec3 wo) const {
   return sun_color * sky_color(wo);
 }
-LightSample Sky::sample(const Interaction& it, vec2 u2) const {
+psl::optional<LightSample> Sky::sample(const Interaction& it, vec2 u2) const {
   auto ls = LightSample{};
   if (it.is<SurfaceInteraction>()) {
     ls.wo = coordinate_system(it.surface_n()) * uniform_hemisphere(u2);
@@ -111,7 +114,7 @@ Atmosphere::Atmosphere(vec3 sun_direction_, vec3 sun_color, vec2i image_size)
 vec3 Atmosphere::color(vec3 wo) const {
   return sun_color * atmosphere_color(wo, sun_direction, 8);
 }
-LightSample Atmosphere::sample(const Interaction&, vec2 u2) const {
+psl::optional<LightSample> Atmosphere::sample(const Interaction&, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
   auto sc = ic2sc(ds.p, image_size);
@@ -141,27 +144,34 @@ ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint, float elevation, fl
   }
 }
 vec3 ImageSky::color(vec3 wo) const {
+  // return vec3(0.0f);
   if (w2l)
     wo = *w2l * wo;
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
-  return tint * (*image)[ic];
+  return tint * (vec3)(*image)[ic];
 }
-LightSample ImageSky::sample(const Interaction&, vec2 u2) const {
+psl::optional<LightSample> ImageSky::sample(const Interaction&, vec2 u2) const {
   auto ls = LightSample{};
   auto ds = distr.sample(u2);
+  CHECK(!psl::isnan(ds.pdf));
+  CHECK(!psl::isinf(ds.pdf));
+  CHECK_GE(ds.pdf, 0);
   auto sc = ic2sc(ds.p, image->size());
   ls.wo = uniform_sphere(sc);
   psl::swap(ls.wo.y, ls.wo.z);
   if (l2w)
     ls.wo = *l2w * ls.wo;
+  CHECK(!ls.wo.has_inf());
+  CHECK(!ls.wo.has_nan());
   ls.distance = float_max;
   ls.pdf = ds.pdf / (4 * Pi);
-  ls.le = tint * (*image)[ds.p];
+  ls.le = tint * (vec3)(*image)[ds.p];
   return ls;
 }
 float ImageSky::pdf(const Interaction&, vec3 wo) const {
+  // return 10000.0f;
   if (w2l)
     wo = *w2l * wo;
   psl::swap(wo.y, wo.z);

@@ -286,7 +286,7 @@ void EARSIntegrator::render(Scene& scene) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
     auto it = SurfaceInteraction();
     if (intersect(ray, it)) {
-      albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
+      albedo[p] = it.material().albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
     }
   });
@@ -430,8 +430,8 @@ EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene [[maybe_unu
   //   return result;
   // }
 
-  // if (it.material()->is<EmissiveMaterial>()) {
-  //   Lo += it.material()->le({it, wi});
+  // if (it.material().is<EmissiveMaterial>()) {
+  //   Lo += it.material().le({it, wi});
   //   if (!pv.is_delta)
   //     result.light_pdf = light_sampler.pdf(it.geometry, it, ray, pv.n);
   //   global_stats.record_path_length(pv.length + 1);
@@ -470,15 +470,15 @@ EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene [[maybe_unu
   // for (int i = 0; i < ni; i++) {
   //   auto W = vec3(0.0f);
   //   auto cost = 0.0f;
-  //   if (!it.material()->is_delta()) {
+  //   if (!it.material().is_delta()) {
   //     if (auto ls = light_sampler.sample(it.p, it.n, sampler.get1d(), sampler.get2d())) {
   //       if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
   //         auto cosine = absdot(ls->wo, it.n);
   //         if (ls->light->is_delta()) {
-  //           auto f = it.material()->f({it, wi, ls->wo});
+  //           auto f = it.material().f({it, wi, ls->wo});
   //           W += ls->le * cosine * f / ls->pdf;
   //         } else {
-  //           auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+  //           auto [f, bsdf_pdf] = it.material().f_pdf({it, wi, ls->wo});
   //           auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
   //           W += ls->le * cosine * f / ls->pdf * mis;
   //         }
@@ -487,11 +487,11 @@ EARSIntegrator::RadianceResult EARSIntegrator::radiance(Scene& scene [[maybe_unu
   //     cost += 1.0f;
   //   }
 
-  //   if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+  //   if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
   //     auto cosine = absdot(bs->wo, it.n);
   //     auto nv = Vertex(pv.length + 1, pv.throughput / n * bs->f / bs->pdf * cosine,
   //                      pv.throughput * bs->f / bs->pdf * cosine, it.n, it.p, bs->pdf,
-  //                      it.material()->is_delta());
+  //                      it.material().is_delta());
   //     auto [Li, light_pdf, Li_cost] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv, stats);
   //     auto mis = 1.0f;
   //     if (light_pdf)

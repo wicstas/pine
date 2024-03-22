@@ -8,14 +8,7 @@
 namespace pine {
 
 struct SurfaceInteraction {
-  Ray spawn_ray(vec3 wo, float distance = float_max) const {
-    Ray ray;
-    ray.d = wo;
-    ray.o = offset_ray_origin(p, face_same_hemisphere(n, ray.d));
-    ray.tmin = 1e-8f;
-    ray.tmax = distance * (1.0f - 1e-3f);
-    return ray;
-  }
+  Ray spawn_ray(vec3 wo, float distance = float_max) const;
 
   void compute_transformation() {
     world_to_local = inverse(coordinate_system(n));
@@ -29,7 +22,7 @@ struct SurfaceInteraction {
   vec2 uv;
   mat3 world_to_local;
 
-  const Material* material() const;
+  const Material& material() const;
 
   const Geometry* geometry = nullptr;
 };

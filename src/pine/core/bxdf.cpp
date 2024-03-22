@@ -3,27 +3,34 @@
 
 namespace pine {
 
-psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const NodeEvalCtx& nc) const {
+psl::optional<BSDFSample> DiffuseBSDF::sample(vec3 wi, float, vec2 u, const BxdfEvalCtx& bc) const {
   BSDFSample bs;
 
   vec3 wo = cosine_weighted_hemisphere(u);
   if (CosTheta(wi) < 0)
     wo = -wo;
-  DCHECK(SameHemisphere(wi, wo));
 
   bs.wo = wo;
   bs.pdf = AbsCosTheta(bs.wo) / Pi;
-  bs.f = albedo(nc) / Pi;
-  if (bs.pdf == 0.0f)
-    return psl::nullopt;
+  bs.f = albedo(bc) / Pi;
   return bs;
+}
+vec3 DiffuseBSDF::f(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
+  if (!SameHemisphere(wi, wo))
+    return vec3(0.0f);
+  return albedo(bc) / Pi;
+}
+float DiffuseBSDF::pdf(vec3 wi, vec3 wo, const BxdfEvalCtx&) const {
+  if (!SameHemisphere(wi, wo))
+    return 0.0f;
+  return AbsCosTheta(wo) / Pi;
 }
 
 psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
-                                                const NodeEvalCtx& nc) const {
+                                                const BxdfEvalCtx& bc) const {
   BSDFSample bs;
 
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
   vec3 wm = distrib.SampleWm(wi, u2);
 
@@ -31,7 +38,7 @@ psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
   if (!SameHemisphere(wi, wo))
     return psl::nullopt;
 
-  vec3 fr = FrSchlick(albedo(nc), AbsCosTheta(wm));
+  vec3 fr = FrSchlick(albedo(bc), AbsCosTheta(wm));
 
   bs.wo = wo;
   bs.pdf = distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
@@ -39,42 +46,39 @@ psl::optional<BSDFSample> ConductorBSDF::sample(vec3 wi, float, vec2 u2,
 
   return bs;
 }
-vec3 ConductorBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
+vec3 ConductorBSDF::f(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
   if (!SameHemisphere(wi, wo))
     return {};
 
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   vec3 wh = normalize(wi + wo);
 
-  vec3 fr = FrSchlick(albedo(nc), AbsCosTheta(wh));
+  vec3 fr = FrSchlick(albedo(bc), AbsCosTheta(wh));
   return fr * distrib.D(wh) * distrib.G(wo, wi) / (4 * AbsCosTheta(wo) * AbsCosTheta(wi));
 }
-float ConductorBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
+float ConductorBSDF::pdf(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
   if (!SameHemisphere(wi, wo))
     return {};
 
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   vec3 wh = normalize(wi + wo);
 
   return distrib.pdf(wi, wh) / (4 * absdot(wi, wh));
 }
-float ConductorBSDF::roughness_amount(const NodeEvalCtx& nc) const {
-  return roughness(nc);
-}
 
-psl::optional<BSDFSample> DielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
-                                                 const NodeEvalCtx& nc) const {
+psl::optional<BSDFSample> RefractiveDielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
+                                                           const BxdfEvalCtx& bc) const {
   BSDFSample bs;
-  float etap = eta(nc);
+  float etap = eta(bc);
   if (CosTheta(wi) < 0)
     etap = 1.0f / etap;
   float fr = FrDielectric(AbsCosTheta(wi), etap);
 
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
   vec3 wm = distrib.SampleWm(wi, u2);
 
@@ -85,7 +89,7 @@ psl::optional<BSDFSample> DielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
 
     bs.wo = wo;
     bs.pdf = fr * distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
-    bs.f = albedo(nc) * fr * distrib.D(wm) * distrib.G(wo, wi) / (4 * CosTheta(wi) * CosTheta(wo));
+    bs.f = albedo(bc) * fr * distrib.D(wm) * distrib.G(wo, wi) / (4 * CosTheta(wi) * CosTheta(wo));
   } else {
     vec3 wo;
     if (!Refract(wi, wm, etap, wo))
@@ -94,19 +98,19 @@ psl::optional<BSDFSample> DielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
     bs.wo = wo;
     float denom = psl::sqr(dot(wo, wm) + dot(wi, wm) / etap);
     float dwm_dwo = absdot(wo, wm) / denom;
-    bs.pdf = (1.0f - fr) * distrib.pdf(wi, wm) * dwm_dwo;
-    bs.f = albedo(nc) * (1.0f - fr) * distrib.D(wm) * distrib.G(wi, wo) *
+    bs.pdf = distrib.pdf(wi, wm) * dwm_dwo;
+    bs.f = albedo(bc) * distrib.D(wm) * distrib.G(wi, wo) *
            psl::abs(dot(wo, wm) * dot(wi, wm) / denom / cosThetaI / cosThetaO);
   }
   return bs;
 }
-vec3 DielectricBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+vec3 RefractiveDielectricBSDF::f(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
   bool reflect = cosThetaI * cosThetaO > 0;
-  float etap = eta(nc);
+  float etap = eta(bc);
   if (!reflect)
     etap = 1.0f / etap;
 
@@ -114,67 +118,117 @@ vec3 DielectricBSDF::f(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
   if (dot(wm, wo) * cosThetaI < 0.0f || dot(wm, wi) * cosThetaO < 0.0f)
     return {};
 
-  float fr = FrDielectric(AbsCosTheta(wi), eta(nc));
-
   if (reflect) {
-    return albedo(nc) * fr * distrib.D(wm) * distrib.G(wo, wi) / (4 * cosThetaI * cosThetaO);
+    return albedo(bc) * distrib.D(wm) * distrib.G(wo, wi) / (4 * cosThetaI * cosThetaO);
   } else {
     float denom = psl::sqr(dot(wo, wm) + dot(wi, wm) / etap) * cosThetaI * cosThetaO;
-    return albedo(nc) * (1.0f - fr) * distrib.D(wm) * distrib.G(wi, wo) *
-           psl::abs(dot(wo, wm) * dot(wi, wm) / denom);
+    return albedo(bc) * distrib.D(wm) * distrib.G(wi, wo) *
+           psl::abs(dot(wo, wm) * dot(wi, wm) / psl::max(denom, epsilon));
   }
 }
-float DielectricBSDF::pdf(vec3 wi, vec3 wo, const NodeEvalCtx& nc) const {
-  float alpha = psl::clamp(psl::sqr(roughness(nc)), 0.001f, 1.0f);
+float RefractiveDielectricBSDF::pdf(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
   TrowbridgeReitzDistribution distrib(alpha, alpha);
 
   float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
   bool reflect = cosThetaI * cosThetaO > 0;
-  float etap = eta(nc);
+  float etap = eta(bc);
   if (!reflect)
     etap = 1.0f / etap;
 
   vec3 wm = FaceForward(normalize(wi * etap + wo), vec3(0, 0, 1));
   if (dot(wm, wo) * cosThetaI < 0.0f || dot(wm, wi) * cosThetaO < 0.0f)
-    return {};
-
-  float fr = FrDielectric(AbsCosTheta(wi), eta(nc));
+    return 0.0f;
 
   if (reflect) {
-    return fr * distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
+    return distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
   } else {
     float denom = psl::sqr(dot(wo, wm) + dot(wi, wm) / etap);
     float dwm_dwo = absdot(wo, wm) / denom;
-    return (1.0f - fr) * distrib.pdf(wi, wm) * dwm_dwo;
+    return distrib.pdf(wi, wm) * dwm_dwo;
   }
 }
-float DielectricBSDF::roughness_amount(const NodeEvalCtx& nc) const {
-  return roughness(nc);
+
+psl::optional<BSDFSample> DiffusiveDielectricBSDF::sample(vec3 wi, float u1, vec2 u2,
+                                                          const BxdfEvalCtx& bc) const {
+  BSDFSample bs;
+  float etap = eta(bc);
+  float fr = FrDielectric(AbsCosTheta(wi), etap);
+
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
+  TrowbridgeReitzDistribution distrib(alpha, alpha);
+  vec3 wm = distrib.SampleWm(wi, u2);
+
+  if (u1 < fr) {
+    vec3 wo = Reflect(wi, wm);
+    if (!SameHemisphere(wi, wo))
+      return psl::nullopt;
+
+    bs.wo = wo;
+    bs.pdf = distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
+    bs.f = vec3(distrib.D(wm) * distrib.G(wo, wi) / (4 * CosTheta(wi) * CosTheta(wo)));
+  } else {
+    vec3 wo = cosine_weighted_hemisphere(u2);
+    bs.wo = wo;
+    bs.pdf = AbsCosTheta(bs.wo) / Pi;
+    bs.f = albedo(bc) / Pi;
+  }
+  if (CosTheta(wi) < 0)
+    bs.wo = -bs.wo;
+  return bs;
+}
+vec3 DiffusiveDielectricBSDF::f(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
+  TrowbridgeReitzDistribution distrib(alpha, alpha);
+
+  float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
+  float etap = eta(bc);
+
+  vec3 wm = FaceForward(normalize(wi * etap + wo), vec3(0, 0, 1));
+  float fr = FrDielectric(AbsCosTheta(wi), etap);
+
+  auto f0 = vec3(fr * distrib.D(wm) * distrib.G(wo, wi) / (4 * cosThetaI * cosThetaO));
+  auto f1 = (1 - fr) * albedo(bc) / Pi;
+  return f0 + f1;
+}
+float DiffusiveDielectricBSDF::pdf(vec3 wi, vec3 wo, const BxdfEvalCtx& bc) const {
+  float alpha = psl::clamp(psl::sqr(roughness(bc)), bc.bounded_roughness(0.001f), 1.0f);
+  TrowbridgeReitzDistribution distrib(alpha, alpha);
+
+  float cosThetaO = CosTheta(wo), cosThetaI = CosTheta(wi);
+  float etap = eta(bc);
+
+  vec3 wm = FaceForward(normalize(wi * etap + wo), vec3(0, 0, 1));
+  if (dot(wm, wo) * cosThetaI < 0.0f || dot(wm, wi) * cosThetaO < 0.0f)
+    return 0.0f;
+
+  float fr = FrDielectric(AbsCosTheta(wi), eta(bc));
+
+  auto pdf0 = fr * distrib.pdf(wi, wm) / (4 * absdot(wi, wm));
+  auto pdf1 = (1 - fr) * AbsCosTheta(wo);
+  return pdf0 + pdf1;
 }
 
 psl::optional<BSDFSample> SpecularReflectionBSDF::sample(vec3 wi, float, vec2,
-                                                         const NodeEvalCtx& nc) const {
+                                                         const BxdfEvalCtx& bc) const {
   auto bs = BSDFSample{};
   bs.wo = Reflect(wi, vec3{0, 0, 1});
-  bs.f = albedo(nc) / psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.f = albedo(bc) / psl::max(AbsCosTheta(bs.wo), epsilon);
   bs.pdf = 1.0f;
   return bs;
 }
-vec3 SpecularReflectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {
+vec3 SpecularReflectionBSDF::f(vec3, vec3, const BxdfEvalCtx&) const {
   PINE_UNREACHABLE;
   return vec3{0.0f};
 }
-float SpecularReflectionBSDF::pdf(vec3, vec3, const NodeEvalCtx&) const {
+float SpecularReflectionBSDF::pdf(vec3, vec3, const BxdfEvalCtx&) const {
   PINE_UNREACHABLE;
-  return 0.0f;
-}
-float SpecularReflectionBSDF::roughness_amount(const NodeEvalCtx&) const {
   return 0.0f;
 }
 
 psl::optional<BSDFSample> SpecularRefrectionBSDF::sample(vec3 wi, float, vec2,
-                                                         const NodeEvalCtx& nc) const {
-  // float etap = eta(nc);
+                                                         const BxdfEvalCtx& bc) const {
+  // float etap = eta(bc);
   // if (CosTheta(wi) < 0)
   //   etap = 1.0f / etap;
   // float fr = FrDielectric(AbsCosTheta(wi), etap);
@@ -184,21 +238,18 @@ psl::optional<BSDFSample> SpecularRefrectionBSDF::sample(vec3 wi, float, vec2,
   //   bs.wo = Reflect(wi, vec3{0, 0, 1});
   // else if (!Refract(wi, vec3{0, 0, 1}, etap, bs.wo))
   //   return psl::nullopt;
-  // bs.f = albedo(nc) / psl::max(AbsCosTheta(bs.wo), epsilon);
+  // bs.f = albedo(bc) / psl::max(AbsCosTheta(bs.wo), epsilon);
   // bs.pdf = 1.0f;
   bs.wo = -wi;
-  bs.f = albedo(nc) / psl::max(AbsCosTheta(bs.wo), epsilon);
+  bs.f = albedo(bc) / psl::max(AbsCosTheta(bs.wo), epsilon);
   bs.pdf = 1.0f;
   return bs;
 }
-vec3 SpecularRefrectionBSDF::f(vec3, vec3, const NodeEvalCtx&) const {
+vec3 SpecularRefrectionBSDF::f(vec3, vec3, const BxdfEvalCtx&) const {
   PINE_UNREACHABLE;
 }
-float SpecularRefrectionBSDF::pdf(vec3, vec3, const NodeEvalCtx&) const {
+float SpecularRefrectionBSDF::pdf(vec3, vec3, const BxdfEvalCtx&) const {
   PINE_UNREACHABLE;
-}
-float SpecularRefrectionBSDF::roughness_amount(const NodeEvalCtx&) const {
-  return 0.0f;
 }
 
 }  // namespace pine

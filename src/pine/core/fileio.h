@@ -45,6 +45,7 @@ psl::optional<Image> load_image(void* data, size_t size);
 psl::optional<TriangleMesh> load_mesh(void* data, size_t size);
 TriangleMesh load_mesh(psl::string_view filename);
 
+void load_gltf(Scene& scene_, psl::string_view filename);
 void load_scene(Scene& scene_, psl::string_view filename);
 
 void interpret_file(Context& context, psl::string_view filename);

@@ -411,7 +411,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 }
 
 template <typename F>
-bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
+bool BVHImpl::Intersect(Ray& ray, F&& f) const {
   if (this->nodes.size() == 0)
     return false;
   RayOctant rayOctant = RayOctant(ray);
@@ -425,7 +425,7 @@ bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
 
   if (PINE_UNLIKELY(nodes[next].primitiveIndices.size())) {
     for (int index : nodes[next].primitiveIndices)
-      if (f(ray, it, index))
+      if (f(ray, index))
         hit = true;
   } else {
     while (true) {
@@ -439,7 +439,7 @@ bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
           leftChildIndex = node.children[0];
         } else {
           for (int index : leftChild.primitiveIndices)
-            if (f(ray, it, index))
+            if (f(ray, index))
               hit = true;
         }
       }
@@ -450,7 +450,7 @@ bool BVHImpl::Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const {
 
         } else {
           for (int index : rightChild.primitiveIndices)
-            if (f(ray, it, index))
+            if (f(ray, index))
               hit = true;
         }
       }
@@ -549,21 +549,41 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
   if ((*geometries).size() == 0)
     return false;
 
-  return tbvh.Intersect(ray, it, [&](Ray& ray, SurfaceInteraction& it, int i_lbvh) {
+  auto geom_index = uint32_t(0), prim_index = uint32_t(0);
+
+  auto hit = tbvh.Intersect(ray, [&](Ray& ray, int i_lbvh) {
     auto& geometry = (*geometries)[indices[i_lbvh]];
 
     if (i_lbvh < int(lbvh.size())) {
       auto& mesh = geometry->shape.as<TriangleMesh>();
-      auto hit = lbvh[i_lbvh].Intersect(ray, it, [&](Ray& ray, SurfaceInteraction& it, int index) {
-        return mesh.intersect(ray, it, index);
+      auto hit = lbvh[i_lbvh].Intersect(ray, [&](Ray& ray, int index) {
+        auto hit = mesh.intersect(ray, index);
+        if (hit)
+          prim_index = index;
+        return hit;
       });
       if (hit)
-        it.geometry = geometry.get();
+        geom_index = indices[i_lbvh];
       return hit;
     } else {
-      return geometry->intersect(ray, it);
+      auto hit = geometry->intersect(ray);
+
+      if (hit)
+        geom_index = indices[i_lbvh];
+      return hit;
     }
   });
+  if (hit) {
+    it.p = ray();
+    it.geometry = (*geometries)[geom_index].get();
+    auto& shape = (*geometries)[geom_index]->shape;
+    if (shape.is<TriangleMesh>())
+      shape.as<TriangleMesh>().compute_surface_info(it, prim_index);
+    else
+      shape.compute_surface_info(it);
+  }
+
+  return hit;
 }
 
 }  // namespace pine

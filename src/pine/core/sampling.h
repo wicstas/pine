@@ -56,4 +56,14 @@ inline float balance_heuristic(float pF, float pG) {
   return pF / (pF + pG);
 }
 
+inline bool with_prob(float prob, auto& u) {
+  if (u < prob) {
+    u /= prob;
+    return true;
+  } else {
+    u = (u - prob) / (1 - prob);
+    return false;
+  }
+}
+
 }  // namespace pine

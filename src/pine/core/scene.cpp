@@ -10,20 +10,30 @@ void Scene::add_material(psl::string name, Material material) {
   std::lock_guard<std::mutex> lock{mutex};
   materials[psl::move(name)] = psl::make_shared<Material>(psl::move(material));
 }
-void Scene::add_geometry(Shape shape, psl::string material_name) {
+int Scene::add_geometry(Shape shape, psl::string material_name) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  geometries.push_back(psl::make_shared<Geometry>(psl::move(shape), find_material(material_name)));
+  const auto& material = find_material(material_name);
+  if (material->is<SubsurfaceMaterial>())
+    add_medium(
+        Medium(HomogeneousMedium(shape, vec3(0.0f), material->as<SubsurfaceMaterial>().sigma_s)));
+  geometries.push_back(psl::make_shared<Geometry>(psl::move(shape), material));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
+  return geometries.size() - 1;
 }
-void Scene::add_geometry(Shape shape, Material material) {
+int Scene::add_geometry(Shape shape, Material material) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
+  if (material.is<SubsurfaceMaterial>()) {
+    add_medium(
+        Medium(HomogeneousMedium(shape, vec3(0.0f), material.as<SubsurfaceMaterial>().sigma_s)));
+  }
   geometries.push_back(psl::make_shared<Geometry>(psl::move(shape),
                                                   psl::make_shared<Material>(psl::move(material))));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
+  return geometries.size() - 1;
 }
 void Scene::add_light(Light light) {
   static std::mutex mutex;

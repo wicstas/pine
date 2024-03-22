@@ -35,6 +35,7 @@ struct NodeCheckerboard;
 struct NodeNoisef;
 struct NodeNoise3f;
 struct NodeImage;
+struct NodeImagef;
 struct NodeComponent;
 struct NodeToVec3;
 
@@ -44,7 +45,7 @@ struct Mnode<float> {
                               NodeBinary<float, '*'>, NodeBinary<float, '/'>,
                               NodeBinary<float, '^'>, NodeUnary<float, '-'>, NodeUnary<float, 'a'>,
                               NodeUnary<float, 's'>, NodeUnary<float, 'r'>, NodeUnary<float, 'f'>,
-                              NodeComponent, NodeNoisef, NodeCheckerboard>;
+                              NodeComponent, NodeNoisef, NodeCheckerboard, NodeImagef>;
 
   template <typename T>
   requires psl::one_of<T, Types>
@@ -176,7 +177,6 @@ struct NodeComponent {
       Fatal("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
   };
   float eval(const NodeEvalCtx& ctx) const {
-    CHECK_RANGE(n, 0, 2);
     return x(ctx)[n];
   }
 
@@ -233,6 +233,14 @@ private:
 struct NodeImage {
   NodeImage(Node3f p, psl::shared_ptr<Image> image) : p{psl::move(p)}, image{psl::move(image)} {};
   vec3 eval(const NodeEvalCtx& ctx) const;
+
+private:
+  Node3f p;
+  psl::shared_ptr<Image> image;
+};
+struct NodeImagef {
+  NodeImagef(Node3f p, psl::shared_ptr<Image> image) : p{psl::move(p)}, image{psl::move(image)} {};
+  float eval(const NodeEvalCtx& ctx) const;
 
 private:
   Node3f p;

@@ -86,7 +86,8 @@ struct AABB {
     return psl::to_string("{", lower, ", ", upper, "}");
   }
 
-  bool intersect(Ray& ray, SurfaceInteraction&) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction&) const;
   AABB get_aabb() const {
     return *this;
   }
@@ -109,7 +110,10 @@ struct OBB {
   OBB(AABB aabb, mat4 m);
   bool hit(Ray ray) const;
   bool intersect(vec3 o, vec3 d, float& tmin, float& tmax) const;
-  bool intersect(Ray& ray, SurfaceInteraction&) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction&) const {
+    PINE_UNREACHABLE;
+  }
   AABB get_aabb() const {
     return AABB(*this);
   }

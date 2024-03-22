@@ -45,7 +45,7 @@ public:
   template <typename F>
   bool hit(const Ray& ray, F&& f) const;
   template <typename F>
-  bool Intersect(Ray& ray, SurfaceInteraction& it, F&& f) const;
+  bool Intersect(Ray& ray, F&& f) const;
 
   AABB get_aabb() const {
     return union_(nodes[rootIndex].aabbs[0], nodes[rootIndex].aabbs[1]);

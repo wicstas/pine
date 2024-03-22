@@ -13,8 +13,8 @@ namespace pine {
 
 struct Scene {
   void add_material(psl::string name, Material material);
-  void add_geometry(Shape shape, psl::string material_name);
-  void add_geometry(Shape shape, Material material);
+  int add_geometry(Shape shape, psl::string material_name);
+  int add_geometry(Shape shape, Material material);
   void add_light(Light light);
   void add_medium(Medium medium);
   void set_camera(Camera camera);

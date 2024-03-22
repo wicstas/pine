@@ -3,6 +3,8 @@
 #include <pine/core/parallel.h>
 #include <pine/core/scene.h>
 
+#include <cfenv>
+
 namespace pine {
 
 PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
@@ -24,6 +26,7 @@ struct PathIntegrator::Vertex {
   Interaction it;
   float pdf;
   bool is_delta;
+  bool inside_subsurface_model;
 };
 void PathIntegrator::render(Scene& scene) {
   RTIntegrator::render(scene);
@@ -87,8 +90,8 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
     return result;
   }
 
-  if (it->material()->is<EmissiveMaterial>()) {
-    Lo += Tr * it->material()->le({*it, wi});
+  if (it->material().is<EmissiveMaterial>()) {
+    Lo += Tr * it->material().le({*it, wi});
     if (!pv.is_delta)
       result.light_pdf = light_sampler.pdf(pv.it, *it, ray);
     return result;
@@ -97,33 +100,40 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   if (pv.length + 1 >= max_path_length)
     return result;
 
-  if (!it->material()->is_delta()) {
-    if (auto ls = light_sampler.sample(*it, sampler.get1d(), sampler.get2d())) {
-      if (!hit(it->spawn_ray(ls->wo, ls->distance))) {
-        auto cosine = absdot(ls->wo, it->n);
-        auto tr = transmittance(it->p, ls->wo, ls->distance, sampler);
-        if (ls->light->is_delta()) {
-          auto f = it->material()->f({*it, wi, ls->wo});
-          Lo += Tr * ls->le * tr * cosine * f / ls->pdf;
-        } else {
-          auto [f, bsdf_pdf] = it->material()->f_pdf({*it, wi, ls->wo});
-          auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-          Lo += Tr * ls->le * tr * cosine * f / ls->pdf * mis;
+  auto rr_m = average(Tr);
+  auto lo = vec3(0.0f);
+  if (with_probability(rr_m, sampler)) {
+    if (!it->material().is_delta(*it)) {
+      if (auto ls = light_sampler.sample(*it, sampler.get1d(), sampler.get2d())) {
+        if (!hit(it->spawn_ray(ls->wo, ls->distance))) {
+          auto cosine = absdot(ls->wo, it->n);
+          auto tr = transmittance(it->p, ls->wo, ls->distance, sampler);
+          if (ls->light->is_delta()) {
+            auto f = it->material().f({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+            lo += Tr * ls->le * tr * cosine * f / ls->pdf;
+          } else {
+            auto [f, bsdf_pdf] = it->material().f_pdf({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+            auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+            lo += Tr * ls->le * tr * cosine * f / ls->pdf * mis;
+          }
         }
       }
     }
-  }
 
-  if (auto bs = it->material()->sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
-    auto cosine = absdot(bs->wo, it->n);
-    auto nv = Vertex(pv.length + 1, *it, bs->pdf, it->material()->is_delta());
-    auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
-    if (rr >= 1 || sampler.get1d() < rr) {
-      auto [Li, light_pdf] = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);
-      auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
-      Lo += Tr * Li * bs->f * (cosine / bs->pdf * mis / psl::min(1.0f, rr));
+    if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
+      auto cosine = absdot(bs->wo, it->n);
+      auto nv = Vertex(pv.length + 1, *it, bs->pdf, it->material().is_delta(*it));
+      auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
+      if (rr >= 1 || sampler.get1d() < rr) {
+        auto [Li, light_pdf] = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);
+        auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
+        lo += Tr * Li * bs->f * (cosine / bs->pdf * mis / psl::min(1.0f, rr));
+      }
     }
   }
+  if (rr_m)
+    Lo += lo / rr_m;
+
   return result;
 }
 

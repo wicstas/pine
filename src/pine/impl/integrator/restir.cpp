@@ -135,8 +135,8 @@
 //   } else {
 //     auto& it = ittr->as<SurfaceInteraction>();
 //     it.n = face_same_hemisphere(it.n, wi);
-//     if (it.material()->is<EmissiveMaterial>()) {
-//       Lo += it.material()->le({it, wi});
+//     if (it.material().is<EmissiveMaterial>()) {
+//       Lo += it.material().le({it, wi});
 //       if (!pv.is_delta)
 //         result.light_pdf = light_sampler.pdf(pv.it, it, ray);
 //       return result;
@@ -145,16 +145,16 @@
 //     if (pv.length + 1 >= max_path_length)
 //       return result;
 
-//     if (!it.material()->is_delta()) {
+//     if (!it.material().is_delta()) {
 //       if (auto ls = light_sampler.sample(*ittr, sampler.get1d(), sampler.get2d())) {
 //         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
 //           auto cosine = absdot(ls->wo, it.n);
 //           auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
 //           if (ls->light->is_delta()) {
-//             auto f = it.material()->f({it, wi, ls->wo});
+//             auto f = it.material().f({it, wi, ls->wo});
 //             Lo += ls->le * tr * cosine * f / ls->pdf;
 //           } else {
-//             auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+//             auto [f, bsdf_pdf] = it.material().f_pdf({it, wi, ls->wo});
 //             auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
 //             Lo += ls->le * tr * cosine * f / ls->pdf * mis;
 //           }
@@ -163,16 +163,16 @@
 //     }
 
 //     auto indirect = vec3(0.0f);
-//     // if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+//     // if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
 //     auto bs = psl::optional<BSDFSample>(BSDFSample());
 //     CHECK(bs);
 //     bs->wo = uniform_sphere(sampler.get2d());
 //     if (dot(bs->wo, face_same_hemisphere(it.n, wi)) < 0)
 //       bs->wo *= -1;
-//     bs->f = it.material()->albedo({it.p, it.n, it.uv}) / Pi;
+//     bs->f = it.material().albedo({it.p, it.n, it.uv}) / Pi;
 //     bs->pdf = 1.0f / (2 * Pi);
 //     auto cosine = absdot(bs->wo, it.n);
-//     auto nv = Vertex(pv.q, pv.length + 1, *ittr, bs->pdf, it.material()->is_delta());
+//     auto nv = Vertex(pv.q, pv.length + 1, *ittr, bs->pdf, it.material().is_delta());
 //     auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
 //     if (rr >= 1 || sampler.get1d() < rr) {
 //       auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
@@ -195,7 +195,7 @@
 //       }
 //       // if (R.s) {
 //       //   auto wo = normalize(R.s->xs - it.p);
-//       // Lo += R.W * R.s->Lo * absdot(wo, it.n) * it.material()->f({it, wi, wo});
+//       // Lo += R.W * R.s->Lo * absdot(wo, it.n) * it.material().f({it, wi, wo});
 //       // }
 
 //       if (iteration > 0) {
@@ -229,7 +229,7 @@
 //         Rs.W = Rs.w / (Z * luminance(Rs.s->Lo));
 
 //         auto wo = normalize(Rs.s->xs - it.p);
-//         Lo += Rs.W * Rs.s->Lo * absdot(wo, it.n) * it.material()->f({it, wi, wo});
+//         Lo += Rs.W * Rs.s->Lo * absdot(wo, it.n) * it.material().f({it, wi, wo});
 //       }
 //     } else {
 //       Lo += indirect;

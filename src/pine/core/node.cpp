@@ -18,8 +18,10 @@ float NodeCheckerboard::eval(const NodeEvalCtx& ctx) const {
 }
 
 vec3 NodeImage::eval(const NodeEvalCtx& ctx) const {
-  return (*image)[clamp(vec2i{image->size() * fract(vec2{p(ctx)})}, vec2i{0},
-                        image->size() - vec2i{1})];
+  return vec3((*image)[min(vec2i{image->size() * fract(vec2{p(ctx)})}, image->size() - vec2i(1))]);
+}
+float NodeImagef::eval(const NodeEvalCtx& ctx) const {
+  return (*image)[min(vec2i{image->size() * fract(vec2{p(ctx)})}, image->size() - vec2i(1))].x;
 }
 
 void node_context(Context& ctx) {

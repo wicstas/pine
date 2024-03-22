@@ -100,20 +100,21 @@ bool AABB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   }
   return true;
 }
-bool AABB::intersect(Ray& ray, SurfaceInteraction& it) const {
+bool AABB::intersect(Ray& ray) const {
   auto tmin = ray.tmin;
   auto tmax = ray.tmax;
   if (intersect(ray.o, ray.d, tmin, tmax)) {
     ray.tmax = tmin > ray.tmin ? tmin : tmax;
-    it.p = ray();
-    auto pu = (it.p - centroid()) / diagonal();
-    auto axis = max_axis(abs(pu));
-    it.n = vec3(0.0f);
-    it.n[axis] = pu[axis] > 0 ? 1 : -1;
     return true;
   } else {
     return false;
   }
+}
+void AABB::compute_surface_info(SurfaceInteraction& it) const {
+  auto pu = (it.p - centroid()) / diagonal();
+  auto axis = max_axis(abs(pu));
+  it.n = vec3(0.0f);
+  it.n[axis] = pu[axis] > 0 ? 1 : -1;
 }
 
 OBB::OBB(AABB aabb, mat4 m) {
@@ -166,7 +167,7 @@ bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
 
   return true;
 }
-bool OBB::intersect(Ray&, SurfaceInteraction&) const {
+bool OBB::intersect(Ray&) const {
   return false;
 }
 

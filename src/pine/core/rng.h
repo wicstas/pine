@@ -125,6 +125,10 @@ struct RNG {
     return result;
   }
 
+  double nextd() {
+    auto u64 = next64u();
+    return psl::min(u64 * 0x1p-64f, one_minus_epsilon);
+  }
   float nextf() {
     auto u64 = next64u();
     return psl::min(uint32_t(u64 ^ (u64 >> 32)) * 0x1p-32f, one_minus_epsilon);

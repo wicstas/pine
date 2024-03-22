@@ -59,7 +59,7 @@ struct Sky {
   }
 
   vec3 color(vec3 wo) const;
-  LightSample sample(const Interaction& it, vec2 u2) const;
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
   float pdf(const Interaction& it, vec3 wo) const;
 
 private:
@@ -69,7 +69,7 @@ struct Atmosphere {
   Atmosphere(vec3 sun_direction, vec3 sun_color, vec2i image_size = {1024, 1024});
 
   vec3 color(vec3 wo) const;
-  LightSample sample(const Interaction& it, vec2 u2) const;
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
   float pdf(const Interaction& it, vec3 wo) const;
 
 private:
@@ -83,7 +83,7 @@ struct ImageSky {
            float rotation = 0.0f);
 
   vec3 color(vec3 wo) const;
-  LightSample sample(const Interaction& it, vec2 u2) const;
+  psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
   float pdf(const Interaction& it, vec3 wo) const;
 
 private:
@@ -98,7 +98,11 @@ struct Light
   using variant::variant;
 
   psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const {
-    return dispatch([&](auto&& x) -> psl::optional<LightSample> { return x.sample(it, u2); });
+    auto ls = dispatch([&](auto&& x) -> psl::optional<LightSample> { return x.sample(it, u2); });
+    if (ls && ls->pdf > 0)
+      return ls;
+    else
+      return psl::nullopt;
   }
   bool is_delta() const {
     return is<PointLight>() || is<SpotLight>() || is<DirectionalLight>();
@@ -111,7 +115,11 @@ struct EnvironmentLight : psl::variant<Atmosphere, Sky, ImageSky> {
     return dispatch([&](auto&& x) { return x.color(wo); });
   }
   psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const {
-    return dispatch([&](auto&& x) { return x.sample(it, u2); });
+    auto ls = dispatch([&](auto&& x) { return x.sample(it, u2); });
+    if (ls && ls->pdf > 0)
+      return ls;
+    else
+      return psl::nullopt;
   }
   float pdf(const Interaction& it, vec3 wo) const {
     return dispatch([&](auto&& x) { return x.pdf(it, wo); });

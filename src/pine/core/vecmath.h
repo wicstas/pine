@@ -1068,6 +1068,19 @@ Vector4<T> exp(Vector4<T> val) {
 }
 
 template <typename T>
+Vector2<T> log(Vector2<T> val) {
+  return {psl::log(val.x), psl::log(val.y)};
+}
+template <typename T>
+Vector3<T> log(Vector3<T> val) {
+  return {psl::log(val.x), psl::log(val.y), psl::log(val.z)};
+}
+template <typename T>
+Vector4<T> log(Vector4<T> val) {
+  return {psl::log(val.x), psl::log(val.y), psl::log(val.z), psl::log(val.w)};
+}
+
+template <typename T>
 Vector2<T> pow(Vector2<T> val, T p) {
   return {psl::pow(val.x, p), psl::pow(val.y, p)};
 }

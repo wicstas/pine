@@ -5,7 +5,7 @@
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
 
-// #include <pine/impl/integrator/randomwalk.h>
+#include <pine/impl/integrator/randomwalk.h>
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/denoiser.h>
@@ -53,12 +53,12 @@ Context get_default_context() {
       .ctor<Accel, Sampler>()
       .ctor(+[](Sampler sampler) { return AOIntegrator(EmbreeAccel(), sampler); })
       .method("render", &AOIntegrator::render);
-  // ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
-  //     .ctor<Accel, Sampler, int>()
-  //     .ctor(+[](Sampler sampler, int max_path_length) {
-  //       return RandomWalkIntegrator(EmbreeAccel(), sampler, max_path_length);
-  //     })
-  //     .method("render", &RandomWalkIntegrator::render);
+  ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
+      .ctor<Accel, Sampler, int>()
+      .ctor(+[](Sampler sampler, int max_path_length) {
+        return RandomWalkIntegrator(EmbreeAccel(), sampler, max_path_length);
+      })
+      .method("render", &RandomWalkIntegrator::render);
   ctx.type<PathIntegrator>("PathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
       .ctor(+[](Sampler sampler, int max_path_length) {

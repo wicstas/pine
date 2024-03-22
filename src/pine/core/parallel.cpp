@@ -3,6 +3,10 @@
 
 namespace pine {
 
+int n_threads() {
+  return std::thread::hardware_concurrency();
+}
+
 void parallel_context(Context& ctx) {
   ctx("parallel_for") =
       +[](int size, psl::function<void(int)> f) { parallel_for(size, psl::move(f)); };

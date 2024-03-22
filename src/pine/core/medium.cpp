@@ -26,31 +26,32 @@ psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
   auto it = SurfaceInteraction();
   {
     auto r = Ray(ray.o, -ray.d, 0.0f, float_max);
-    if (accel.intersect(r, it) && dot(r.d, it.n) < 0.0f)
+    if (accel.intersect(r, it) && dot(r.d, it.n) > 0.0f)
       inside = true;
   }
 
   auto r = ray;
-  auto channel = int(sampler.get1d() * 3);
-  auto sigma = sigma_z[channel];
+  auto sigma = average(sigma_z);
+  auto t_sampled = -psl::log(1 - sampler.get1d()) / sigma;
+  auto t = 0.0f;
+
   while (true) {
     auto hit = accel.intersect(r, it);
     if (inside) {
-      auto t = r.tmin - psl::log(1 - sampler.get1d()) / sigma;
-      if (t < r.tmax) {
-        /*
-          pdf = sigma * exp(-sigma * t)
-          W = sigma_s / pdf
-        */
-        return MediumInteraction(t, ray(t), sigma_s / sigma * psl::exp(sigma * (t - r.tmin)),
-                                 HgPhaseFunction(0.0f));
+      auto dt = r.tmax - r.tmin;
+      if (t + dt > t_sampled) {
+        auto pdf = sigma * psl::exp(-sigma * t_sampled);
+        auto W = sigma_s * exp(-sigma_z * t_sampled) / pdf;
+        auto t_world = r.tmin + t_sampled - t;
+        return MediumInteraction(t_world, ray(t_world), W, HgPhaseFunction(0.0f));
       }
+      t += dt;
     }
     if (!hit)
       return psl::nullopt;
 
     inside = dot(r.d, it.n) < 0;
-    r.tmin = r.tmax + max_dim * 1e-5f;
+    r.tmin = r.tmax * 1.001f + max_dim * 1e-4f;
     r.tmax = ray.tmax;
   }
 }
@@ -74,7 +75,7 @@ vec3 HomogeneousMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler&) cons
       return tr;
 
     inside = dot(d, it.n) < 0;
-    ray.tmin = ray.tmax + 1e-3f;
+    ray.tmin = ray.tmax * 1.001f + max_dim * 1e-4f;
     ray.tmax = tmax;
   }
 }
@@ -89,7 +90,9 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
   this->grid = grid;
   this->handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
   sigma_maj = max_value(sigma_z) * grid->tree().root().getMax();
+  sigma_majs = sigma_z * grid->tree().root().getMax();
   sigma_maj_inv = 1.0f / sigma_maj;
+  sigma_maj_invs = 1.0f / sigma_majs;
   auto aabb = AABB();
   for (int i = 0; i < 3; i++) {
     aabb.lower[i] = grid->worldBBox().min()[i];
@@ -112,27 +115,32 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
   auto density = grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
-  auto u = rng.nextf();
-  auto W = vec3(1.0f);
+
+  auto f = vec3d(1.0f);
+  // auto pdf = vec3(1.0f);
+  auto c = int(rng.nextf() * 3);
+  auto u = rng.nextd();
 
   while (true) {
-    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+    auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_invs[c];
+    tmin += dt;
     if (tmin >= tmax)
       return psl::nullopt;
     auto cr = pi0 + tmin * di;
     auto D = density(cr.x, cr.y, cr.z);
     auto sig_s = sigma_s * D;
     auto sig_t = sigma_z * D;
-    auto sig_n = vec3(sigma_maj) - sig_t;
-    auto Pn = max_value(W * sig_n);
-    auto Ps = max_value(W * sig_t);
-    auto dd = Pn / (Pn + Ps);
-    if (u < dd) {
-      W *= sig_n * sigma_maj_inv / dd;
-      u /= dd;
+    auto sig_n = sigma_majs - sig_t;
+    auto p_e_n = sig_n[c] / sigma_majs[c];
+    if (with_prob(p_e_n, u)) {
+      f = normalize(f * exp(-sigma_majs * dt) * sig_n);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
     } else {
-      W *= sig_s * sigma_maj_inv / (1 - dd);
-      return MediumInteraction(tmin, ray(tmin), W, HgPhaseFunction(0.0f));
+      f = normalize(f * exp(-sigma_majs * dt) * sig_s);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
+      return MediumInteraction(tmin, ray(tmin), f / average(f), HgPhaseFunction(0.0f));
     }
   }
 }
@@ -148,7 +156,8 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   auto density = grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
-  float u[]{rng.nextf(), rng.nextf(), rng.nextf()};
+  auto u0 = rng.nextd();
+  double u[]{u0, u0, u0};
   auto tr = vec3(1.0f);
 
   auto n_channel_remaining = 3;

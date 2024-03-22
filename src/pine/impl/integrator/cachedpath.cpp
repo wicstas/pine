@@ -131,7 +131,7 @@ void CachedPathIntegrator::render(Scene& scene) {
   parallel_for(film.size(), [&](vec2i p) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
     if (auto it = SurfaceInteraction(); intersect(ray, it)) {
-      albedo[p] = it.material()->albedo({it.p, it.n, it.uv});
+      albedo[p] = it.material().albedo({it.p, it.n, it.uv});
       normal[p] = it.n;
     }
   });
@@ -226,8 +226,8 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
     return result;
   } else {
     auto& it = ittr->as<SurfaceInteraction>();
-    if (it.material()->is<EmissiveMaterial>()) {
-      Lo += it.material()->le({it, wi});
+    if (it.material().is<EmissiveMaterial>()) {
+      Lo += it.material().le({it, wi});
       if (!pv.is_delta)
         result.light_pdf = light_sampler.pdf(pv.it, it, ray);
       return result;
@@ -241,16 +241,16 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
     if (pv.length + 1 >= max_path_length)
       return result;
 
-    if (!it.material()->is_delta()) {
+    if (!it.material().is_delta()) {
       if (auto ls = light_sampler.sample(*ittr, sampler.get1d(), sampler.get2d())) {
         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
           auto cosine = absdot(ls->wo, it.n);
           auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
           if (ls->light->is_delta()) {
-            auto f = it.material()->f({it, wi, ls->wo});
+            auto f = it.material().f({it, wi, ls->wo});
             Lo += ls->le * tr * cosine * f / ls->pdf;
           } else {
-            auto [f, bsdf_pdf] = it.material()->f_pdf({it, wi, ls->wo});
+            auto [f, bsdf_pdf] = it.material().f_pdf({it, wi, ls->wo});
             auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
             Lo += ls->le * tr * cosine * f / ls->pdf * mis;
           }
@@ -258,9 +258,9 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
       }
     }
 
-    if (auto bs = it.material()->sample({it, wi, sampler.get1d(), sampler.get2d()})) {
+    if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
       auto cosine = absdot(bs->wo, it.n);
-      auto nv = Vertex(pv.length + 1, *ittr, bs->pdf, it.material()->is_delta());
+      auto nv = Vertex(pv.length + 1, *ittr, bs->pdf, it.material().is_delta());
       auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
       if (rr >= 1 || sampler.get1d() < rr) {
         auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);

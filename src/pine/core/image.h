@@ -4,26 +4,20 @@
 #include <pine/core/color.h>
 
 #include <psl/variant.h>
+#include <psl/memory.h>
 
 namespace pine {
 
-struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec3>, Array2d<vec4>> {
+struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec4u8>, Array2d<vec3>, Array2d<vec4>> {
   using variant::variant;
 
-  vec3 operator[](vec2i p) const {
-    return dispatch([p](auto&& x) {
-      auto value = x[p];
-      if constexpr (psl::SameAs<decltype(value), vec3u8>)
-        return correct_gamma(value / 255.0f);
-      else
-        return vec3(value);
-    });
-  }
+  vec4 operator[](vec2i p) const;
 
   vec2i size() const {
     return dispatch([](auto&& x) { return x.size(); });
   }
 };
+using ImagePtr = psl::shared_ptr<Image>;
 
 float mse(const Image& a, const Image& b);
 float rmse(const Image& ref, const Image& b);

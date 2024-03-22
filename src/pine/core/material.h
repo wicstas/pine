@@ -7,13 +7,12 @@
 
 namespace pine {
 
-struct MaterialSampleCtx : NodeEvalCtx {
-  MaterialSampleCtx(vec3 p, vec3 n, vec2 uv, vec3 wi, float u1, vec2 u2)
-      : NodeEvalCtx(p, n, uv), m2w(coordinate_system(n)), u1(u1), u2(u2) {
+struct MaterialSampleCtx : BxdfEvalCtx {
+  MaterialSampleCtx(const SurfaceInteraction& it, vec3 wi, float u1, vec2 u2,
+                    float min_roughness = 0.0f)
+      : BxdfEvalCtx(it, min_roughness), m2w(coordinate_system(it.n)), u1(u1), u2(u2) {
     this->wi = solve(m2w, wi);
-  }
-  MaterialSampleCtx(const SurfaceInteraction& it, vec3 wi, float u1, vec2 u2)
-      : MaterialSampleCtx(it.p, it.n, it.uv, wi, u1, u2){};
+  };
 
   vec3 wi;
   mat3 m2w;
@@ -21,10 +20,10 @@ struct MaterialSampleCtx : NodeEvalCtx {
   vec2 u2;
 };
 
-struct MaterialEvalCtx : NodeEvalCtx {
+struct MaterialEvalCtx : BxdfEvalCtx {
 public:
-  MaterialEvalCtx(const SurfaceInteraction& it, vec3 wi, vec3 wo)
-      : NodeEvalCtx(it.p, it.n, it.uv), wi(it.to_local(wi)), wo(it.to_local(wo)) {
+  MaterialEvalCtx(const SurfaceInteraction& it, vec3 wi, vec3 wo, float min_roughness = 0.0f)
+      : BxdfEvalCtx(it, min_roughness), wi(it.to_local(wi)), wo(it.to_local(wo)) {
   }
 
   vec3 wi;
@@ -38,191 +37,6 @@ struct LeEvalCtx : NodeEvalCtx {
   }
 
   vec3 wo;
-};
-
-struct DiffuseMaterial {
-  DiffuseMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return bsdf.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return bsdf.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return bsdf.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bsdf.albedo(nc);
-  }
-  bool is_delta() const {
-    return false;
-  }
-
-  DiffuseBSDF bsdf;
-};
-
-struct MetalMaterial {
-  MetalMaterial(Node3f albedo, Nodef roughness) : bsdf{psl::move(albedo), psl::move(roughness)} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return bsdf.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return bsdf.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return bsdf.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bsdf.albedo(nc);
-  }
-  bool is_delta() const {
-    return false;
-  }
-
-private:
-  ConductorBSDF bsdf;
-};
-
-struct GlassMaterial {
-  GlassMaterial(Node3f albedo, Nodef roughness)
-      : bsdf{psl::move(albedo), psl::move(roughness), NodeConstant{1.45f}} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return bsdf.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return bsdf.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return bsdf.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bsdf.albedo(nc);
-  }
-  bool is_delta() const {
-    return false;
-  }
-
-private:
-  DielectricBSDF bsdf;
-};
-
-struct GlossyMaterial {
-  GlossyMaterial(Node3f albedo, Node3f specular, Nodef roughness)
-      : top{psl::move(specular), psl::move(roughness), NodeConstant{1.45f}},
-        bottom{psl::move(albedo)} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    if (auto bs = top.sample(mc.wi, mc.u1, mc.u2, mc); bs && SameHemisphere(mc.wi, bs->wo))
-      return bs;
-    return bottom.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return top.f(mc.wi, mc.wo, mc) + bottom.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return top.pdf(mc.wi, mc.wo, mc) + bottom.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return top.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bottom.albedo(nc);
-  }
-  bool is_delta() const {
-    return false;
-  }
-
-private:
-  DielectricBSDF top;
-  DiffuseBSDF bottom;
-};
-
-struct MirrorMaterial {
-  MirrorMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return bsdf.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return bsdf.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return bsdf.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bsdf.albedo(nc);
-  }
-  bool is_delta() const {
-    return true;
-  }
-
-private:
-  SpecularReflectionBSDF bsdf;
-};
-
-struct WaterMaterial {
-  WaterMaterial(Node3f albedo, Nodef eta) : bsdf{psl::move(albedo), psl::move(eta)} {
-  }
-
-  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
-    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
-  }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return bsdf.f(mc.wi, mc.wo, mc);
-  }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return bsdf.pdf(mc.wi, mc.wo, mc);
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return bsdf.roughness_amount(nc);
-  }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return bsdf.albedo(nc);
-  }
-  bool is_delta() const {
-    return true;
-  }
-
-private:
-  SpecularRefrectionBSDF bsdf;
 };
 
 struct EmissiveMaterial {
@@ -243,36 +57,286 @@ struct EmissiveMaterial {
       return vec3(0.0f);
     return color.eval(ec);
   }
-  float roughness_amount(const NodeEvalCtx&) const {
+  float roughness_amount(const BxdfEvalCtx&) const {
     return 1.0f;
   }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return color(nc);
-  }
-  bool is_delta() const {
-    return false;
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return color(bc);
   }
 
   Node3f color;
 };
 
-struct Material : psl::variant<DiffuseMaterial, MetalMaterial, GlassMaterial, GlossyMaterial,
-                               MirrorMaterial, WaterMaterial, EmissiveMaterial> {
+struct DiffuseMaterial {
+  DiffuseMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+  DiffuseBSDF bsdf;
+};
+
+struct MirrorMaterial {
+  MirrorMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+private:
+  SpecularReflectionBSDF bsdf;
+};
+
+struct MetalMaterial {
+  MetalMaterial(Node3f albedo, Nodef roughness) : bsdf{psl::move(albedo), psl::move(roughness)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+  ConductorBSDF bsdf;
+};
+
+struct GlossyMaterial {
+  GlossyMaterial(Node3f albedo, Nodef roughness, Nodef eta)
+      : bsdf{psl::move(albedo), psl::move(roughness), psl::move(eta)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+  DiffusiveDielectricBSDF bsdf;
+};
+
+struct GlassMaterial {
+  GlassMaterial(Node3f albedo, Nodef roughness, Nodef eta)
+      : bsdf{psl::move(albedo), psl::move(roughness), psl::move(eta)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+  RefractiveDielectricBSDF bsdf;
+};
+
+template <typename A, typename B>
+struct BlendMaterial {
+  BlendMaterial(Nodef factor, A a, B b)
+      : factor(psl::move(factor)), a(psl::move(a)), b(psl::move(b)) {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc_) const {
+    auto mc = mc_;
+    if (with_prob(factor(mc), mc.u1))
+      return b.sample(mc);
+    else
+      return a.sample(mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    auto r = factor(mc);
+    if (r == 0.0f)
+      return a.f(mc);
+    else if (r == 1.0f)
+      return b.f(mc);
+    else
+      return lerp(r, a.f(mc), b.f(mc));
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    auto r = factor(mc);
+    if (r == 0.0f)
+      return a.pdf(mc);
+    else if (r == 1.0f)
+      return b.pdf(mc);
+    else
+      return lerp(r, a.pdf(mc), b.pdf(mc));
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return lerp(factor(bc), a.roughness_amount(bc), b.roughness_amount(bc));
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return a.albedo(bc);
+  }
+
+private:
+  Nodef factor;
+  A a;
+  B b;
+};
+
+struct UberMaterial {
+  using M0 = BlendMaterial<GlossyMaterial, GlassMaterial>;
+
+  UberMaterial(Node3f albedo, Nodef roughness, Nodef metallic = 0.0f, Nodef transmission = 0.0f,
+               Nodef ior = 1.3f)
+      : base(metallic,
+             M0(transmission, GlossyMaterial(albedo, roughness, ior),
+                GlassMaterial(albedo, roughness, ior)),
+             MetalMaterial(albedo, roughness)) {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return base.sample(mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return base.f(mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return base.pdf(mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return base.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return base.albedo(bc);
+  }
+
+private:
+  BlendMaterial<M0, MetalMaterial> base;
+};
+
+struct SubsurfaceMaterial {
+  SubsurfaceMaterial(Node3f albedo, Nodef roughness, vec3 sigma_s)
+      : base{psl::move(albedo), psl::move(roughness), 1.4f}, sigma_s(sigma_s) {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    auto s = base.sample(mc);
+    if (s)
+      s->inside_subsurface_model = CosTheta(s->wo) < 0;
+    return s;
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return base.f(mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return base.pdf(mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return base.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return base.albedo(bc);
+  }
+  GlassMaterial base;
+  vec3 sigma_s;
+};
+
+struct Material : psl::variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, UberMaterial,
+                               SubsurfaceMaterial> {
 public:
   using variant::variant;
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& c) const {
+    if (c.wi.z == 0.0f)
+      return psl::nullopt;
     return dispatch([&](auto&& x) {
       psl::optional<BSDFSample> bs = x.sample(c);
-      if (bs)
+      if (bs) {
         bs->wo = c.m2w * bs->wo;
+        if (bs->pdf == 0.0f)
+          bs = psl::nullopt;
+      }
       return bs;
     });
   }
   vec3 f(const MaterialEvalCtx& c) const {
+    if (c.wi.z * c.wo.z == 0.0f)
+      return vec3(0.0f);
     return dispatch([&](auto&& x) { return x.f(c); });
   }
   float pdf(const MaterialEvalCtx& c) const {
+    if (c.wi.z * c.wo.z == 0.0f)
+      return 0.0f;
     return dispatch([&](auto&& x) { return x.pdf(c); });
   }
   psl::pair<vec3, float> f_pdf(const MaterialEvalCtx& c) const {
@@ -281,14 +345,14 @@ public:
   vec3 le(const LeEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.le(c); });
   }
-  float roughness_amount(const NodeEvalCtx& nc) const {
-    return dispatch([&](auto&& x) { return x.roughness_amount(nc); });
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return dispatch([&](auto&& x) { return x.albedo(bc); });
   }
-  vec3 albedo(const NodeEvalCtx& nc) const {
-    return dispatch([&](auto&& x) { return x.albedo(nc); });
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return dispatch([&](auto&& x) { return x.roughness_amount(bc); });
   }
-  bool is_delta() const {
-    return dispatch([&](auto&& x) { return x.is_delta(); });
+  bool is_delta(const BxdfEvalCtx& bc) const {
+    return roughness_amount(bc) < 0.005f;
   }
 };
 

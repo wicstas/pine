@@ -4,8 +4,17 @@
 
 namespace pine {
 
-inline vec3 correct_gamma(vec3 v) {
+inline vec3 gamma_correction(vec3 v) {
   return pow(v, 1.0f / 2.2f);
+}
+inline vec4 gamma_correction(vec4 v) {
+  return pow(v, 1.0f / 2.2f);
+}
+inline vec3 inverse_gamma_correction(vec3 v) {
+  return pow(v, 2.2f);
+}
+inline vec4 inverse_gamma_correction(vec4 v) {
+  return pow(v, 2.2f);
 }
 
 inline float luminance(vec3 color) {
@@ -19,7 +28,8 @@ vec3 ACES(vec3 v);
 vec3 color_map(float v);
 vec3 color_map_auto(float v);
 
-vec3 atmosphere_color(vec3 direction, vec3 sun_direction, int nsamples, bool simulate_real_sun = false);
+vec3 atmosphere_color(vec3 direction, vec3 sun_direction, int nsamples,
+                      bool simulate_real_sun = false);
 vec3 sky_color(vec3 direction);
 
 }  // namespace pine

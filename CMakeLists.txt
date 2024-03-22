@@ -19,8 +19,8 @@ src/psl/system.cpp
 src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
-target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
-target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
+#target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
+#target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
 
 #psl Test
 add_executable(psl_test test/psl_test.cpp)
@@ -64,7 +64,7 @@ src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
 src/pine/core/gui.cpp
-#src/pine/impl/integrator/randomwalk.cpp
+src/pine/impl/integrator/randomwalk.cpp
 #src/pine/impl/integrator/guidedpath.cpp
 #src/pine/impl/integrator/cachedpath.cpp
 src/pine/impl/integrator/denoiser.cpp
@@ -74,6 +74,10 @@ src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
+
+src/contrib/stb_image_write.cpp
+src/contrib/stb_image.cpp
+src/contrib/tiny_gltf.cpp
 )
 
 add_library(pine_gui
