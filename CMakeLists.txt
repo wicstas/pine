@@ -73,7 +73,7 @@ src/pine/impl/integrator/denoiser.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
-src/pine/impl/accel/bvh.cpp
+#src/pine/impl/accel/bvh.cpp
 
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp

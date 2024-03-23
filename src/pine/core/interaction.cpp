@@ -13,9 +13,8 @@ Ray SurfaceInteraction::spawn_ray(vec3 wo, float distance) const {
 }
 
 const Material& SurfaceInteraction::material() const {
-  DCHECK(geometry);
-  DCHECK(geometry->material.get());
-  return *geometry->material;
+  DCHECK(_material);
+  return *_material;
 }
 
 }  // namespace pine

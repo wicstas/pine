@@ -91,7 +91,7 @@ struct AABB {
   AABB get_aabb() const {
     return *this;
   }
-  ShapeSample sample(vec3, vec2) const {
+  psl::optional<ShapeSample> sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
   float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
@@ -117,7 +117,7 @@ struct OBB {
   AABB get_aabb() const {
     return AABB(*this);
   }
-  ShapeSample sample(vec3, vec2) const {
+  psl::optional<ShapeSample> sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
   float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {

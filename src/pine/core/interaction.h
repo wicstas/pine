@@ -24,7 +24,8 @@ struct SurfaceInteraction {
 
   const Material& material() const;
 
-  const Geometry* geometry = nullptr;
+  const Shape* shape = nullptr;
+  const Material* _material = nullptr;
 };
 
 struct MediumInteraction {

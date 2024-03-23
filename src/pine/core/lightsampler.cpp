@@ -30,7 +30,7 @@ psl::optional<LightSample> UniformLightSampler::sample(const Interaction& it, fl
 }
 float UniformLightSampler::pdf(const Interaction& it, const SurfaceInteraction& git,
                                const Ray& ray) const {
-  return git.geometry->pdf(it, git, ray) / lights.size();
+  return git.shape->pdf(it, git, ray) / lights.size();
 }
 
 }  // namespace pine

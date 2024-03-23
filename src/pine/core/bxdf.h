@@ -22,7 +22,7 @@ struct BSDFSample {
   vec3 wo;
   vec3 f;
   float pdf = 0.0f;
-  bool inside_subsurface_model = false;
+  bool enter_subsurface = false;
 };
 
 struct SpecularReflectionBSDF {

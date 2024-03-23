@@ -14,7 +14,7 @@
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
-#include <pine/impl/accel/bvh.h>
+// #include <pine/impl/accel/bvh.h>
 
 namespace pine {
 
@@ -24,12 +24,12 @@ Context get_default_context() {
   vecmath_context(ctx);
   array2d_context(ctx);
   rng_context(ctx);
-  geometry_context(ctx);
-  medium_context(ctx);
   image_context(ctx);
-  light_context(ctx);
   node_context(ctx);
   material_context(ctx);
+  geometry_context(ctx);
+  medium_context(ctx);
+  light_context(ctx);
   film_context(ctx);
   camera_context(ctx);
   scene_context(ctx);
@@ -38,9 +38,9 @@ Context get_default_context() {
   parallel_context(ctx);
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
-  ctx.type<BVH>("BVH").ctor();
+  // ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
-  ctx.type<Accel>("Accel").ctor_variant<BVH, EmbreeAccel>();
+  ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")

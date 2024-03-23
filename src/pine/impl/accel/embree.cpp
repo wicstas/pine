@@ -64,10 +64,34 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
     }
   }
 }
-void EmbreeAccel::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geometries) {
-  this->geometries = geometries;
-  if (geometries->size() == 0)
-    return;
+static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& shape,
+                       uint32_t expected_index) {
+  if (shape.is<TriangleMesh>()) {
+    auto mesh = shape.as<TriangleMesh>();
+    RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_TRIANGLE);
+
+    float* vb = (float*)rtcSetNewGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3,
+                                                sizeof(vec3), mesh.vertices.size());
+    psl::memcpy(vb, mesh.vertices.data(), mesh.vertices.byte_size());
+
+    unsigned* ib = (unsigned*)rtcSetNewGeometryBuffer(
+        geom, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, sizeof(vec3u32), mesh.num_triangles());
+    psl::memcpy(ib, mesh.indices.data(), mesh.indices.byte_size());
+    rtcCommitGeometry(geom);
+    CHECK_EQ(expected_index, rtcAttachGeometry(rtc_scene, geom));
+    rtcReleaseGeometry(geom);
+  } else {
+    RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_USER);
+    rtcSetGeometryUserPrimitiveCount(geom, 1);
+    rtcSetGeometryUserData(geom, (void*)&shape);
+    rtcSetGeometryBoundsFunction(geom, bounds_func, nullptr);
+    rtcCommitGeometry(geom);
+    CHECK_EQ(expected_index, rtcAttachGeometry(rtc_scene, geom));
+    rtcReleaseGeometry(geom);
+  }
+}
+void EmbreeAccel::build(const Scene* scene) {
+  this->scene = scene;
   rtc_device = psl::opaque_shared_ptr(
       rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
@@ -76,36 +100,35 @@ void EmbreeAccel::build(const psl::vector<psl::shared_ptr<pine::Geometry>>* geom
   auto rtc_scene = RTCScene(this->rtc_scene.get());
   rtcSetSceneBuildQuality(rtc_scene, RTC_BUILD_QUALITY_HIGH);
 
-  for (uint32_t i = 0; i < geometries->size(); i++) {
-    if ((*geometries)[i]->shape.is<TriangleMesh>()) {
-      auto mesh = (*geometries)[i]->shape.as<TriangleMesh>();
-      RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_TRIANGLE);
+  for (uint32_t i = 0; i < scene->geometries.size(); i++) {
+    build_geom(rtc_device, rtc_scene, scene->geometries[i]->shape, i);
+    indices_to_instancing_index.push_back(uint32_t(-1));
+    indices_to_instance_index.push_back(uint32_t(-1));
+  }
 
-      float* vb = (float*)rtcSetNewGeometryBuffer(
-          geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(vec3), mesh.vertices.size());
-      psl::memcpy(vb, mesh.vertices.data(), mesh.vertices.byte_size());
+  for (size_t i = 0; i < scene->instancings.size(); i++) {
+    this->instancing_scenes.push_back(psl::opaque_shared_ptr(
+        rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); }));
+    auto instancing_scene = RTCScene(instancing_scenes.back().get());
+    rtcSetSceneBuildQuality(instancing_scene, RTC_BUILD_QUALITY_HIGH);
+    build_geom(rtc_device, instancing_scene, scene->instancings[i].shape, 0);
+    rtcCommitScene(instancing_scene);
 
-      unsigned* ib = (unsigned*)rtcSetNewGeometryBuffer(
-          geom, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, sizeof(vec3u32), mesh.num_triangles());
-      psl::memcpy(ib, mesh.indices.data(), mesh.indices.byte_size());
+    for (size_t k = 0; k < scene->instancings[i].instances.size(); k++) {
+      RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_INSTANCE);
+      rtcSetGeometryInstancedScene(geom, instancing_scene);
+      rtcSetGeometryTransform(geom, 0, RTCFormat::RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
+                              &scene->instancings[i].instances[k].transform[0][0]);
       rtcCommitGeometry(geom);
-      CHECK_EQ(i, rtcAttachGeometry(rtc_scene, geom));
-      rtcReleaseGeometry(geom);
-    } else {
-      RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_USER);
-      rtcSetGeometryUserPrimitiveCount(geom, 1);
-      rtcSetGeometryUserData(geom, &(*geometries)[i]->shape);
-      rtcSetGeometryBoundsFunction(geom, bounds_func, nullptr);
-      rtcCommitGeometry(geom);
-      CHECK_EQ(i, rtcAttachGeometry(rtc_scene, geom));
+      CHECK_EQ(indices_to_instancing_index.size(), rtcAttachGeometry(rtc_scene, geom));
+      indices_to_instancing_index.push_back(i);
+      indices_to_instance_index.push_back(k);
       rtcReleaseGeometry(geom);
     }
   }
   rtcCommitScene(rtc_scene);
 }
 bool EmbreeAccel::hit(Ray ray) const {
-  if (geometries->size() == 0)
-    return false;
   RTCRay ray_;
   ray_.org_x = ray.o.x;
   ray_.org_y = ray.o.y;
@@ -120,14 +143,12 @@ bool EmbreeAccel::hit(Ray ray) const {
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.occluded = hit_func;
-  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE |
+  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcOccluded1(RTCScene(rtc_scene.get()), &ray_, &args);
   return ray_.tfar < 0;
 }
 uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
-  if (geometries->size() == 0)
-    return false;
   RTCRay8 ray_;
   for (int i = 0; i < 8; i++) {
     ray_.org_x[i] = rays[i].o.x;
@@ -144,7 +165,7 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.occluded = hit8_func;
-  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE |
+  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   int valid[8]{-1, -1, -1, -1, -1, -1, -1, -1};
   rtcOccluded8(valid, RTCScene(rtc_scene.get()), &ray_, &args);
@@ -156,8 +177,6 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
   return result;
 }
 bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
-  if (geometries->size() == 0)
-    return false;
   RTCRayHit rayhit;
   rayhit.ray.org_x = ray.o.x;
   rayhit.ray.org_y = ray.o.y;
@@ -169,21 +188,32 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
   rayhit.ray.tfar = ray.tmax;
   rayhit.ray.mask = -1;
   rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+  rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
   args.intersect = intersect_func;
-  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE |
+  args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcIntersect1(RTCScene(rtc_scene.get()), &rayhit, &args);
   if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID)
     return false;
-
   ray.tmax = rayhit.ray.tfar;
-  it.geometry = (*geometries)[rayhit.hit.geomID].get();
 
-  if (it.geometry->shape.is<TriangleMesh>()) {
-    const auto& mesh = it.geometry->shape.as<TriangleMesh>();
+  auto instancing_index = uint32_t(-1);
+  auto instance_index = uint32_t(-1);
+  if (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID) {
+    instancing_index = indices_to_instancing_index[rayhit.hit.instID[0]];
+    instance_index = indices_to_instance_index[rayhit.hit.instID[0]];
+    it.shape = &scene->instancings[instancing_index].shape;
+    it._material = scene->instancings[instancing_index].instances[instance_index].material.get();
+  } else {
+    it.shape = &scene->geometries[rayhit.hit.geomID]->shape;
+    it._material = scene->geometries[rayhit.hit.geomID]->material.get();
+  }
+
+  if (it.shape->is<TriangleMesh>()) {
+    const auto& mesh = it.shape->as<TriangleMesh>();
     auto face = mesh.indices[rayhit.hit.primID];
     auto uv = vec2(rayhit.hit.u, rayhit.hit.v);
 
@@ -198,8 +228,12 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
       it.uv = uv;
   } else {
     it.p = ray();
-    (*geometries)[rayhit.hit.geomID]->compute_surface_info(it);
+    it.shape->compute_surface_info(it);
   }
+
+  if (instancing_index != uint32_t(-1))
+    it.p = vec3(scene->instancings[instancing_index].instances[instance_index].transform *
+                vec4(it.p, 1.0f));
 
   return true;
 }

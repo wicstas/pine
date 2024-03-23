@@ -283,20 +283,36 @@ private:
 
 struct SubsurfaceMaterial {
   SubsurfaceMaterial(Node3f albedo, Nodef roughness, vec3 sigma_s)
-      : base{psl::move(albedo), psl::move(roughness), 1.4f}, sigma_s(sigma_s) {
+      : base{albedo, roughness, 1.3f}, diffuse(albedo), sigma_s(sigma_s) {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
     auto s = base.sample(mc);
     if (s)
-      s->inside_subsurface_model = CosTheta(s->wo) < 0;
+      s->enter_subsurface = CosTheta(s->wo) < 0.0f;
     return s;
   }
-  vec3 f(const MaterialEvalCtx& mc) const {
-    return base.f(mc);
+  vec3 f(MaterialEvalCtx mc) const {
+    if (!SameHemisphere(mc.wi, mc.wo)) {
+      if (CosTheta(mc.wi) < 0)
+        mc.wi = -mc.wi;
+      else
+        mc.wo = -mc.wo;
+      return diffuse.f(mc);
+    } else {
+      return base.f(mc);
+    }
   }
-  float pdf(const MaterialEvalCtx& mc) const {
-    return base.pdf(mc);
+  float pdf(MaterialEvalCtx mc) const {
+    if (!SameHemisphere(mc.wi, mc.wo)) {
+      if (CosTheta(mc.wi) < 0)
+        mc.wi = -mc.wi;
+      else
+        mc.wo = -mc.wo;
+      return diffuse.pdf(mc);
+    } else {
+      return base.pdf(mc);
+    }
   }
   vec3 le(const LeEvalCtx&) const {
     return {};
@@ -308,6 +324,7 @@ struct SubsurfaceMaterial {
     return base.albedo(bc);
   }
   GlassMaterial base;
+  DiffuseMaterial diffuse;
   vec3 sigma_s;
 };
 

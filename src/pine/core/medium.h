@@ -11,6 +11,7 @@ namespace pine {
 
 struct HomogeneousMedium {
   HomogeneousMedium(Shape shape, vec3 sigma_a, vec3 sigma_s);
+  ~HomogeneousMedium();  // = default
 
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
@@ -19,7 +20,7 @@ struct HomogeneousMedium {
   }
 
 private:
-  psl::shared_ptr<psl::vector<psl::shared_ptr<Geometry>>> geometry;
+  psl::shared_ptr<Scene> scene;
   AABB aabb;
   Accel accel;
   vec3 sigma_s;

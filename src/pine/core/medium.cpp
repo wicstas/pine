@@ -1,24 +1,27 @@
 #include <pine/core/geometry.h>
 #include <pine/core/sampling.h>
+#include <pine/core/parallel.h>
 #include <pine/core/context.h>
 #include <pine/core/sampler.h>
 #include <pine/core/medium.h>
-#include <pine/core/parallel.h>
+#include <pine/core/scene.h>
 
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/IO.h>
 
 namespace pine {
 
+HomogeneousMedium::~HomogeneousMedium() = default;
+
 HomogeneousMedium::HomogeneousMedium(Shape shape, vec3 sigma_a, vec3 sigma_s)
     : sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
   auto material = psl::make_shared<Material>(DiffuseMaterial(vec3(1.0f)));
-  geometry = psl::make_shared<psl::vector<psl::shared_ptr<Geometry>>>();
-  geometry->push_back(psl::make_shared<Geometry>(shape, material));
+  scene = psl::make_shared<Scene>();
+  scene->geometries.push_back(psl::make_shared<Geometry>(shape, material));
   aabb = shape.get_aabb();
   max_dim = max_value(aabb.diagonal());
   accel = EmbreeAccel();
-  accel.build(geometry.get());
+  accel.build(scene.get());
 }
 psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
                                                                  Sampler& sampler) const {

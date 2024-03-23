@@ -40,6 +40,7 @@ void material_context(Context& ctx) {
   ctx.type<Material>("Material")
       .ctor_variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, UberMaterial,
                     SubsurfaceMaterial>();
+  ctx.type<psl::shared_ptr<Material>>("MaterialPtr");
 }
 
 }  // namespace pine

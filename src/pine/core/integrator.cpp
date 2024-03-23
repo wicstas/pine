@@ -27,7 +27,7 @@ void RTIntegrator::render(Scene& scene) {
   sampler.init(scene.camera.film().size());
   for (int i = 0; i < n_threads(); i++)
     samplers.push_back(sampler);
-  accel.build(&scene.geometries);
+  accel.build(&scene);
   set_progress(0);
 }
 bool RTIntegrator::intersect(Ray& ray, SurfaceInteraction& it) const {

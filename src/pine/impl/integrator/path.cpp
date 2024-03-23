@@ -16,8 +16,13 @@ PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_
     Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 struct PathIntegrator::Vertex {
-  Vertex(int length, Interaction it, float pdf, bool is_delta = false)
-      : length(length), it(psl::move(it)), pdf(pdf), is_delta(is_delta) {
+  Vertex(int length, Interaction it, float pdf, bool is_delta = false,
+         bool inside_subsurface = false)
+      : length(length),
+        it(psl::move(it)),
+        pdf(pdf),
+        is_delta(is_delta),
+        inside_subsurface(inside_subsurface) {
   }
   static Vertex first_vertex() {
     return Vertex(0, {}, 0.0f, true);
@@ -26,7 +31,7 @@ struct PathIntegrator::Vertex {
   Interaction it;
   float pdf;
   bool is_delta;
-  bool inside_subsurface_model;
+  bool inside_subsurface;
 };
 void PathIntegrator::render(Scene& scene) {
   RTIntegrator::render(scene);
@@ -57,20 +62,21 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   if (mit) {
     auto Tr = transmittance(ray.o, ray.d, mit->t, sampler, mit->medium_index);
     if (pv.length + 1 < max_path_length) {
-      if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
-        if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {
-          auto tr = transmittance(mit->p, ls->wo, ls->distance, sampler);
-          auto f = mit->pg.f(wi, ls->wo);
-          if (ls->light->is_delta()) {
-            Lo += ls->le * Tr * mit->W * tr * f / ls->pdf;
-          } else {
-            auto mis = balance_heuristic(ls->pdf, mit->pg.pdf(wi, ls->wo));
-            Lo += ls->le * Tr * mit->W * tr * f / ls->pdf * mis;
+      if (!pv.inside_subsurface)
+        if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
+          if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {
+            auto tr = transmittance(mit->p, ls->wo, ls->distance, sampler);
+            auto f = mit->pg.f(wi, ls->wo);
+            if (ls->light->is_delta()) {
+              Lo += ls->le * Tr * mit->W * tr * f / ls->pdf;
+            } else {
+              auto mis = balance_heuristic(ls->pdf, mit->pg.pdf(wi, ls->wo));
+              Lo += ls->le * Tr * mit->W * tr * f / ls->pdf * mis;
+            }
           }
         }
-      }
       auto ps = mit->pg.sample(wi, sampler.get2d());
-      auto nv = Vertex(pv.length + 1, *mit, ps.pdf);
+      auto nv = Vertex(pv.length + 1, *mit, ps.pdf, pv.inside_subsurface);
       auto rr = pv.length <= 1 ? 1.0f : psl::max(ps.f / ps.pdf, 0.05f);
       if (rr >= 1 || sampler.get1d() < rr) {
         auto [Li, light_pdf] = radiance(scene, Ray(mit->p, ps.wo), sampler, nv);
@@ -122,7 +128,8 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
 
     if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
       auto cosine = absdot(bs->wo, it->n);
-      auto nv = Vertex(pv.length + 1, *it, bs->pdf, it->material().is_delta(*it));
+      auto nv =
+          Vertex(pv.length + 1, *it, bs->pdf, it->material().is_delta(*it), bs->enter_subsurface);
       auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
       if (rr >= 1 || sampler.get1d() < rr) {
         auto [Li, light_pdf] = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);

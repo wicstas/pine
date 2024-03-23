@@ -36,7 +36,7 @@ static vec3 project_to_plane(vec3 plane_p, vec3 plane_ex, vec3 plane_ey, vec3 p)
   auto dp = p - plane_p;
   return plane_p + plane_ex * dot(plane_ex, dp) + plane_ey * dot(plane_ey, dp);
 }
-ShapeSample Plane::sample(vec3 p, vec2 u2) const {
+psl::optional<ShapeSample> Plane::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
   auto p_sphere = uniform_hemisphere(u2);
   auto l = absdot(p - position, n);
@@ -84,7 +84,7 @@ void Sphere::compute_surface_info(SurfaceInteraction& it) const {
   it.p = c + it.n * r;
   it.uv = cartesian_to_spherical(it.n);
 }
-ShapeSample Sphere::sample(vec3 p, vec2 u) const {
+psl::optional<ShapeSample> Sphere::sample(vec3 p, vec2 u) const {
   auto ss = ShapeSample{};
   auto l = length(c - p);
   auto cos_theta = psl::sqrt(1 - psl::sqr(r / l));
@@ -152,7 +152,7 @@ void Disk::compute_surface_info(SurfaceInteraction& it) const {
   it.uv = {ex, ey};
   it.p = position + ex * u + ey * v;
 }
-ShapeSample Disk::sample(vec3 p, vec2 u2) const {
+psl::optional<ShapeSample> Disk::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
   auto uv = sample_disk_concentric(u2);
   ss.p = position + r * u * uv[0] + r * v * uv[1];
@@ -223,7 +223,7 @@ void Line::compute_surface_info(SurfaceInteraction& it) const {
   it.uv = {lt, 0.0f};
   // TODO
 }
-ShapeSample Line::sample(vec3 p, vec2 u2) const {
+psl::optional<ShapeSample> Line::sample(vec3 p, vec2 u2) const {
   auto ss = ShapeSample{};
   auto phi = u2[1] * 2 * Pi;
   ss.p =
@@ -332,7 +332,7 @@ void Rect::compute_surface_info(SurfaceInteraction& it) const {
   it.n = n;
   it.uv = vec2(u, v) + vec2(0.5f);
 }
-ShapeSample Rect::sample(vec3 o, vec2 u) const {
+psl::optional<ShapeSample> Rect::sample(vec3 o, vec2 u) const {
   auto ss = ShapeSample{};
   ss.p = position + (u[0] - 0.5f) * ex * lx + (u[1] - 0.5f) * ey * ly;
   ss.n = n;
@@ -495,7 +495,7 @@ void Triangle::compute_surface_info(SurfaceInteraction& it) const {
   it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
   it.n = n;
 }
-ShapeSample Triangle::sample(vec3 p, vec2 u) const {
+psl::optional<ShapeSample> Triangle::sample(vec3 p, vec2 u) const {
   ShapeSample ss;
   if (u.x + u.y > 1.0f)
     u = vec2(1.0f) - u;
@@ -617,6 +617,7 @@ void geometry_context(Context& ctx) {
       .member("n", &SurfaceInteraction::n)
       .member("p", &SurfaceInteraction::p)
       .member("uv", &SurfaceInteraction::uv);
+  ctx.type<psl::shared_ptr<Geometry>>("GeometryPtr");
   ctx.type<AABB>("AABB")
       .ctor<vec3, vec3>()
       .member("lower", &AABB::lower)
@@ -635,6 +636,10 @@ void geometry_context(Context& ctx) {
       .method("apply", &TriangleMesh::apply);
   ctx.type<Shape>("Shape")
       .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
+  ctx.type<InstancedShape>("Instancing")
+      .ctor<TriangleMesh>()
+      .method("add", overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add))
+      .method("add", overloaded<mat4, Material>(&InstancedShape::add));
   ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2)>>(height_map_to_mesh);
   ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2i)>>(height_map_to_mesh);
