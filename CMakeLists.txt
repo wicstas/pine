@@ -35,6 +35,7 @@ src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/interaction.cpp
 src/pine/core/integrator.cpp
+src/pine/core/blackbody.cpp
 src/pine/core/geometry.cpp
 src/pine/core/material.cpp
 src/pine/core/profiler.cpp

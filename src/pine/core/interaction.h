@@ -33,11 +33,14 @@ struct MediumInteraction {
   MediumInteraction(float t, vec3 p, vec3 W, PhaseFunction pg)
       : t(t), p(p), W(W), pg(psl::move(pg)) {
   }
+  MediumInteraction(vec3 W, vec3 le) : W(W), le(le) {
+  }
 
   float t;
   vec3 p;
   vec3 W;
   PhaseFunction pg;
+  psl::optional<vec3> le;
   int medium_index = -1;
 };
 

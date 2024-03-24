@@ -61,7 +61,9 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
 
   if (mit) {
     auto Tr = transmittance(ray.o, ray.d, mit->t, sampler, mit->medium_index);
-    if (pv.length + 1 < max_path_length) {
+    if (mit->le)
+      Lo += *mit->le * Tr * mit->W;
+    else if (pv.length + 1 < max_path_length) {
       if (!pv.inside_subsurface)
         if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
           if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {

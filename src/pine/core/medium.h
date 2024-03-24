@@ -47,7 +47,8 @@ private:
 };
 
 struct VDBMedium {
-  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_s, vec3 sigma_z);
+  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_s, vec3 sigma_z,
+            float blackbody_intensity = 1.0f, float temperature_scale = 1.0f);
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
   AABB get_aabb() const {
@@ -55,18 +56,25 @@ struct VDBMedium {
   }
 
 private:
-  psl::opaque_shared_ptr handle;
-  void* grid;
+  psl::opaque_shared_ptr density_handle;
+  psl::opaque_shared_ptr flame_handle;
+  psl::opaque_shared_ptr temperature_handle;
+  void* density_grid;
+  void* flame_grid;
+  void* temperature_grid;
   OBB bbox;
   vec3 sigma_majs;
   vec3 sigma_maj_invs;
   float sigma_maj;
   float sigma_maj_inv;
+  vec3 sigma_a;
   vec3 sigma_s;
   vec3 sigma_z;
-  vec3 index_start;
-  vec3 index_end;
   mat4 world2index;
+  mat4 world2index_flame;
+  mat4 world2index_tem;
+  float blackbody_intensity = 1.0f;
+  float temperature_scale = 1.0f;
 };
 
 struct Medium : psl::variant<HomogeneousMedium, VDBMedium> {

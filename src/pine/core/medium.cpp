@@ -1,3 +1,4 @@
+#include <pine/core/blackbody.h>
 #include <pine/core/geometry.h>
 #include <pine/core/sampling.h>
 #include <pine/core/parallel.h>
@@ -83,29 +84,78 @@ vec3 HomogeneousMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler&) cons
   }
 }
 
-VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 sigma_s)
-    : sigma_s(sigma_s), sigma_z(sigma_a + sigma_s) {
+VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 sigma_s,
+                     float blackbody_intensity, float temperature_scale)
+    : sigma_a(sigma_a),
+      sigma_s(sigma_s),
+      sigma_z(sigma_a + sigma_s),
+      blackbody_intensity(blackbody_intensity),
+      temperature_scale(temperature_scale) {
   using Handle = nanovdb::GridHandle<nanovdb::HostBuffer>;
-  auto handle = nanovdb::io::readGrid(filename.c_str());
-  auto grid = handle.grid<float>();
-  if (!grid)
-    Fatal("[VDBMedium]Expect a grid of float density from: `", filename, '`');
-  this->grid = grid;
-  this->handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
-  sigma_maj = max_value(sigma_z) * grid->tree().root().getMax();
-  sigma_majs = sigma_z * grid->tree().root().getMax();
-  sigma_maj_inv = 1.0f / sigma_maj;
-  sigma_maj_invs = 1.0f / sigma_majs;
-  auto aabb = AABB();
-  for (int i = 0; i < 3; i++) {
-    aabb.lower[i] = grid->worldBBox().min()[i];
-    aabb.upper[i] = grid->worldBBox().max()[i];
-    index_start[i] = grid->indexBBox().min()[i];
-    index_end[i] = grid->indexBBox().max()[i];
+  {
+    auto handle = nanovdb::io::readGrid(filename.c_str(), "density");
+    auto grid = handle.grid<float>();
+    if (!grid)
+      Fatal("[VDBMedium]`", filename, " `has no density attribute");
+    sigma_maj = max_value(sigma_z) * grid->tree().root().getMax();
+    sigma_majs = sigma_z * grid->tree().root().getMax();
+    sigma_maj_inv = 1.0f / sigma_maj;
+    sigma_maj_invs = 1.0f / sigma_majs;
+    auto aabb = AABB();
+    auto index_start = vec3(), index_end = vec3();
+    for (int i = 0; i < 3; i++) {
+      aabb.lower[i] = grid->worldBBox().min()[i];
+      aabb.upper[i] = grid->worldBBox().max()[i];
+      index_start[i] = grid->indexBBox().min()[i];
+      index_end[i] = grid->indexBBox().max()[i];
+    }
+    bbox = OBB(aabb, transform);
+    world2index = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
+                          scale(1.0f / (index_end - index_start)) * translate(-index_start));
+    this->density_grid = grid;
+    this->density_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
   }
-  bbox = OBB(aabb, transform);
-  world2index = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
-                        scale(1.0f / (index_end - index_start)) * translate(-index_start));
+  {
+    auto handle = nanovdb::io::readGrid(filename.c_str(), "flames");
+    auto grid = handle.grid<float>();
+    if (grid) {
+      Debug("[VDBMedium]", filename, " has flames attribute");
+      auto aabb = AABB();
+      auto index_start = vec3(), index_end = vec3();
+      for (int i = 0; i < 3; i++) {
+        aabb.lower[i] = grid->worldBBox().min()[i];
+        aabb.upper[i] = grid->worldBBox().max()[i];
+        index_start[i] = grid->indexBBox().min()[i];
+        index_end[i] = grid->indexBBox().max()[i];
+      }
+      bbox = OBB(aabb, transform);
+      world2index_flame =
+          inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
+                  scale(1.0f / (index_end - index_start)) * translate(-index_start));
+      this->flame_grid = grid;
+      this->flame_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+    }
+  }
+  {
+    auto handle = nanovdb::io::readGrid(filename.c_str(), "temperature");
+    auto grid = handle.grid<float>();
+    if (grid) {
+      Debug("[VDBMedium]", filename, " has temperature attribute");
+      auto aabb = AABB();
+      auto index_start = vec3(), index_end = vec3();
+      for (int i = 0; i < 3; i++) {
+        aabb.lower[i] = grid->worldBBox().min()[i];
+        aabb.upper[i] = grid->worldBBox().max()[i];
+        index_start[i] = grid->indexBBox().min()[i];
+        index_end[i] = grid->indexBBox().max()[i];
+      }
+      bbox = OBB(aabb, transform);
+      world2index_tem = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
+                                scale(1.0f / (index_end - index_start)) * translate(-index_start));
+      this->temperature_grid = grid;
+      this->temperature_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+    }
+  }
 }
 psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler& sampler) const {
   auto tmin = ray.tmin, tmax = ray.tmax;
@@ -114,13 +164,12 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
   auto pi0 = vec3(world2index * vec4(ray(0), 1.0f));
   auto pi1 = vec3(world2index * vec4(ray(tmax), 1.0f));
   auto di = (pi1 - pi0) / tmax;
-  auto grid = (nanovdb::FloatGrid*)this->grid;
-  auto density = grid->getAccessor();
+  auto density_grid = (nanovdb::FloatGrid*)this->density_grid;
+  auto density = density_grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
 
   auto f = vec3d(1.0f);
-  // auto pdf = vec3(1.0f);
   auto c = int(rng.nextf() * 3);
   auto u = rng.nextd();
 
@@ -131,19 +180,39 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
       return psl::nullopt;
     auto cr = pi0 + tmin * di;
     auto D = density(cr.x, cr.y, cr.z);
+    auto sig_a = sigma_a * D;
     auto sig_s = sigma_s * D;
-    auto sig_t = sigma_z * D;
+    auto sig_t = sig_a + sig_s;
     auto sig_n = sigma_majs - sig_t;
-    auto p_e_n = sig_n[c] / sigma_majs[c];
-    if (with_prob(p_e_n, u)) {
+    auto prob_n = sig_n[c] / sigma_majs[c];
+    auto prob_s = sig_s[c] / sigma_majs[c];
+    if (with_prob(prob_n, u)) {  // null-scattering
       f = normalize(f * exp(-sigma_majs * dt) * sig_n);
       if (average(f) == 0.0f)
         return psl::nullopt;
-    } else {
+    } else if (with_prob(prob_s, u)) {  // real-scattering
       f = normalize(f * exp(-sigma_majs * dt) * sig_s);
       if (average(f) == 0.0f)
         return psl::nullopt;
       return MediumInteraction(tmin, ray(tmin), f / average(f), HgPhaseFunction(0.0f));
+    } else {  // absorption
+      f = normalize(f * exp(-sigma_majs * dt) * sig_a);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
+      auto blackbody_color = vec3(0.0f);
+      auto flame_grid = (nanovdb::FloatGrid*)this->flame_grid;
+      auto temperature_grid = (nanovdb::FloatGrid*)this->temperature_grid;
+      if (flame_grid) {
+        auto pc = world2index_flame * vec4(ray(tmin), 1.0f);
+        auto flame = flame_grid->getAccessor()(pc.x, pc.y, pc.z);
+        blackbody_color = vec3(blackbody_intensity * flame);
+      }
+      if (temperature_grid) {
+        auto pc = world2index_tem * vec4(ray(tmin), 1.0f);
+        auto T = temperature_grid->getAccessor()(pc.x, pc.y, pc.z);
+        blackbody_color *= blackbody(temperature_scale * 4000 * T);
+      }
+      return MediumInteraction(f / average(f), sig_a * blackbody_color);
     }
   }
 }
@@ -155,8 +224,8 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   auto pi0 = vec3(world2index * vec4(p, 1.0f));
   auto pi1 = vec3(world2index * vec4(p + d * tmax, 1.0f));
   auto di = (pi1 - pi0) / tmax;
-  auto grid = (nanovdb::FloatGrid*)this->grid;
-  auto density = grid->getAccessor();
+  auto density_grid = (nanovdb::FloatGrid*)this->density_grid;
+  auto density = density_grid->getAccessor();
 
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
   auto u0 = rng.nextd();
@@ -188,7 +257,9 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
 
 void medium_context(Context& context) {
   context.type<HomogeneousMedium>("HomoMedium").ctor<Shape, vec3, vec3>();
-  context.type<VDBMedium>("VDBMedium").ctor<psl::string, mat4, vec3, vec3>();
+  context.type<VDBMedium>("VDBMedium")
+      .ctor<psl::string, mat4, vec3, vec3>()
+      .ctor<psl::string, mat4, vec3, vec3, float, float>();
   context.type<Medium>("Medium").ctor_variant<HomogeneousMedium, VDBMedium>();
 }
 
