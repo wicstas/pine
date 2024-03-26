@@ -115,7 +115,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
     this->density_grid = grid;
     this->density_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
   }
-  {
+  if (nanovdb::io::hasGrid(filename.c_str(), "flames")) {
     auto handle = nanovdb::io::readGrid(filename.c_str(), "flames");
     auto grid = handle.grid<float>();
     if (grid) {
@@ -128,7 +128,6 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
         index_start[i] = grid->indexBBox().min()[i];
         index_end[i] = grid->indexBBox().max()[i];
       }
-      bbox = OBB(aabb, transform);
       world2index_flame =
           inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
                   scale(1.0f / (index_end - index_start)) * translate(-index_start));
@@ -136,7 +135,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
       this->flame_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
     }
   }
-  {
+  if (nanovdb::io::hasGrid(filename.c_str(), "temperature")) {
     auto handle = nanovdb::io::readGrid(filename.c_str(), "temperature");
     auto grid = handle.grid<float>();
     if (grid) {
@@ -149,7 +148,6 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 si
         index_start[i] = grid->indexBBox().min()[i];
         index_end[i] = grid->indexBBox().max()[i];
       }
-      bbox = OBB(aabb, transform);
       world2index_tem = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
                                 scale(1.0f / (index_end - index_start)) * translate(-index_start));
       this->temperature_grid = grid;
@@ -186,11 +184,12 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
     auto sig_n = sigma_majs - sig_t;
     auto prob_n = sig_n[c] / sigma_majs[c];
     auto prob_s = sig_s[c] / sigma_majs[c];
-    if (with_prob(prob_n, u)) {  // null-scattering
+    if (u < prob_n) {  // null-scattering
+      u /= prob_n;
       f = normalize(f * exp(-sigma_majs * dt) * sig_n);
       if (average(f) == 0.0f)
         return psl::nullopt;
-    } else if (with_prob(prob_s, u)) {  // real-scattering
+    } else if (u < prob_n + prob_s) {  // real-scattering
       f = normalize(f * exp(-sigma_majs * dt) * sig_s);
       if (average(f) == 0.0f)
         return psl::nullopt;

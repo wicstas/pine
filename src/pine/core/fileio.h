@@ -15,7 +15,8 @@ psl::string read_string_file(psl::string_view filename);
 void write_binary_file(psl::string_view filename, const void* ptr, size_t size);
 psl::vector<char> read_binary_file(psl::string_view filename);
 
-psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data);
+psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data,
+                                    bool flip_y = false);
 
 void save_image(psl::string filename, vec2i size, int nchannel, const float* data);
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t* data);

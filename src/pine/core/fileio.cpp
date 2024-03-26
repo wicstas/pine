@@ -41,13 +41,15 @@ psl::vector<char> read_binary_file(psl::string_view filename) {
   return data;
 }
 
-psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data) {
+psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data, bool flip_y) {
   psl::vector<uint8_t> pixels(area(size) * nchannel);
   for (int x = 0; x < size.x; x++)
     for (int y = 0; y < size.y; y++)
-      for (int c = 0; c < nchannel; c++)
+      for (int c = 0; c < nchannel; c++) {
+        auto y_ = flip_y ? size.y - 1 - y : y;
         pixels[y * size.x * nchannel + x * nchannel + c] =
-            psl::clamp(data[y * size.x * nchannel + x * nchannel + c] * 256.0f, 0.0f, 255.0f);
+            psl::clamp(data[y_ * size.x * nchannel + x * nchannel + c] * 256.0f, 0.0f, 255.0f);
+      }
   return pixels;
 }
 void save_image(psl::string filename, vec2i size, int nchannel, const float *data) {

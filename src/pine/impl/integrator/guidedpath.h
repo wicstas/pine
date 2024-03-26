@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/lightsampler.h>
 #include <pine/core/integrator.h>
 
@@ -20,7 +19,6 @@ private:
   int max_path_length;
   bool collect_radiance_sample;
   float use_learned_ratio;
-  bool enable_adrrs;
 };
 
 }  // namespace pine

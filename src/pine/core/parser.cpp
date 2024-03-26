@@ -9,7 +9,7 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/denoiser.h>
-#include <pine/impl/integrator/restir.h>
+// #include <pine/impl/integrator/restir.h>
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
@@ -65,34 +65,29 @@ Context get_default_context() {
         return PathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
       })
       .method("render", &PathIntegrator::render);
-  // ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
-  //     .ctor<Accel, Sampler, LightSampler, int, int, int>()
-  //     .ctor(+[](Sampler sampler, int max_path_length, int max_axis_resolution, int
-  //     starting_depth) {
-  //       return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(),
-  //       max_path_length,
-  //                                   max_axis_resolution, starting_depth);
-  //     })
-  //     .method("render", &CachedPathIntegrator::render);
-  // ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
-  //     .ctor<Accel, Sampler, LightSampler, int>()
-  //     .ctor(+[](Sampler sampler, int max_path_length) {
-  //       return GuidedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(),
-  //       max_path_length);
-  //     })
-  //     .method("render", &GuidedPathIntegrator::render);
+  ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int, int, int>()
+      .ctor(+[](Sampler sampler, int max_path_length, int max_axis_resolution, int starting_depth) {
+        return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
+                                    max_axis_resolution, starting_depth);
+      })
+      .ctor(+[](Sampler sampler, int max_path_length) {
+        return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
+                                    128, 1);
+      })
+      .method("render", &CachedPathIntegrator::render);
+  ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](Sampler sampler, int max_path_length) {
+        return GuidedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
+      })
+      .method("render", &GuidedPathIntegrator::render);
   // ctx.type<EARSIntegrator>("EARSIntegrator")
   //     .ctor<Accel, Sampler, LightSampler, int>()
   //     .ctor(+[](Sampler sampler, int max_path_length) {
   //       return EARSIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
   //     })
   //     .method("render", &EARSIntegrator::render);
-  // ctx.type<RestirIntegrator>("RestirIntegrator")
-  //     .ctor<Accel, Sampler, LightSampler, int>()
-  //     .ctor(+[](Sampler sampler, int max_path_length) {
-  //       return RestirIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
-  //     })
-  //     .method("render", &RestirIntegrator::render);
   ctx("denoise") =
       +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
 
