@@ -43,7 +43,6 @@ struct Film {
 
 private:
   void apply_tone_mapping();
-  void apply_gamma_correction();
   SpinLock spin_lock;
 };
 

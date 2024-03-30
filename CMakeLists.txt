@@ -72,8 +72,8 @@ src/pine/impl/integrator/denoiser.cpp
 #src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
-src/pine/impl/accel/embree.cpp
-#src/pine/impl/accel/bvh.cpp
+#src/pine/impl/accel/embree.cpp
+src/pine/impl/accel/bvh.cpp
 
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp
@@ -100,22 +100,21 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 find_package(Threads REQUIRED)
 
 set(BUILD_SHARED_LIBS OFF)
-set(ASSIMP_NO_EXPORT ON)
-set(ASSIMP_BUILD_TESTS OFF)  
-set(ASSIMP_INSTALL OFF)  
-set(ASSIMP_INSTALL_PDB OFF)
-add_subdirectory(src/contrib/assimp)
 
-FIND_PACKAGE(embree 4 REQUIRED)
-FIND_PACKAGE(TBB REQUIRED)
-FIND_PACKAGE(OpenImageDenoise REQUIRED)
-
-target_link_libraries(pinelib psl Threads::Threads assimp embree tbb OpenImageDenoise)
+target_link_libraries(pinelib psl Threads::Threads)
 target_include_directories(pinelib PRIVATE src/contrib)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib)
+
+#Gltf tool
+add_executable(gltf-tool src/cli/gltf-tool.cpp)
+target_link_libraries(gltf-tool pinelib)
+
+#Image tool
+add_executable(image-tool src/cli/image-tool.cpp)
+target_link_libraries(image-tool pinelib)
 
 #Pine executable
 add_executable(pine-repl src/cli/pine-repl.cpp)

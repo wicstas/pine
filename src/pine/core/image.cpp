@@ -1,4 +1,5 @@
 #include <pine/core/context.h>
+#include <pine/core/fileio.h>
 #include <pine/core/image.h>
 
 namespace pine {
@@ -34,7 +35,11 @@ void image_context(Context& ctx) {
   ctx.type<Image>("Image").ctor_variant<Array2d<vec3u8>, Array2d<vec3>, Array2d<vec4>>();
   ctx.type<psl::shared_ptr<Image>>("ImagePtr")
       .converter<psl::string>([&ctx](psl::string_view filename) {
-        return ctx.call<psl::shared_ptr<Image>>("load_image", filename);
+        auto data = ctx.call<Bytes>("read_binary", filename);
+        auto image = image_from(data.data(), data.size());
+        if (!image)
+          Fatal("Unable to load `", filename, '`');
+        return psl::make_shared<Image>(*image);
       })
       .converter<vec3, vec3i>(+[](vec3 color) {
         auto pixels = Array2d<vec3>({1, 1});

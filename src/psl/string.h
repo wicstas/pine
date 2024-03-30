@@ -351,5 +351,6 @@ string space_by(vector<string> input, string spacer);
 string space_by(string input, string spacer);
 
 string from_last_of(const string& str, char c);
+string until_last_of(const string& str, char c);
 
 }  // namespace psl

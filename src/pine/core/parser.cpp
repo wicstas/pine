@@ -9,12 +9,11 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/denoiser.h>
-// #include <pine/impl/integrator/restir.h>
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
-// #include <pine/impl/accel/bvh.h>
+#include <pine/impl/accel/bvh.h>
 
 namespace pine {
 
@@ -38,7 +37,7 @@ Context get_default_context() {
   parallel_context(ctx);
   ctx("print") = +[](const psl::string& x) { Logr(x); };
   ctx("println") = +[](const psl::string& x) { Log(x); };
-  // ctx.type<BVH>("BVH").ctor();
+  ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();

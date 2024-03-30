@@ -7,7 +7,7 @@ namespace pine {
 
 void save_film_as_image(psl::string_view filename, Film film) {
   film.finalize();
-  save_image(psl::string(filename), film.pixels);
+  save_image(psl::string(filename), film.pixels, true);
 }
 
 void Film::clear() {
@@ -20,7 +20,6 @@ void Film::finalize(float scale) {
     pixel.w = 1;
   }
   apply_tone_mapping();
-  apply_gamma_correction();
 }
 void Film::add_sample(vec2i p_film, vec3 color, float weight) {
   if (weight == 0.0f)
@@ -43,10 +42,6 @@ void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
 void Film::apply_tone_mapping() {
   for (auto& pixel : pixels)
     pixel = vec4{uncharted2_filmic(vec3(pixel)), pixel.w};
-}
-void Film::apply_gamma_correction() {
-  for (auto& pixel : pixels)
-    pixel = vec4{pow(vec3{pixel}, 1.0f / 2.2f), pixel.w};
 }
 
 Film combine(Film a, const Film& b, float weight_a, float weight_b) {

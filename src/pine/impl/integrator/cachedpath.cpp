@@ -124,8 +124,6 @@ void CachedPathIntegrator::render(Scene& scene) {
   stree = SpatialTree(aabb, resolution);
   auto image0 = Array2d3f(film.size());
   auto image1 = Array2d3f(film.size());
-  auto image0_estimate = Array2d3f(film.size());
-  auto image1_estimate = Array2d3f(film.size());
 
   Profiler _("[CachedPath]Render");
 
@@ -170,16 +168,19 @@ void CachedPathIntegrator::render(Scene& scene) {
       set_progress(0.5f + float(p.x + p.y * film.size().x) / area(film.size()) / 2);
   });
 
-  denoise(DenoiseQuality::High, image0_estimate, image0, albedo, normal);
-  denoise(DenoiseQuality::High, image1_estimate, image1, albedo, normal);
-  auto variance0 = 0.0, variance1 = 0.0;
-  parallel_for(film.size(), [&](vec2i p) {
-    auto Ie0 = image0_estimate[p];
-    auto Ie1 = image1_estimate[p];
-    variance0 += average(sqr((image0[p] - Ie0) / max(Ie0, vec3(0.01f))));
-    variance1 += average(sqr((image1[p] - Ie1) / max(Ie1, vec3(0.01f))));
-  });
-  film.pixels = Array2d4f::from(combine(image0, image1, 1.0f / variance0, 1.0f / variance1));
+  //   auto image0_estimate = Array2d3f(film.size());
+  //   auto image1_estimate = Array2d3f(film.size());
+  //   denoise(DenoiseQuality::High, image0_estimate, image0, albedo, normal);
+  //   denoise(DenoiseQuality::High, image1_estimate, image1, albedo, normal);
+  //   auto variance0 = 0.0, variance1 = 0.0;
+  //   parallel_for(film.size(), [&](vec2i p) {
+  //     auto Ie0 = image0_estimate[p];
+  //     auto Ie1 = image1_estimate[p];
+  //     variance0 += average(sqr((image0[p] - Ie0) / max(Ie0, vec3(0.01f))));
+  //     variance1 += average(sqr((image1[p] - Ie1) / max(Ie1, vec3(0.01f))));
+  //   });
+  //   film.pixels = Array2d4f::from(combine(image0, image1, 1.0f / variance0, 1.0f / variance1));
+  film.pixels = Array2d4f::from(image1);
   set_progress(1.0f);
 }
 CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene, Ray ray,

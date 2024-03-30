@@ -113,10 +113,16 @@ struct Atomic<T> {
     value = rhs;
   }
   void operator+=(T rhs) {
-    value += rhs;
+    auto old = value.load(std::memory_order_consume);
+    auto desired = old + rhs;
+    while (!value.compare_exchange_weak(old, desired))
+      desired = old + rhs;
   }
   void operator-=(T rhs) {
-    value -= rhs;
+    auto old = value.load(std::memory_order_consume);
+    auto desired = old - rhs;
+    while (!value.compare_exchange_weak(old, desired))
+      desired = old - rhs;
   }
 
 private:

@@ -5,13 +5,8 @@
 #include <pine/core/scene.h>
 #include <pine/core/log.h>
 
-#include <contrib/stb_image.h>
 #include <contrib/stb_image_write.h>
-
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-
+#include <contrib/stb_image.h>
 #include <contrib/tiny_gltf.h>
 
 namespace pine {
@@ -19,10 +14,9 @@ namespace pine {
 psl::string read_string_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::in);
   if (!file.is_open())
-    Warning("Unable to open file `", filename, '`');
+    Fatal("Unable to open file `", filename, '`');
   size_t size = file.size();
-  psl::string str;
-  str.resize(size);
+  auto str = psl::string(file.size());
   file.read(&str[0], size);
   return str;
 }
@@ -32,29 +26,47 @@ void write_binary_file(psl::string_view filename, const void *ptr, size_t size) 
     Warning("Unable to open file `", filename, '`');
   file.write((const char *)ptr, size);
 }
-psl::vector<char> read_binary_file(psl::string_view filename) {
+Bytes read_binary_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::in);
   if (!file.is_open())
     Warning("Unable to open file `", filename, '`');
-  psl::vector<char> data(file.size());
+  Bytes data(file.size());
   file.read(&data[0], file.size());
   return data;
 }
 
-psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data, bool flip_y) {
+// static psl::string get_directory(psl::string_view filename) {
+//   auto p0 = psl::find_last_of(filename, '/');
+//   if (auto p1 = psl::find_last_of(filename, '\\'); p1 != filename.end()) {
+//     if (p0 != filename.end())
+//       p0 = psl::max(p0, p1);
+//     else
+//       p0 = p1;
+//   }
+//   if (p0 == filename.end())
+//     p0 = filename.begin();
+//   else
+//     p0 = psl::next(p0);
+//   return psl::string(filename.begin(), p0);
+// }
+
+psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data, bool flip_y,
+                                    bool apply_gamma) {
   psl::vector<uint8_t> pixels(area(size) * nchannel);
   for (int x = 0; x < size.x; x++)
     for (int y = 0; y < size.y; y++)
       for (int c = 0; c < nchannel; c++) {
         auto y_ = flip_y ? size.y - 1 - y : y;
-        pixels[y * size.x * nchannel + x * nchannel + c] =
-            psl::clamp(data[y_ * size.x * nchannel + x * nchannel + c] * 256.0f, 0.0f, 255.0f);
+        auto value = data[y_ * size.x * nchannel + x * nchannel + c];
+        if (apply_gamma)
+          value = psl::pow(value, 1 / 2.2f);
+        pixels[y * size.x * nchannel + x * nchannel + c] = psl::clamp(value * 256.0f, 0.0f, 255.0f);
       }
   return pixels;
 }
 void save_image(psl::string filename, vec2i size, int nchannel, const float *data) {
   Profiler _("[FileIO]Save image");
-  auto pixels = to_uint8_array(size, nchannel, data);
+  auto pixels = to_uint8_array(size, nchannel, data, false, true);
   save_image(filename, size, nchannel, pixels.data());
 }
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *data) {
@@ -72,31 +84,8 @@ void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *d
     stbi_write_png((filename + ".png").c_str(), size.x, size.y, nchannel, data, 0);
   }
 }
-psl::shared_ptr<Image> load_image(psl::string_view filename) {
-  static psl::map<psl::string, psl::shared_ptr<Image>> caches;
-  if (auto it = caches.find(filename); it != caches.end())
-    return it->second;
 
-  auto data = read_binary_file(filename);
-  if (auto image = load_image(data.data(), data.size())) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> lock{mutex};
-    return caches[psl::string(filename)] = psl::make_shared<Image>(psl::move(*image));
-  } else {
-    Fatal("Unable to load `", filename, "`");
-  }
-}
-
-psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const uint8_t *data) {
-  auto result = psl::vector<uint8_t>(size_t(area(size)) * target_comp);
-  for (int y = 0; y < size.y; y++)
-    for (int x = 0; x < size.x; x++)
-      for (int i = 0; i < psl::min(source_comp, target_comp); i++)
-        result[size_t(y) * size.x * target_comp + x * target_comp + i] =
-            data[size_t(y) * size.x * source_comp + x * source_comp + i];
-  return result;
-}
-psl::optional<Image> load_image(void *buffer, size_t size) {
+psl::optional<Image> image_from(void *buffer, size_t size) {
   int width, height, channels;
   if (stbi_is_hdr_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size)) {
     auto data = stbi_loadf_from_memory(reinterpret_cast<const stbi_uc *>(buffer), size, &width,
@@ -116,99 +105,35 @@ psl::optional<Image> load_image(void *buffer, size_t size) {
     return image;
   }
 }
+psl::shared_ptr<Image> load_image(psl::string_view filename,
+                                  psl::function<Bytes(psl::string_view)> reader) {
+  static psl::map<psl::string, psl::shared_ptr<Image>> caches;
+  if (auto it = caches.find(filename); it != caches.end())
+    return it->second;
 
-psl::optional<TriangleMesh> load_mesh(void *data, size_t size) {
-  Assimp::Importer importer;
-  const aiScene *scene =
-      importer.ReadFileFromMemory(data, size,
-                                  aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
-                                      aiProcess_OptimizeMeshes | aiProcess_OptimizeGraph);
-
-  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-    return psl::nullopt;
-
-  auto indices = psl::vector<vec3u32>{};
-  auto vertices = psl::vector<vec3>{};
-  auto normals = psl::vector<vec3>{};
-  auto texcoords = psl::vector<vec2>{};
-  auto index_offset = 0u;
-
-  for (size_t i_mesh = 0; i_mesh < scene->mNumMeshes; i_mesh++) {
-    aiMesh *mesh = scene->mMeshes[i_mesh];
-
-    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-      auto v = mesh->mVertices[i];
-      vertices.push_back(vec3{v.x, v.y, v.z});
-    }
-
-    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-      auto face = mesh->mFaces[i];
-      CHECK_EQ(face.mNumIndices, 3);
-      indices.push_back(vec3i(index_offset + face.mIndices[0], index_offset + face.mIndices[1],
-                              index_offset + face.mIndices[2]));
-    }
-
-    index_offset = vertices.size();
-
-    if (mesh->HasTextureCoords(0)) {
-      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-        aiVector3D aiTexCoords = mesh->mTextureCoords[0][i];
-        texcoords.push_back(vec2(aiTexCoords.x, aiTexCoords.y));
-      }
-    }
-
-    if (mesh->HasNormals()) {
-      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-        aiVector3D aiNormal = mesh->mNormals[i];
-        normals.push_back(vec3(aiNormal.x, aiNormal.y, aiNormal.z));
-      }
-    }
-  }
-
-  return TriangleMesh{psl::move(vertices), psl::move(indices), psl::move(texcoords),
-                      psl::move(normals)};
-}
-TriangleMesh load_mesh(psl::string_view filename) {
-  Profiler _("Loading mesh");
-  auto data = read_binary_file(filename);
-  if (auto mesh = load_mesh(data.data(), data.size()))
-    return *mesh;
-  else
+  auto data = reader(filename);
+  if (auto image = image_from(data.data(), data.size())) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock{mutex};
+    return caches[psl::string(filename)] = psl::make_shared<Image>(psl::move(*image));
+  } else {
     Fatal("Unable to load `", filename, "`");
-}
-
-static psl::string get_directory(psl::string_view filename) {
-  auto p0 = psl::find_last_of(filename, '/');
-  if (auto p1 = psl::find_last_of(filename, '\\'); p1 != filename.end()) {
-    if (p0 != filename.end())
-      p0 = psl::max(p0, p1);
-    else
-      p0 = p1;
   }
-  if (p0 == filename.end())
-    p0 = filename.begin();
-  else
-    p0 = psl::next(p0);
-  return psl::string(filename.begin(), p0);
 }
 
-void load_gltf(Scene &scene, psl::string_view filename) {
-  tinygltf::Model model;
+psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const uint8_t *data) {
+  auto result = psl::vector<uint8_t>(size_t(area(size)) * target_comp);
+  for (int y = 0; y < size.y; y++)
+    for (int x = 0; x < size.x; x++)
+      for (int i = 0; i < psl::min(source_comp, target_comp); i++)
+        result[size_t(y) * size.x * target_comp + x * target_comp + i] =
+            data[size_t(y) * size.x * source_comp + x * source_comp + i];
+  return result;
+}
+
+void scene_from(Scene &scene, void *tiny_gltf_model) {
+  auto &model = *(tinygltf::Model *)tiny_gltf_model;
   tinygltf::TinyGLTF gltf_ctx;
-  std::string err, warn;
-
-  auto ext = from_last_of(psl::string(filename), '.');
-  auto ret = ext == "glb"
-                 ? gltf_ctx.LoadBinaryFromFile(&model, &err, &warn, psl::string(filename).c_str())
-                 : gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, psl::string(filename).c_str());
-  auto working_directory = get_directory(filename);
-
-  if (!warn.empty())
-    Warning("[FileIO]", filename, ": ", warn.c_str());
-  if (!err.empty())
-    Fatal("[FileIO]", filename, ": ", err.c_str());
-  if (!ret)
-    Fatal("[FIleIO]", filename, ": Unable to load");
 
   auto images = psl::vector<ImagePtr>();
   for (const auto &image : model.images) {
@@ -223,7 +148,7 @@ void load_gltf(Scene &scene, psl::string_view filename) {
   }
 
   for (const auto &node : model.nodes) {
-    Logs(node.name.c_str());
+    Debug(node.name.c_str());
     auto transform = mat4::identity();
     for (size_t i = 0; i < node.matrix.size(); i++)
       transform[i / 4][i % 4] = node.matrix[i];
@@ -243,10 +168,10 @@ void load_gltf(Scene &scene, psl::string_view filename) {
       CHECK_EQ(indexSize, 2);
       switch (primitive.mode) {
         case TINYGLTF_MODE_TRIANGLE_FAN: {
-          Log("Fan");
+          Fatal("Fan");
         }
         case TINYGLTF_MODE_TRIANGLE_STRIP: {
-          Log("Strip");
+          Fatal("Strip");
         }
         case TINYGLTF_MODE_TRIANGLES: {
           auto ptr = (uint16_t *)indicesPtr;
@@ -260,7 +185,7 @@ void load_gltf(Scene &scene, psl::string_view filename) {
             const auto data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
             if (attribute.first == "POSITION") {
               if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO]", filename, ": Expect position data to be vec3");
+                Fatal("[FIleIO][TinyGLFT]Expect position data to be vec3");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec3 *)data;
@@ -276,7 +201,7 @@ void load_gltf(Scene &scene, psl::string_view filename) {
               }
             } else if (attribute.first == "NORMAL") {
               if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO]", filename, ": Expect normal data to be vec3");
+                Fatal("[FIleIO][TinyGLFT]Expect normal data to be vec3");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec3 *)data;
@@ -292,7 +217,7 @@ void load_gltf(Scene &scene, psl::string_view filename) {
               }
             } else if (attribute.first == "TEXCOORD_0") {
               if (accessor.type != TINYGLTF_TYPE_VEC2)
-                Fatal("[FIleIO]", filename, ": Expect texcoord data to be vec2");
+                Fatal("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec2 *)data;
@@ -327,7 +252,7 @@ void load_gltf(Scene &scene, psl::string_view filename) {
           ior = it->second.Get("ior").GetNumberAsDouble();
 
         for (auto &[name, param] : mat.values) {
-          Logs("\t", mat.name.c_str(), name.c_str());
+          Debug("\t", mat.name.c_str(), name.c_str());
           if (name == "baseColorFactor")
             basecolor =
                 vec3(param.ColorFactor()[0], param.ColorFactor()[1], param.ColorFactor()[2]);
@@ -355,88 +280,40 @@ void load_gltf(Scene &scene, psl::string_view filename) {
   }
 }
 
-void load_scene(Scene &scene_, psl::string_view filename) {
+void scene_from(Scene &scene, const Bytes &data) {
+  tinygltf::Model model;
+  tinygltf::TinyGLTF gltf_ctx;
+  std::string err, warn;
+
+  auto ret = gltf_ctx.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size());
+
+  if (!warn.empty())
+    Warning("[FileIO][GLTF]: ", warn.c_str());
+  if (!err.empty())
+    Fatal("[FileIO][GLTF]: ", err.c_str());
+  if (!ret)
+    Fatal("[FIleIO][GLTF]Unable to create scene");
+
+  scene_from(scene, &model);
+}
+void load_scene(Scene &scene, psl::string_view filename) {
+  tinygltf::Model model;
+  tinygltf::TinyGLTF gltf_ctx;
+  std::string err, warn;
+
   auto ext = from_last_of(psl::string(filename), '.');
-  if (ext == "gltf" || ext == "glb")
-    return load_gltf(scene_, filename);
-  auto working_directory = get_directory(filename);
+  Debug("Loading ", ext == "glb" ? "binary gltf" : "textual gltf");
+  auto ret = ext == "glb"
+                 ? gltf_ctx.LoadBinaryFromFile(&model, &err, &warn, psl::string(filename).c_str())
+                 : gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, psl::string(filename).c_str());
+  if (!warn.empty())
+    Warning("[FileIO]", filename, ": ", warn.c_str());
+  if (!err.empty())
+    Fatal("[FileIO]", filename, ": ", err.c_str());
+  if (!ret)
+    Fatal("[FIleIO]Unable to load `", filename, '`');
 
-  Assimp::Importer importer;
-  const aiScene *scene = importer.ReadFile(
-      psl::string(filename).c_str(),
-      aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes);
-
-  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-    Fatal("Unable to load `", filename, "`");
-  }
-
-  parallel_for(scene->mNumMeshes, [&](size_t i_mesh) {
-    auto indices = psl::vector<vec3u32>{};
-    auto vertices = psl::vector<vec3>{};
-    auto normals = psl::vector<vec3>{};
-    auto texcoords = psl::vector<vec2>{};
-    aiMesh *mesh = scene->mMeshes[i_mesh];
-
-    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-      auto v = mesh->mVertices[i];
-      vertices.push_back(vec3{v.x, v.y, v.z});
-    }
-
-    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-      auto face = mesh->mFaces[i];
-      CHECK_EQ(face.mNumIndices, 3);
-      indices.push_back(vec3i(face.mIndices[0], face.mIndices[1], face.mIndices[2]));
-    }
-
-    if (mesh->HasTextureCoords(0)) {
-      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-        aiVector3D aiTexCoords = mesh->mTextureCoords[0][i];
-        texcoords.push_back(vec2(aiTexCoords.x, aiTexCoords.y));
-      }
-    }
-
-    if (mesh->HasNormals()) {
-      for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-        aiVector3D aiNormal = mesh->mNormals[i];
-        normals.push_back(vec3(aiNormal.x, aiNormal.y, aiNormal.z));
-      }
-    }
-
-    auto material = scene->mMaterials[mesh->mMaterialIndex];
-    auto dc = aiColor3D(1.0, 1.0, 1.0);
-    if (material->Get(AI_MATKEY_COLOR_DIFFUSE, dc) == aiReturn_SUCCESS)
-      ;  // Debug(mesh->mName.C_Str(), " has diffuse ", dc.r, ' ', dc.g, ' ', dc.b);
-    auto diffuse_texture = aiString();
-    if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_DIFFUSE, 0), diffuse_texture) ==
-        aiReturn_SUCCESS)
-      ;  // Debug(mesh->mName.C_Str(), " has diffuse texture ", diffuse_texture.C_Str());
-    auto base_texture = aiString();
-    if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_BASE_COLOR, 0), base_texture) ==
-        aiReturn_SUCCESS)
-      ;  // Debug(mesh->mName.C_Str(), " has base texture ", base_texture.C_Str());
-    auto alpha_texture = aiString();
-    if (material->Get(AI_MATKEY_TEXTURE(aiTextureType_OPACITY, 0), alpha_texture) ==
-        aiReturn_SUCCESS)
-      ;  // Debug(mesh->mName.C_Str(), " has alpha texture ", alpha_texture.C_Str());
-
-    auto material_ = Material();
-    if (diffuse_texture.length != 0) {
-      auto basecolor = vec3(dc.r, dc.g, dc.b);
-      if (basecolor == vec3(1.0f))
-        material_ = DiffuseMaterial(
-            NodeImage(NodeUV(), load_image(working_directory + diffuse_texture.C_Str())));
-      else
-        material_ = DiffuseMaterial(NodeBinary<vec3, '*'>(
-            Node3f(basecolor),
-            NodeImage(NodeUV(), load_image(working_directory + diffuse_texture.C_Str()))));
-    } else {
-      material_ = DiffuseMaterial(vec3(dc.r, dc.g, dc.b));
-    }
-
-    scene_.add_geometry(TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords),
-                                     psl::move(normals)),
-                        psl::move(material_));
-  });
+  scene_from(scene, &model);
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
@@ -446,12 +323,33 @@ void interpret_file(Context &context, psl::string_view filename) {
 }
 
 void fileio_context(Context &ctx) {
-  ctx("load_mesh") = overloaded<psl::string_view>(load_mesh);
-  ctx("load") = load_scene;
-  ctx("load_image") = overloaded<psl::string_view>(load_image);
-  ctx("save_image") = overloaded<psl::string, Array2d2f>(save_image);
-  ctx("save_image") = overloaded<psl::string, Array2d3f>(save_image);
-  ctx("save_image") = overloaded<psl::string, Array2d4f>(save_image);
+  ctx.type<Bytes>("Bytes");
+  ctx("read_binary") = +[](psl::string_view filename) { return read_binary_file(filename); };
+  ctx("load") = tag<void, Scene &, psl::string_view>([&](Scene &scene, psl::string_view filename) {
+    auto data = ctx.call<Bytes>("read_binary", filename);
+    scene_from(scene, data);
+  });
+  ctx("load_image") = tag<Image, psl::string_view>([&](psl::string_view filename) {
+    auto reader = [&ctx](psl::string_view filename) {
+      return ctx.call<Bytes>("read_binary", filename);
+    };
+    return load_image(filename, reader);
+  });
+  ctx("save_image") =
+      +[](psl::string filename, const Array2d3f &array) { save_image(filename, array); };
+  ctx("save_image") = +[](psl::string filename, const Array2d3f &array, bool should_invert_y) {
+    save_image(filename, array, should_invert_y);
+  };
+  ctx("save_image") =
+      +[](psl::string filename, const Array2d4f &array) { save_image(filename, array); };
+  ctx("save_image") = +[](psl::string filename, const Array2d4f &array, bool should_invert_y) {
+    save_image(filename, array, should_invert_y);
+  };
+  ctx("save_image") =
+      +[](psl::string filename, const Image &array) { save_image(filename, array); };
+  ctx("save_image") = +[](psl::string filename, const Image &array, bool should_invert_y) {
+    save_image(filename, array, should_invert_y);
+  };
 }
 
 }  // namespace pine
