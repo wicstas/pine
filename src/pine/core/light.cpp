@@ -138,13 +138,12 @@ ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint, float elevation, fl
   auto density = Array2d<float>{image->size()};
   for_2d(image->size(), [&](auto p) { density[p] = length((*image)[p]); });
   distr = Distribution2D(density, 20);
-  if (elevation != 90.0f || rotation != 0.0f) {
-    l2w = rotate_x((1 - elevation) * Pi) * rotate_y(rotation * Pi * 2);
+  if (elevation != 0.0f || rotation != 0.0f) {
+    l2w = rotate_x(elevation * Pi) * rotate_y(rotation * Pi * 2);
     w2l = inverse(*l2w);
   }
 }
 vec3 ImageSky::color(vec3 wo) const {
-  // return vec3(0.0f);
   if (w2l)
     wo = *w2l * wo;
   psl::swap(wo.y, wo.z);
@@ -171,7 +170,6 @@ psl::optional<LightSample> ImageSky::sample(const Interaction&, vec2 u2) const {
   return ls;
 }
 float ImageSky::pdf(const Interaction&, vec3 wo) const {
-  // return 10000.0f;
   if (w2l)
     wo = *w2l * wo;
   psl::swap(wo.y, wo.z);

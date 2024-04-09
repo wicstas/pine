@@ -12,22 +12,23 @@
 namespace pine {
 
 struct Scene {
-  void add_material(psl::string name, psl::shared_ptr<Material> material);
-  void add_material(psl::string name, Material material) {
-    add_material(psl::move(name), psl::make_shared<Material>(psl::move(material)));
+  psl::shared_ptr<pine::Material> add_material(psl::string name,
+                                               psl::shared_ptr<Material> material);
+  psl::shared_ptr<pine::Material> add_material(psl::string name, Material material) {
+    return add_material(psl::move(name), psl::make_shared<Material>(psl::move(material)));
   }
-  void add_geometry(Shape shape, psl::shared_ptr<Material> material);
-  void add_geometry(Shape shape, Material material) {
-    add_geometry(psl::move(shape), psl::make_shared<Material>(psl::move(material)));
+  psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, psl::shared_ptr<Material> material);
+  psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, Material material) {
+    return add_geometry(psl::move(shape), psl::make_shared<Material>(psl::move(material)));
   }
-  void add_geometry(Shape shape, psl::string material_name) {
-    add_geometry(psl::move(shape), find_material(material_name));
+  psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, psl::string material_name) {
+    return add_geometry(psl::move(shape), find_material(material_name));
   }
-  void add_instancing(InstancedShape instancing);
-  void add_light(Light light);
-  void add_medium(Medium medium);
-  void set_camera(Camera camera);
-  void set_env_light(EnvironmentLight env_light);
+  InstancedShape& add_instancing(InstancedShape instancing);
+  Light& add_light(Light light);
+  Medium& add_medium(Medium medium);
+  Camera& set_camera(Camera camera);
+  EnvironmentLight& set_env_light(EnvironmentLight env_light);
 
   psl::shared_ptr<Material> find_material(psl::string_view name);
   AABB get_aabb() const;

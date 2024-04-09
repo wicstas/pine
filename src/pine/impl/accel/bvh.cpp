@@ -575,9 +575,9 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
   });
   if (hit) {
     it.p = ray();
-    it.shape = &scene->geometries[geom_index]->shape;
-    it._material = scene->geometries[geom_index]->material.get();
     auto& shape = scene->geometries[geom_index]->shape;
+    it._material = scene->geometries[geom_index]->material.get();
+    it.shape = &shape;
     if (shape.is<TriangleMesh>())
       shape.as<TriangleMesh>().compute_surface_info(it, prim_index);
     else

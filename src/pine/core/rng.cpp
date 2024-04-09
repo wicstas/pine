@@ -8,6 +8,7 @@ namespace pine {
 void rng_context(Context &ctx) {
   ctx.type<RNG>("RNG")
       .ctor<>()
+      .ctor<int>()
       .method("nextf", &RNG::nextf)
       .method("next2f", &RNG::next2f)
       .method("next3f", &RNG::next3f);

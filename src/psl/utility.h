@@ -46,6 +46,11 @@ struct pair {
   U second;
 };
 
+template <typename T, typename U>
+pair<T, U> make_pair(T a, U b) {
+  return pair<T, U>(static_cast<T>(a), static_cast<U>(b));
+}
+
 constexpr auto first_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).first; };
 constexpr auto second_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).second; };
 

@@ -144,6 +144,18 @@ void test_vector() {
   CHECK_NE(xs, psl::vector_of(1, 2, 6, 10, 0));
   CHECK_NE(xs, psl::vector_of(1, 2, 6, 11));
 
+  xs.insert_range(psl::next(xs.begin()), psl::vector_of(4, 3));
+  CHECK_EQ(xs, psl::vector_of(1, 4, 3, 2, 6, 10));
+
+  xs.erase_range(xs.begin() + 1, xs.begin() + 3);
+  CHECK_EQ(xs, psl::vector_of(1, 2, 6, 10));
+
+  xs.insert_range(xs.end(), psl::vector_of(7, 5));
+  CHECK_EQ(xs, psl::vector_of(1, 2, 6, 10, 7, 5));
+
+  xs.erase_range(xs.end() - 2, xs.end());
+  CHECK_EQ(xs, psl::vector_of(1, 2, 6, 10));
+
   xs.erase(psl::next(xs.begin()));
   CHECK_EQ(xs.size(), 3);
   CHECK_EQ(xs[0], 1);
@@ -579,11 +591,15 @@ void test_algorithm() {
 }
 
 int main() {
-  test_vector();
-  test_variant();
-  test_string();
-  test_memory();
-  test_optional();
-  test_functional();
-  test_algorithm();
+  try {
+    test_vector();
+    test_variant();
+    test_string();
+    test_memory();
+    test_optional();
+    test_functional();
+    test_algorithm();
+  } catch (const pine::Exception& e) {
+    pine::Log(e.what());
+  }
 }

@@ -146,9 +146,9 @@ void Bytecodes::enter_scope() {
 }
 void Bytecodes::exit_scope() {
   DCHECK(scope_stack.size() != 0);
-  stack.erase(stack.begin() + scope_stack.back().type_stack_position, stack.end());
-  variable_map.erase(variable_map.begin() + scope_stack.back().variable_map_position,
-                     variable_map.end());
+  stack.erase_range(stack.begin() + scope_stack.back().type_stack_position, stack.end());
+  variable_map.erase_range(variable_map.begin() + scope_stack.back().variable_map_position,
+                           variable_map.end());
   scope_stack.pop_back();
 }
 psl::string Bytecodes::to_string(const Context& context) const {
@@ -1424,7 +1424,9 @@ struct Parser {
         backup();
         auto id_ = id();
         if (accept(":=")) {
-          stmt = Stmt(declaration(id_));
+          stmt = Stmt(declaration(id_, false));
+        } else if (accept("&=")) {
+          stmt = Stmt(declaration(id_, true));
         } else {
           undo();
           stmt = Stmt(expr());
@@ -1437,10 +1439,10 @@ struct Parser {
     return stmt;
   }
 
-  Declaration declaration(Id id_) {
+  Declaration declaration(Id id_, bool create_ref) {
     auto loc = source_loc();
     auto expr_ = expr();
-    return Declaration{loc, psl::move(id_.value), psl::move(expr_)};
+    return Declaration{loc, psl::move(id_.value), psl::move(expr_), create_ref};
   }
   Expr expr() {
     auto exprs = psl::vector<Expr>{};

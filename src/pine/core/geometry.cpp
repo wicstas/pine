@@ -541,13 +541,18 @@ bool TriangleMesh::intersect(Ray& ray, int index) const {
 void TriangleMesh::compute_surface_info(SurfaceInteraction& it, int index) const {
   auto face = indices[index];
   auto v0 = vertices[face[0]], v1 = vertices[face[1]], v2 = vertices[face[2]];
+  auto e1 = v1 - v0;
+  auto e2 = v2 - v0;
+  it.n = cross(e1, e2);
+  auto tbn = inverse(mat3(e1, e2, it.n));
+  it.uv = vec2(tbn * (it.p - v0));
   it.p = lerp(it.uv[0], it.uv[1], v0, v1, v2);
-  it.n = normalize(cross(v0 - v1, v0 - v2));
   if (normals.size())
-    it.n =
-        normalize(lerp(it.uv[0], it.uv[1], normals[face[0]], normals[face[1]], normals[face[2]]));
+    it.n = *normal_of(face, it.uv);
+  else
+    it.n = normalize(it.n);
   if (texcoords.size())
-    it.uv = lerp(it.uv[0], it.uv[1], texcoords[face[0]], texcoords[face[1]], texcoords[face[2]]);
+    it.uv = *texcoord_of(face, it.uv);
 }
 AABB TriangleMesh::get_aabb(size_t index) const {
   DCHECK_LT(index, indices.size());
@@ -562,7 +567,7 @@ AABB TriangleMesh::get_aabb() const {
   return aabb;
 }
 
-TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
+TriangleMesh heightmap(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;
   auto height = height_map.size().y + 1;
   auto p2i = [width](int x, int y) { return x + y * width; };
@@ -593,16 +598,16 @@ TriangleMesh height_map_to_mesh(const Array2d<float>& height_map) {
   return TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
 }
 
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2i)> height_function) {
+TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution, [&](vec2i p) { height_map[p] = height_function(p); });
-  return height_map_to_mesh(height_map);
+  return heightmap(height_map);
 }
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> height_function) {
+TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution,
                [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
-  return height_map_to_mesh(height_map);
+  return heightmap(height_map);
 }
 
 int Geometry::global_id = 0;
@@ -640,9 +645,9 @@ void geometry_context(Context& ctx) {
       .ctor<TriangleMesh>()
       .method("add", overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add))
       .method("add", overloaded<mat4, Material>(&InstancedShape::add));
-  ctx("height_map_to_mesh") = overloaded<const Array2df&>(height_map_to_mesh);
-  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2)>>(height_map_to_mesh);
-  ctx("height_map_to_mesh") = overloaded<vec2i, psl::function<float(vec2i)>>(height_map_to_mesh);
+  ctx("heightmap") = overloaded<const Array2df&>(heightmap);
+  ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
+  ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2i)>>(heightmap);
 }
 
 }  // namespace pine

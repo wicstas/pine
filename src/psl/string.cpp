@@ -235,7 +235,7 @@ string from_last_of(const string& str, char c) {
 
 string until_last_of(const string& str, char c) {
   if (auto p = psl::find_last_of(str, c); p != psl::end(str))
-    return str.substr(0, psl::next(p) - str.begin());
+    return str.substr(0, p - str.begin());
   else
     return str;
 }

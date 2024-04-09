@@ -1,3 +1,4 @@
+#include <pine/core/video_writer.h>
 #include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
 #include <pine/core/parser.h>
@@ -8,6 +9,8 @@
 #include <contrib/stb_image_write.h>
 #include <contrib/stb_image.h>
 #include <contrib/tiny_gltf.h>
+
+#include <filesystem>
 
 namespace pine {
 
@@ -23,16 +26,73 @@ psl::string read_string_file(psl::string_view filename) {
 void write_binary_file(psl::string_view filename, const void *ptr, size_t size) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::out);
   if (!file.is_open())
-    Warning("Unable to open file `", filename, '`');
+    Warning("Unable to create file `", filename, '`');
   file.write((const char *)ptr, size);
 }
 Bytes read_binary_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::in);
   if (!file.is_open())
-    Warning("Unable to open file `", filename, '`');
+    Fatal("Unable to open file `", filename, '`');
   Bytes data(file.size());
   file.read(&data[0], file.size());
   return data;
+}
+psl::map<psl::string, Bytes> read_folder(psl::string path) {
+  auto fs = psl::map<psl::string, Bytes>();
+  for (const auto &entry : std::filesystem::recursive_directory_iterator(path.c_str())) {
+    auto entry_path = psl::string(entry.path().c_str());
+    if (entry_path[0] == '.') {
+      entry_path.pop_front();
+      if (entry_path[0] == '/')
+        entry_path.pop_front();
+    }
+    // Debug(entry_path);
+    if (entry.is_regular_file())
+      fs[entry_path] = read_binary_file(entry_path);
+  }
+  return fs;
+}
+Bytes serialize(const psl::map<psl::string, Bytes> &fs) {
+  auto bytes = Bytes();
+  auto write = [&](const auto &first_elem, size_t size) {
+    bytes.insert_range(bytes.end(), psl::range((uint8_t *)&first_elem, size));
+  };
+  write(fs.size(), sizeof(size_t));
+  for (auto &[path, data] : fs) {
+    write(path.byte_size(), sizeof(size_t));
+    write(path[0], path.byte_size());
+    write(data.byte_size(), sizeof(size_t));
+    write(data[0], data.byte_size());
+  }
+
+  return bytes;
+}
+template <>
+psl::map<psl::string, Bytes> deserialize(BytesView bytes) {
+  auto fs = psl::map<psl::string, Bytes>();
+  auto read = [&](auto &first_elem, size_t size) {
+    psl::copy((uint8_t *)&first_elem, bytes.subspan(0, size));
+    bytes = bytes.subspan(size);
+  };
+  auto read_pod = [&]<typename T>() {
+    T value;
+    read(value, sizeof(T));
+    return value;
+  };
+
+  auto size = read_pod.operator()<size_t>();
+  for (size_t i = 0; i < size; i++) {
+    auto str_size = read_pod.operator()<size_t>();
+    auto str = psl::string(str_size);
+    read(str[0], str_size);
+
+    auto data_size = read_pod.operator()<size_t>();
+    auto data = Bytes(data_size);
+    read(data[0], data_size);
+    fs[psl::move(str)] = psl::move(data);
+  }
+
+  return fs;
 }
 
 // static psl::string get_directory(psl::string_view filename) {
@@ -142,7 +202,7 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
     if (image.component == 3)
       images.push_back(psl::make_shared<Image>(
           Array2d<vec3u8>({image.width, image.height}, (vec3u8 *)image.image.data())));
-    else if (image.component == 4)
+    else
       images.push_back(psl::make_shared<Image>(
           Array2d<vec4u8>({image.width, image.height}, (vec4u8 *)image.image.data())));
   }
@@ -252,7 +312,7 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
           ior = it->second.Get("ior").GetNumberAsDouble();
 
         for (auto &[name, param] : mat.values) {
-          Debug("\t", mat.name.c_str(), name.c_str());
+          Debug("\t", mat.name.c_str(), ' ', name.c_str());
           if (name == "baseColorFactor")
             basecolor =
                 vec3(param.ColorFactor()[0], param.ColorFactor()[1], param.ColorFactor()[2]);
@@ -279,41 +339,152 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
     }
   }
 }
+UberMaterial material_from(void *tiny_gltf_model) {
+  auto &model = *(tinygltf::Model *)tiny_gltf_model;
+  tinygltf::TinyGLTF gltf_ctx;
 
-void scene_from(Scene &scene, const Bytes &data) {
+  auto images = psl::vector<ImagePtr>();
+  for (const auto &image : model.images) {
+    CHECK(image.component == 3 || image.component == 4);
+    CHECK(image.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE);
+    if (image.component == 3)
+      images.push_back(psl::make_shared<Image>(
+          Array2d<vec3u8>({image.width, image.height}, (vec3u8 *)image.image.data())));
+    else
+      images.push_back(psl::make_shared<Image>(
+          Array2d<vec4u8>({image.width, image.height}, (vec4u8 *)image.image.data())));
+  }
+
+  if (model.materials.size() != 1)
+    Fatal("[FileIO][GLTF]Expect a unique material, get ", model.materials.size());
+  const auto &mat = model.materials[0];
+
+  auto basecolor = Node3f(vec3(1.0f));
+  auto roughness = Nodef(1.0f);
+  auto metallic = Nodef(0.0f);
+  auto transmission = Nodef(0.0f);
+  auto ior = Nodef(1.4f);
+  if (auto it = mat.extensions.find("KHR_materials_transmission"); it != mat.extensions.end())
+    transmission = it->second.Get("transmissionFactor").GetNumberAsDouble();
+  if (auto it = mat.extensions.find("KHR_materials_ior"); it != mat.extensions.end())
+    ior = it->second.Get("ior").GetNumberAsDouble();
+
+  for (auto &[name, param] : mat.values) {
+    Debug("\t", mat.name.c_str(), ' ', name.c_str());
+    if (name == "baseColorFactor")
+      basecolor = vec3(param.ColorFactor()[0], param.ColorFactor()[1], param.ColorFactor()[2]);
+    else if (name == "roughnessFactor")
+      roughness = param.Factor();
+    else if (name == "baseColorTexture")
+      basecolor = NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]);
+    else if (name == "metallicRoughnessTexture") {
+      roughness = NodeBinary<float, '^'>(
+          NodeComponent(NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]),
+                        1),
+          1.0f / 2.2f);
+      metallic = NodeBinary<float, '^'>(
+          NodeComponent(NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]),
+                        2),
+          1.0f / 2.2f);
+    }
+  }
+
+  return UberMaterial(basecolor, roughness, metallic, transmission, ior);
+}
+
+void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string, Bytes> &files) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
 
-  auto ret = gltf_ctx.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size());
+  auto fs = tinygltf::FsCallbacks();
+  fs.FileExists = +[](const std::string &path, void *user_data) {
+    Log(path.c_str());
+    auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+    return files.find(path.c_str()) != files.end();
+  };
+  fs.ExpandFilePath = +[](const std::string &abs_filename, void *) { return abs_filename; };
+  fs.ReadWholeFile = +[](std::vector<unsigned char> *out_data, std::string *err,
+                         const std::string &path, void *user_data) {
+    auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+    if (auto it = files.find(path.c_str()); it != files.end()) {
+      out_data->insert(out_data->end(), it->second.begin(), it->second.end());
+      return true;
+    } else {
+      *err = "Unable to find `" + path + '`';
+      return false;
+    }
+  };
+  fs.GetFileSizeInBytes =
+      +[](size_t *size, std::string *err, const std::string &path, void *user_data) {
+        auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+        if (auto it = files.find(path.c_str()); it != files.end()) {
+          *size = it->second.byte_size();
+          return true;
+        } else {
+          *err = "Unable to find `" + path + '`';
+          return false;
+        }
+      };
+  fs.user_data = (void *)&files;
 
+  gltf_ctx.SetFsCallbacks(fs);
+  auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
   if (!warn.empty())
-    Warning("[FileIO][GLTF]: ", warn.c_str());
+    Warning("[FileIO]", warn.c_str());
   if (!err.empty())
-    Fatal("[FileIO][GLTF]: ", err.c_str());
+    Fatal("[FileIO]", err.c_str());
   if (!ret)
-    Fatal("[FIleIO][GLTF]Unable to create scene");
+    Fatal("[FIleIO]Unable to create scene from GLTF file");
 
   scene_from(scene, &model);
 }
-void load_scene(Scene &scene, psl::string_view filename) {
+UberMaterial material_from(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
 
-  auto ext = from_last_of(psl::string(filename), '.');
-  Debug("Loading ", ext == "glb" ? "binary gltf" : "textual gltf");
-  auto ret = ext == "glb"
-                 ? gltf_ctx.LoadBinaryFromFile(&model, &err, &warn, psl::string(filename).c_str())
-                 : gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, psl::string(filename).c_str());
-  if (!warn.empty())
-    Warning("[FileIO]", filename, ": ", warn.c_str());
-  if (!err.empty())
-    Fatal("[FileIO]", filename, ": ", err.c_str());
-  if (!ret)
-    Fatal("[FIleIO]Unable to load `", filename, '`');
+  auto fs = tinygltf::FsCallbacks();
+  fs.FileExists = +[](const std::string &path, void *user_data) {
+    Log(path.c_str());
+    auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+    return files.find(path.c_str()) != files.end();
+  };
+  fs.ExpandFilePath = +[](const std::string &abs_filename, void *) { return abs_filename; };
+  fs.ReadWholeFile = +[](std::vector<unsigned char> *out_data, std::string *err,
+                         const std::string &path, void *user_data) {
+    auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+    if (auto it = files.find(path.c_str()); it != files.end()) {
+      out_data->insert(out_data->end(), it->second.begin(), it->second.end());
+      return true;
+    } else {
+      *err = "Unable to find `" + path + '`';
+      return false;
+    }
+  };
+  fs.GetFileSizeInBytes =
+      +[](size_t *size, std::string *err, const std::string &path, void *user_data) {
+        auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
+        if (auto it = files.find(path.c_str()); it != files.end()) {
+          *size = it->second.byte_size();
+          return true;
+        } else {
+          *err = "Unable to find `" + path + '`';
+          return false;
+        }
+      };
+  fs.user_data = (void *)&files;
 
-  scene_from(scene, &model);
+  gltf_ctx.SetFsCallbacks(fs);
+  auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
+  if (!warn.empty())
+    Warning("[FileIO]", warn.c_str());
+  if (!err.empty())
+    Fatal("[FileIO]", err.c_str());
+  if (!ret)
+    Fatal("[FIleIO]Unable to create scene from GLTF file");
+
+  return material_from(&model);
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
@@ -325,9 +496,17 @@ void interpret_file(Context &context, psl::string_view filename) {
 void fileio_context(Context &ctx) {
   ctx.type<Bytes>("Bytes");
   ctx("read_binary") = +[](psl::string_view filename) { return read_binary_file(filename); };
-  ctx("load") = tag<void, Scene &, psl::string_view>([&](Scene &scene, psl::string_view filename) {
-    auto data = ctx.call<Bytes>("read_binary", filename);
-    scene_from(scene, data);
+  ctx("load") = tag<void, Scene &, psl::string>([&](Scene &scene, psl::string file_path) {
+    auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
+    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
+    auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
+    scene_from(scene, scene_name, fs);
+  });
+  ctx("load_material") = tag<UberMaterial, psl::string>([&](psl::string file_path) {
+    auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
+    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
+    auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
+    return material_from(scene_name, fs);
   });
   ctx("load_image") = tag<Image, psl::string_view>([&](psl::string_view filename) {
     auto reader = [&ctx](psl::string_view filename) {
@@ -350,6 +529,12 @@ void fileio_context(Context &ctx) {
   ctx("save_image") = +[](psl::string filename, const Image &array, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
+
+  ctx.type<VideoWriter>("VideoWriter")
+      .ctor<psl::string, vec2i, int>()
+      .method("add_frame", overloaded<const Array2d3f &>(&VideoWriter::add_frame))
+      .method("add_frame", overloaded<const Array2d4f &>(&VideoWriter::add_frame))
+      .method("done", &VideoWriter::done);
 }
 
 }  // namespace pine

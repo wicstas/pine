@@ -191,8 +191,8 @@ struct TriangleMesh {
   psl::vector<vec3u32> indices;
 };
 
-TriangleMesh height_map_to_mesh(const Array2d<float>& height_map);
-TriangleMesh height_map_to_mesh(vec2i resolution, psl::function<float(vec2)> height_function);
+TriangleMesh heightmap(const Array2d<float>& height_map);
+TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 
 struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
   using variant::variant;

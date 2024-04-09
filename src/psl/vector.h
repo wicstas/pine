@@ -165,12 +165,14 @@ public:
   }
   template <Range ARange>
   void insert_range(Iterator it, ARange&& range) {
-    auto first = psl::begin(range);
-    auto last = psl::end(range);
-    while (first != last) {
-      it = psl::next(insert(it, *first));
-      ++first;
-    }
+    auto p = it - begin();
+    auto suffix = vector(it, end());
+    auto nlen = size() + psl::size(range);
+    resize_less(p);
+    reserve(nlen);
+    psl::inplace(begin() + p, range);
+    psl::inplace(begin() + p + psl::size(range), suffix);
+    len = nlen;
   }
 
   void erase(Iterator it) {
@@ -183,7 +185,7 @@ public:
     }
     pop_back();
   }
-  void erase(Iterator first, Iterator last) {
+  void erase_range(Iterator first, Iterator last) {
     psl_check(first <= last);
     if (first == last)
       return;

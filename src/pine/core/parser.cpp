@@ -66,9 +66,9 @@ Context get_default_context() {
       .method("render", &PathIntegrator::render);
   ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int, int, int>()
-      .ctor(+[](Sampler sampler, int max_path_length, int max_axis_resolution, int starting_depth) {
+      .ctor(+[](Sampler sampler, int max_path_length, int max_axis_resolution) {
         return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
-                                    max_axis_resolution, starting_depth);
+                                    max_axis_resolution, 1);
       })
       .ctor(+[](Sampler sampler, int max_path_length) {
         return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,

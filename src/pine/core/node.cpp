@@ -18,10 +18,12 @@ float NodeCheckerboard::eval(const NodeEvalCtx& ctx) const {
 }
 
 vec3 NodeImage::eval(const NodeEvalCtx& ctx) const {
-  return vec3((*image)[min(vec2i{image->size() * fract(vec2{p(ctx)})}, image->size() - vec2i(1))]);
+  auto sc = min(vec2i(image->size() * fract(vec2(p(ctx)))), image->size() - vec2i(1));
+  return vec3((*image)[sc]);
 }
 float NodeImagef::eval(const NodeEvalCtx& ctx) const {
-  return (*image)[min(vec2i{image->size() * fract(vec2{p(ctx)})}, image->size() - vec2i(1))].x;
+  auto sc = min(vec2i(image->size() * fract(vec2(p(ctx)))), image->size() - vec2i(1));
+  return (*image)[sc].x;
 }
 
 void node_context(Context& ctx) {
@@ -57,6 +59,7 @@ void node_context(Context& ctx) {
   ctx.type<NodeNoisef>("Noisef").ctor<Node3f, Nodef, Nodef>();
   ctx.type<NodeNoise3f>("Noise3f").ctor<Node3f, Nodef, Nodef>();
   ctx.type<NodeCheckerboard>("Checkerboard").ctor<Node3f>().ctor<Node3f, float>();
+  ctx.type<NodeImagef>("Texture").ctor<Node3f, psl::shared_ptr<Image>>();
   ctx.type<NodeImage>("Texture").ctor<Node3f, psl::shared_ptr<Image>>();
   ctx("+") = +[](Nodef a, Nodef b) { return NodeBinary<float, '+'>{psl::move(a), psl::move(b)}; };
   ctx("-") = +[](Nodef a, Nodef b) { return NodeBinary<float, '-'>{psl::move(a), psl::move(b)}; };
@@ -96,7 +99,7 @@ void node_context(Context& ctx) {
                     NodeBinary<float, '*'>, NodeBinary<float, '/'>, NodeBinary<float, '^'>,
                     NodeUnary<float, '-'>, NodeUnary<float, 'a'>, NodeUnary<float, 's'>,
                     NodeUnary<float, 'r'>, NodeUnary<float, 'f'>, NodeComponent, NodeNoisef,
-                    NodeCheckerboard>();
+                    NodeCheckerboard, NodeImagef>();
   ctx.type<Node3f>()
       .ctor_variant<vec3i, vec3, NodeConstant<vec3>, NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>,
                     NodeBinary<vec3, '*'>, NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>,

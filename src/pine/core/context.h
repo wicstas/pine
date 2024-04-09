@@ -560,6 +560,8 @@ struct Context {
 
   Variable call(psl::string_view name, psl::span<const TypeTag> atypes,
                 psl::vector<Variable> args) const;
+
+  // Argument types must match parameter types
   template <typename T, typename... Args>
   T call(psl::string_view name, Args&&... args) const {
     return call(name, tags<Args...>(), psl::vector_of<Variable>(FWD(args)...)).template as<T>();

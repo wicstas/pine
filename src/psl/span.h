@@ -42,6 +42,15 @@ struct span {
     return ptr[i];
   }
 
+  span subspan(size_t start) const {
+    psl_check(start <= length);
+    return span(ptr + start, length - start);
+  }
+  span subspan(size_t start, size_t size) const {
+    psl_check(start + size <= length);
+    return span(ptr + start, size);
+  }
+
 private:
   T* ptr = nullptr;
   size_t length = 0;

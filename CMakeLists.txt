@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 add_compile_options(-Wall -Wextra -pedantic)
+set(BUILD_SHARED_LIBS OFF)
 
 #psl Library
 add_library(psl
@@ -33,6 +34,7 @@ src/pine/core/lowdiscrepancy.cpp
 src/pine/core/sobolmatrices.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
+src/pine/core/video_writer.cpp
 src/pine/core/interaction.cpp
 src/pine/core/integrator.cpp
 src/pine/core/blackbody.cpp
@@ -75,6 +77,9 @@ src/pine/impl/integrator/ao.cpp
 #src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 
+src/contrib/libgwavi/avi-utils.cpp
+src/contrib/libgwavi/fileio.cpp
+src/contrib/libgwavi/gwavi.cpp
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp
 src/contrib/tiny_gltf.cpp
@@ -95,14 +100,12 @@ src/contrib/tiny_gltf.cpp
 #target_link_libraries(pine_gui PRIVATE glfw)
 
 target_include_directories(pinelib PUBLIC src/)
+target_include_directories(pinelib PRIVATE src/contrib)
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
-
-set(BUILD_SHARED_LIBS OFF)
-
-target_link_libraries(pinelib psl Threads::Threads)
-target_include_directories(pinelib PRIVATE src/contrib)
+add_subdirectory(src/contrib/zlib)
+target_link_libraries(pinelib psl Threads::Threads zlib)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)

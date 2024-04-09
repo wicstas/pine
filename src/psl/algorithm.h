@@ -61,6 +61,9 @@ concept Range = requires(T& x) {
   psl::begin(x);
   psl::end(x);
 };
+auto iters(Range auto&& range) {
+  return psl::make_pair(psl::begin(range), psl::end(range));
+}
 
 template <typename T>
 constexpr bool has_size = requires(T& x) { psl::size(x); };

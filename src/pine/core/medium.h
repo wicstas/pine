@@ -47,7 +47,7 @@ private:
 };
 
 struct VDBMedium {
-  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_s, vec3 sigma_z,
+  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 sigma_s,
             float blackbody_intensity = 1.0f, float temperature_scale = 1.0f);
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;

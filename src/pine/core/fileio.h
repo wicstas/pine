@@ -8,16 +8,24 @@
 #include <psl/string.h>
 #include <psl/vector.h>
 #include <psl/memory.h>
+#include <psl/span.h>
+#include <psl/map.h>
 
 namespace pine {
 
 using Bytes = psl::vector<uint8_t>;
-using BytesView = const uint8_t*;
+using BytesView = psl::span<uint8_t>;
 
 psl::string read_string_file(psl::string_view filename);
 
 void write_binary_file(psl::string_view filename, const void* ptr, size_t size);
 Bytes read_binary_file(psl::string_view filename);
+
+psl::map<psl::string, Bytes> read_folder(psl::string path);
+
+Bytes serialize(const psl::map<psl::string, Bytes>& fs);
+template <typename T>
+T deserialize(BytesView bytes);
 
 psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data,
                                     bool flip_y = false, bool apply_gamma = true);
@@ -61,9 +69,11 @@ inline psl::shared_ptr<Image> load_image(psl::string_view filename) {
   return load_image(filename, read_binary_file);
 }
 
-void scene_from(Scene& scene_, void* tiny_gltf_model);
-void scene_from(Scene& scene_, const Bytes& data);
-void load_scene(Scene& scene_, psl::string_view filename);
+void scene_from(Scene& scene, void* tiny_gltf_model);
+UberMaterial material_from(void* tiny_gltf_model);
+
+void scene_from(Scene& scene, psl::string file_name, const psl::map<psl::string, Bytes>& fs);
+UberMaterial material_from(psl::string file_name, const psl::map<psl::string, Bytes>& fs);
 
 void interpret_file(Context& context, psl::string_view filename);
 

@@ -104,6 +104,9 @@ struct Array2d {
   vec2i size() const {
     return size_;
   }
+  size_t byte_size() const {
+    return data_.byte_size();
+  }
   int width() const {
     return size().x;
   }

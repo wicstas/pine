@@ -79,7 +79,7 @@ private:
   Distribution2D distr;
 };
 struct ImageSky {
-  ImageSky(psl::shared_ptr<Image> image, vec3 tint = vec3{1}, float elevation = 1.0f,
+  ImageSky(psl::shared_ptr<Image> image, vec3 tint = vec3{1}, float elevation = 0.0f,
            float rotation = 0.0f);
 
   vec3 color(vec3 wo) const;
