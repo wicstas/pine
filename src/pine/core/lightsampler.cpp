@@ -5,10 +5,6 @@ namespace pine {
 
 void UniformLightSampler::build(const Scene* scene) {
   lights = scene->lights;
-  for (size_t i = 0; i < lights.size(); i++) {
-    if (lights[i].is<AreaLight>())
-      geo_id_to_index[lights[i].as<AreaLight>().geometry->id] = i;
-  }
   if (scene->env_light)
     scene->env_light->dispatch([&](auto&& x) { lights.push_back(x); });
 }

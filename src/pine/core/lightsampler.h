@@ -1,7 +1,6 @@
 #pragma once
 #include <pine/core/light.h>
 
-#include <psl/unordered_map.h>
 #include <psl/optional.h>
 #include <psl/variant.h>
 #include <psl/vector.h>
@@ -16,7 +15,6 @@ struct UniformLightSampler {
 
 private:
   psl::vector<Light> lights;
-  psl::unordered_map<int, size_t> geo_id_to_index;
 };
 
 struct LightSampler : private psl::variant<UniformLightSampler> {

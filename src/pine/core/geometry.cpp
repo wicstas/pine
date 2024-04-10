@@ -610,8 +610,6 @@ TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_funct
   return heightmap(height_map);
 }
 
-int Geometry::global_id = 0;
-
 void geometry_context(Context& ctx) {
   ctx.type<Ray>("Ray")
       .member("o", &Ray::o)
@@ -645,9 +643,12 @@ void geometry_context(Context& ctx) {
       .ctor<TriangleMesh>()
       .method("add", overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add))
       .method("add", overloaded<mat4, Material>(&InstancedShape::add));
-  ctx("heightmap") = overloaded<const Array2df&>(heightmap);
+  ctx("heightmap") = [&](psl::string_view path) {
+    auto image = ctx.call<Image>("load_image", path);
+    return heightmap(image.size(),
+                     psl::function<float(vec2i)>([&](vec2i p) { return image[p].x; }));
+  };
   ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
-  ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2i)>>(heightmap);
 }
 
 }  // namespace pine

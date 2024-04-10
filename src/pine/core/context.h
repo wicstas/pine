@@ -352,10 +352,16 @@ struct Context {
       ctx.add_f(psl::move(name), psl::move(f));
     }
     template <typename T>
+    requires requires { T::operator(); }
+    void add(T f) const {
+      ctx.add_f(psl::move(name), psl::move(f));
+    }
+    template <typename T>
     void add(T value) const {
       ctx.add_variable(psl::move(name), psl::move(value));
     }
 
+  private:
     Context& ctx;
     psl::string name;
   };
@@ -656,6 +662,18 @@ private:
   }
   template <typename T, typename R, typename... Args>
   Function wrap(Lambda<T, R, Args...> f) const {
+    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+  }
+  template <typename T>
+  Function wrap(T lambda) const {
+    return wrap(psl::move(lambda), &T::operator());
+  }
+  template <typename T, typename R, typename... Args>
+  Function wrap(T f, R (T::*)(Args...)) const {
+    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+  }
+  template <typename T, typename R, typename... Args>
+  Function wrap(T f, R (T::*)(Args...) const) const {
     return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
   }
 };

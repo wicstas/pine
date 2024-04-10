@@ -399,7 +399,6 @@ void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string,
 
   auto fs = tinygltf::FsCallbacks();
   fs.FileExists = +[](const std::string &path, void *user_data) {
-    Log(path.c_str());
     auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
     return files.find(path.c_str()) != files.end();
   };
@@ -446,7 +445,6 @@ UberMaterial material_from(psl::string file_name, const psl::map<psl::string, By
 
   auto fs = tinygltf::FsCallbacks();
   fs.FileExists = +[](const std::string &path, void *user_data) {
-    Log(path.c_str());
     auto &files = *(const psl::map<psl::string, Bytes> *)user_data;
     return files.find(path.c_str()) != files.end();
   };

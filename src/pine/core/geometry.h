@@ -192,6 +192,7 @@ struct TriangleMesh {
 };
 
 TriangleMesh heightmap(const Array2d<float>& height_map);
+TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function);
 TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 
 struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
@@ -225,7 +226,7 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line
 
 struct Geometry {
   Geometry(Shape shape, psl::shared_ptr<Material> material)
-      : id(global_id++), shape{psl::move(shape)}, material{psl::move(material)} {
+      : shape{psl::move(shape)}, material{psl::move(material)} {
   }
 
   bool hit(const Ray& ray) const {
@@ -250,12 +251,8 @@ struct Geometry {
     return shape.area();
   }
 
-  int id;
   Shape shape;
   psl::shared_ptr<Material> material;
-
-private:
-  static int global_id;
 };
 
 struct InstancedShape {
