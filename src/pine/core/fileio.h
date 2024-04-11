@@ -69,10 +69,10 @@ inline psl::shared_ptr<Image> load_image(psl::string_view filename) {
   return load_image(filename, read_binary_file);
 }
 
-void scene_from(Scene& scene, void* tiny_gltf_model);
+void scene_from(Scene& scene, void* tiny_gltf_model, mat4 m);
 UberMaterial material_from(void* tiny_gltf_model);
 
-void scene_from(Scene& scene, psl::string file_name, const psl::map<psl::string, Bytes>& fs);
+void scene_from(Scene& scene, psl::string file_name, const psl::map<psl::string, Bytes>& fs, mat4 m);
 UberMaterial material_from(psl::string file_name, const psl::map<psl::string, Bytes>& fs);
 
 void interpret_file(Context& context, psl::string_view filename);

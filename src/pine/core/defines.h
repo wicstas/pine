@@ -25,7 +25,7 @@ namespace pine {
 struct SurfaceInteraction;
 struct MediumInteraction;
 struct PhaseFunction;
-struct TriangleMesh;
+struct Mesh;
 struct Interaction;
 struct Function;
 struct Material;

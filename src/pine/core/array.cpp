@@ -1,6 +1,8 @@
+#include <pine/core/parallel.h>
 #include <pine/core/context.h>
 #include <pine/core/array.h>
 
+#include <psl/function.h>
 #include <psl/vector.h>
 
 namespace pine {
@@ -30,6 +32,12 @@ void array2d_context(Context& context) {
       .ctor<vec2i>()
       .method("size", &Array2d4f::size)
       .method("[]", overloaded(&Array2d4f::operator[]));
+
+  context("draw") = +[](vec2i size, psl::function<vec3(vec2)> fragment) {
+    auto image = Array2d3f(size);
+    parallel_for(size, [&](vec2i p) { image[p] = fragment((p + vec2(0.5f)) / size); });
+    return image;
+  };
 }
 
 }  // namespace pine

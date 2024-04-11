@@ -729,9 +729,9 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
       fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
-    context.function_rtype = rtype;
+    context.rtype_stack.push_back(rtype);
     body->block.emit(context, fbcodes);
-    context.function_rtype = psl::nullopt;
+    context.rtype_stack.pop_back();
 
     context(name) = Function(
         tag<Function, psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
@@ -938,16 +938,18 @@ void Declaration::emit(Context& context, Bytecodes& bytecodes) const {
   bytecodes.name_top_var(name);
 }
 void ReturnStmt::emit(Context& context, Bytecodes& bytecodes) const {
+  CHECK(context.rtype_stack.size() != 0);
   if (expr) {
     auto vi = expr->emit(context, bytecodes);
-    if (!context.function_rtype || bytecodes.var_type(vi).name != context.function_rtype->name)
+    if (bytecodes.var_type(vi).name != context.rtype_stack.back().name)
       bytecodes.error(sl, "Expression type `", bytecodes.var_type(vi),
-                      "` is inconsistent with function return type `", context.function_rtype, "`");
+                      "` is inconsistent with function return type `", context.rtype_stack.back(),
+                      "`");
     bytecodes.add(sl, Bytecode::Return, vi);
   } else {
-    if (TypeTag("void") != context.function_rtype)
+    if (TypeTag("void") != context.rtype_stack.back())
       bytecodes.error(sl, "Expression type `void`", " is inconsistent with function return type `",
-                      context.function_rtype, "`");
+                      context.rtype_stack.back(), "`");
     bytecodes.add(sl, Bytecode::Return, size_t(-1));
   }
 }
@@ -1092,9 +1094,9 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
       fbcodes.placehold_typed(ptype, param.name.value);
       ptypes.push_back(ptype);
     }
-    context.function_rtype = rtype;
+    context.rtype_stack.push_back(rtype);
     block.emit(context, fbcodes);
-    context.function_rtype = psl::nullopt;
+    context.rtype_stack.pop_back();
 
     // clang-format off
     context(name) = Function(tag<Variable, psl::span<const Variable*>>(

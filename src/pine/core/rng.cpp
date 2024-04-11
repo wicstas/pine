@@ -15,11 +15,17 @@ void rng_context(Context &ctx) {
   static RNG rng;
   static std::uniform_real_distribution<float> dist(0, 1);
   static std::default_random_engine generator;
-  ctx("reset_randf") = tag<void, int>([&](int seed) { generator.seed(seed); });
-  ctx("randf") = tag<float>([&]() {
-    return psl::min(dist(generator), one_minus_epsilon);
-    // return rng.nextf();
-  });
+  ctx("srand") = [&](int seed) { generator.seed(seed); };
+  ctx("randf") = [&]() { return psl::min(dist(generator), one_minus_epsilon); };
+  ctx("rand2f") = [&]() {
+    return vec2(psl::min(dist(generator), one_minus_epsilon),
+                psl::min(dist(generator), one_minus_epsilon));
+  };
+  ctx("rand3f") = [&]() {
+    return vec3(psl::min(dist(generator), one_minus_epsilon),
+                psl::min(dist(generator), one_minus_epsilon),
+                psl::min(dist(generator), one_minus_epsilon));
+  };
 }
 
 }  // namespace pine

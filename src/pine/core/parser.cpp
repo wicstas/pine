@@ -35,18 +35,18 @@ Context get_default_context() {
   sampler_context(ctx);
   fileio_context(ctx);
   parallel_context(ctx);
-  ctx("print") = +[](const psl::string& x) { Logr(x); };
-  ctx("println") = +[](const psl::string& x) { Log(x); };
+  ctx("print") = +[](const psl::string &x) { Logr(x); };
+  ctx("println") = +[](const psl::string &x) { Log(x); };
   ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
-      .ctor(
-          +[](Sampler sampler, psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> f) {
-            return CustomRayIntegrator(EmbreeAccel(), sampler, psl::move(f));
-          })
+      .ctor(+[](Sampler sampler,
+                psl::function<vec3(CustomRayIntegrator &, Scene &, Ray, Sampler &)> f) {
+        return CustomRayIntegrator(EmbreeAccel(), sampler, psl::move(f));
+      })
       .method("render", &CustomRayIntegrator::render);
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
@@ -88,13 +88,14 @@ Context get_default_context() {
   //     })
   //     .method("render", &EARSIntegrator::render);
   ctx("denoise") =
-      +[](Scene& scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
+      +[](Scene &scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
 
   return ctx;
 }
 
-void interpret(Context& context, psl::string source) {
+void interpret(Context &context, psl::string source) {
   auto bytecodes = compile(context, std::move(source));
+
   execute(context, bytecodes);
 }
 

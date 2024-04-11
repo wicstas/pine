@@ -215,6 +215,9 @@ void vecmath_context(Context& ctx) {
   ctx("distance") = distance<vec3>;
   ctx("dot") = overloaded<vec2, vec2>(dot<float>);
   ctx("dot") = overloaded<vec3, vec3>(dot<float>);
+  ctx("sqr") = sqr<vec2>;
+  ctx("sqr") = sqr<vec3>;
+  ctx("sqr") = sqr<vec4>;
   ctx("sum") = overloaded<vec2>(sum<float>);
   ctx("sum") = overloaded<vec3>(sum<float>);
   ctx("sum") = overloaded<vec4>(sum<float>);

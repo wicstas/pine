@@ -28,9 +28,10 @@ public:
   using ReturnType = R;
   function() = default;
   template <typename F>
+  requires requires(F f, Args... args) { f(args...); }
   function(F f) : model(psl::make_shared<FunctionModel<F>>(f)) {
   }
-  R operator()(Args... args) {
+  R operator()(Args... args) const {
     return model->call(static_cast<Args>(args)...);
   }
 };

@@ -491,8 +491,8 @@ void BVH::build(const Scene* scene) {
     return;
 
   for (size_t i = 0; i < scene->geometries.size(); i++) {
-    if (scene->geometries[i]->shape.is<TriangleMesh>()) {
-      auto& mesh = scene->geometries[i]->shape.as<TriangleMesh>();
+    if (scene->geometries[i]->shape.is<Mesh>()) {
+      auto& mesh = scene->geometries[i]->shape.as<Mesh>();
       if (mesh.num_triangles() == 0)
         continue;
       auto primitives = psl::vector<BVHImpl::Primitive>{};
@@ -517,7 +517,7 @@ void BVH::build(const Scene* scene) {
     primitives.push_back(primitive);
   }
   for (size_t i = 0; i < scene->geometries.size(); i++) {
-    if (!scene->geometries[i]->shape.is<TriangleMesh>()) {
+    if (!scene->geometries[i]->shape.is<Mesh>()) {
       auto primitive = BVHImpl::Primitive{};
       primitive.aabb = scene->geometries[i]->get_aabb();
       primitive.index = int(primitives.size());
@@ -537,7 +537,7 @@ bool BVH::hit(Ray ray) const {
 
     if (lbvhIndex < int(lbvh.size())) {
       return lbvh[lbvhIndex].hit(ray, [&](const Ray& ray, int index) {
-        return geometry->shape.as<TriangleMesh>().hit(ray, index);
+        return geometry->shape.as<Mesh>().hit(ray, index);
       });
     } else {
       return geometry->hit(ray);
@@ -555,7 +555,7 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
     auto& geometry = scene->geometries[indices[i_lbvh]];
 
     if (i_lbvh < int(lbvh.size())) {
-      auto& mesh = geometry->shape.as<TriangleMesh>();
+      auto& mesh = geometry->shape.as<Mesh>();
       auto hit = lbvh[i_lbvh].Intersect(ray, [&](Ray& ray, int index) {
         auto hit = mesh.intersect(ray, index);
         if (hit)
@@ -578,8 +578,8 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
     auto& shape = scene->geometries[geom_index]->shape;
     it._material = scene->geometries[geom_index]->material.get();
     it.shape = &shape;
-    if (shape.is<TriangleMesh>())
-      shape.as<TriangleMesh>().compute_surface_info(it, prim_index);
+    if (shape.is<Mesh>())
+      shape.as<Mesh>().compute_surface_info(it, prim_index);
     else
       shape.compute_surface_info(it);
   }

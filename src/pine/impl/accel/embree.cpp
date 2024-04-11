@@ -66,8 +66,8 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
 }
 static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& shape,
                        uint32_t expected_index) {
-  if (shape.is<TriangleMesh>()) {
-    auto mesh = shape.as<TriangleMesh>();
+  if (shape.is<Mesh>()) {
+    auto mesh = shape.as<Mesh>();
     RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_TRIANGLE);
 
     float* vb = (float*)rtcSetNewGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3,
@@ -212,8 +212,8 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
     it._material = scene->geometries[rayhit.hit.geomID]->material.get();
   }
 
-  if (it.shape->is<TriangleMesh>()) {
-    const auto& mesh = it.shape->as<TriangleMesh>();
+  if (it.shape->is<Mesh>()) {
+    const auto& mesh = it.shape->as<Mesh>();
     auto face = mesh.indices[rayhit.hit.primID];
     auto uv = vec2(rayhit.hit.u, rayhit.hit.v);
 

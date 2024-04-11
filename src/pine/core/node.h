@@ -3,6 +3,7 @@
 #include <pine/core/image.h>
 #include <pine/core/log.h>
 
+#include <psl/function.h>
 #include <psl/optional.h>
 #include <psl/variant.h>
 #include <psl/math.h>
@@ -38,19 +39,23 @@ struct NodeImage;
 struct NodeImagef;
 struct NodeComponent;
 struct NodeToVec3;
+template <typename T>
+struct NodeFunction;
 
 template <>
 struct Mnode<float> {
-  using Types = psl::TypePack<NodeConstant<float>, NodeBinary<float, '+'>, NodeBinary<float, '-'>,
-                              NodeBinary<float, '*'>, NodeBinary<float, '/'>,
-                              NodeBinary<float, '^'>, NodeUnary<float, '-'>, NodeUnary<float, 'a'>,
-                              NodeUnary<float, 's'>, NodeUnary<float, 'r'>, NodeUnary<float, 'f'>,
-                              NodeComponent, NodeNoisef, NodeCheckerboard, NodeImagef>;
+  using Types =
+      psl::TypePack<NodeConstant<float>, NodeBinary<float, '+'>, NodeBinary<float, '-'>,
+                    NodeBinary<float, '*'>, NodeBinary<float, '/'>, NodeBinary<float, '^'>,
+                    NodeUnary<float, '-'>, NodeUnary<float, 'a'>, NodeUnary<float, 's'>,
+                    NodeUnary<float, 'r'>, NodeUnary<float, 'f'>, NodeComponent, NodeNoisef,
+                    NodeCheckerboard, NodeImagef, NodeFunction<float>>;
 
   template <typename T>
   requires psl::one_of<T, Types>
   Mnode(T value);
   Mnode(float);
+  Mnode(psl::function<float(NodeEvalCtx)>);
   ~Mnode();
 
   Mnode(Mnode&&);
@@ -69,16 +74,18 @@ private:
 
 template <>
 struct Mnode<vec3> {
-  using Types = psl::TypePack<Mnode<float>, NodePosition, NodeNormal, NodeUV, NodeConstant<vec3>,
-                              NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>, NodeBinary<vec3, '*'>,
-                              NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>, NodeUnary<vec3, '-'>,
-                              NodeUnary<vec3, 'a'>, NodeUnary<vec3, 's'>, NodeUnary<vec3, 'r'>,
-                              NodeUnary<vec3, 'f'>, NodeToVec3, NodeNoise3f, NodeImage>;
+  using Types =
+      psl::TypePack<Mnode<float>, NodePosition, NodeNormal, NodeUV, NodeConstant<vec3>,
+                    NodeBinary<vec3, '+'>, NodeBinary<vec3, '-'>, NodeBinary<vec3, '*'>,
+                    NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>, NodeUnary<vec3, '-'>,
+                    NodeUnary<vec3, 'a'>, NodeUnary<vec3, 's'>, NodeUnary<vec3, 'r'>,
+                    NodeUnary<vec3, 'f'>, NodeToVec3, NodeNoise3f, NodeImage, NodeFunction<vec3>>;
 
   template <typename T>
   requires psl::one_of<T, Types>
   Mnode(T value);
   Mnode(vec3);
+  Mnode(psl::function<vec3(NodeEvalCtx)>);
   ~Mnode();
 
   Mnode(Mnode&&);
@@ -200,24 +207,20 @@ struct NodeToVec3 {
 };
 
 struct NodeNoisef {
-  NodeNoisef(Node3f p, Nodef frequency, Nodef octaves)
-      : p{psl::move(p)}, frequency{psl::move(frequency)}, octaves{psl::move(octaves)} {};
+  NodeNoisef(Node3f p, Nodef octaves) : p{psl::move(p)}, octaves{psl::move(octaves)} {};
   float eval(const NodeEvalCtx& ctx) const;
 
 private:
   Node3f p;
-  Nodef frequency;
   Nodef octaves;
 };
 
 struct NodeNoise3f {
-  NodeNoise3f(Node3f p, Nodef frequency, Nodef octaves)
-      : p{psl::move(p)}, frequency{psl::move(frequency)}, octaves{psl::move(octaves)} {};
+  NodeNoise3f(Node3f p, Nodef octaves) : p{psl::move(p)}, octaves{psl::move(octaves)} {};
   vec3 eval(const NodeEvalCtx& ctx) const;
 
 private:
   Node3f p;
-  Nodef frequency;
   Nodef octaves;
 };
 
@@ -248,9 +251,23 @@ private:
 };
 
 template <typename T>
+struct NodeFunction {
+  NodeFunction(psl::function<T(NodeEvalCtx)> f) : f(psl::move(f)) {
+  }
+  T eval(const NodeEvalCtx& ctx) const {
+    return f(ctx);
+  }
+
+private:
+  psl::function<T(NodeEvalCtx)> f;
+};
+
+template <typename T>
 requires psl::one_of<T, Mnode<float>::Types>
 Mnode<float>::Mnode(T value) : value{psl::move(value)} {};
 inline Mnode<float>::Mnode(float value) : value{NodeConstant{value}} {};
+inline Mnode<float>::Mnode(psl::function<float(NodeEvalCtx)> value)
+    : value{NodeFunction<float>{psl::move(value)}} {};
 inline Mnode<float>::~Mnode() = default;
 inline Mnode<float>::Mnode(Mnode<float>&&) = default;
 inline Mnode<float>::Mnode(const Mnode<float>&) = default;
@@ -264,6 +281,8 @@ template <typename T>
 requires psl::one_of<T, Mnode<vec3>::Types>
 Mnode<vec3>::Mnode(T value) : value{psl::move(value)} {};
 inline Mnode<vec3>::Mnode(vec3 value) : value{NodeConstant{value}} {};
+inline Mnode<vec3>::Mnode(psl::function<vec3(NodeEvalCtx)> value)
+    : value{NodeFunction<vec3>{psl::move(value)}} {};
 inline Mnode<vec3>::~Mnode() = default;
 inline Mnode<vec3>::Mnode(Mnode<vec3>&&) = default;
 inline Mnode<vec3>::Mnode(const Mnode<vec3>&) = default;

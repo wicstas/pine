@@ -163,10 +163,10 @@ struct Variable {
   template <typename T>
   T as() const {
     using Base = psl::Decay<T>;
-    // #ifndef NDEBUG
+#ifndef NDEBUG
     if (!is<Base>())
       Fatal("Trying to interpret ", type_name(), " as ", psl::type_name<T>());
-    // #endif
+#endif
     return *reinterpret_cast<Base*>(model->ptr());
   }
 
@@ -352,7 +352,7 @@ struct Context {
       ctx.add_f(psl::move(name), psl::move(f));
     }
     template <typename T>
-    requires requires { T::operator(); }
+    requires requires { &T::operator(); }
     void add(T f) const {
       ctx.add_f(psl::move(name), psl::move(f));
     }
@@ -423,6 +423,12 @@ struct Context {
     TypeProxy& ctor() {
       ctx.add_f(
           trait.type_name(), +[](Args... args) { return T(FWD(args)...); });
+      return *this;
+    }
+    template <typename... Args>
+    TypeProxy& ctor(psl::string name) {
+      ctx.add_f(
+          name, +[](Args... args) { return T(FWD(args)...); });
       return *this;
     }
     template <typename F>
@@ -638,7 +644,7 @@ struct Context {
   psl::unordered_map<size_t, psl::string> types_map;
   psl::map<psl::string, TypeTrait> types;
   size_t internal_class_n = 0;
-  psl::optional<TypeTag> function_rtype;
+  psl::vector<TypeTag> rtype_stack;
 
 private:
   Function wrap(Function f) const {
@@ -670,11 +676,13 @@ private:
   }
   template <typename T, typename R, typename... Args>
   Function wrap(T f, R (T::*)(Args...)) const {
-    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+    return Function(Lambda<T, R, Args...>(psl::move(f)), tag<R>(),
+                    psl::vector_of<TypeTag>(tag<Args>()...));
   }
   template <typename T, typename R, typename... Args>
   Function wrap(T f, R (T::*)(Args...) const) const {
-    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+    return Function(Lambda<T, R, Args...>(psl::move(f)), tag<R>(),
+                    psl::vector_of<TypeTag>(tag<Args>()...));
   }
 };
 

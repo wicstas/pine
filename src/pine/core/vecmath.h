@@ -1140,6 +1140,17 @@ T trilinear_interp(T c[2][2][2], Vector3<U> uvw) {
 }
 
 template <typename T>
+T perlin_interp(Vector2<T> c[2][2], Vector2<T> uv) {
+  T ret = 0;
+  for (int x = 0; x < 2; x++)
+    for (int y = 0; y < 2; y++) {
+      Vector2<T> weight = uv - Vector2<T>(x, y);
+      ret += (x * uv.x + (1 - x) * (1.0 - uv.x)) * (y * uv.y + (1 - y) * (1.0 - uv.y)) *
+             dot(c[x][y], weight);
+    }
+  return ret;
+}
+template <typename T>
 T perlin_interp(Vector3<T> c[2][2][2], Vector3<T> uvw) {
   T ret = 0;
   for (int x = 0; x < 2; x++)

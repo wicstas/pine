@@ -517,8 +517,8 @@ AABB Triangle::get_aabb() const {
   return aabb;
 }
 
-TriangleMesh::TriangleMesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> indices_,
-                           psl::vector<vec2> texcoords_, psl::vector<vec3> normals_)
+Mesh::Mesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> indices_, psl::vector<vec2> texcoords_,
+           psl::vector<vec3> normals_)
     : vertices{psl::move(vertices_)},
       normals{psl::move(normals_)},
       texcoords{psl::move(texcoords_)},
@@ -528,17 +528,17 @@ TriangleMesh::TriangleMesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> ind
   if (texcoords.size() != 0)
     CHECK_EQ(vertices.size(), texcoords.size());
 };
-bool TriangleMesh::hit(const Ray& ray, int index) const {
+bool Mesh::hit(const Ray& ray, int index) const {
   DCHECK_LT(size_t(index), indices.size());
   auto face = indices[index];
   return Triangle::hit(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
 }
-bool TriangleMesh::intersect(Ray& ray, int index) const {
+bool Mesh::intersect(Ray& ray, int index) const {
   DCHECK_LT(size_t(index), indices.size());
   auto face = indices[index];
   return Triangle::intersect(ray, vertices[face[0]], vertices[face[1]], vertices[face[2]]);
 }
-void TriangleMesh::compute_surface_info(SurfaceInteraction& it, int index) const {
+void Mesh::compute_surface_info(SurfaceInteraction& it, int index) const {
   auto face = indices[index];
   auto v0 = vertices[face[0]], v1 = vertices[face[1]], v2 = vertices[face[2]];
   auto e1 = v1 - v0;
@@ -554,20 +554,20 @@ void TriangleMesh::compute_surface_info(SurfaceInteraction& it, int index) const
   if (texcoords.size())
     it.uv = *texcoord_of(face, it.uv);
 }
-AABB TriangleMesh::get_aabb(size_t index) const {
+AABB Mesh::get_aabb(size_t index) const {
   DCHECK_LT(index, indices.size());
   return Triangle(vertices[indices[index][0]], vertices[indices[index][1]],
                   vertices[indices[index][2]], vec3(0, 0, 1))
       .get_aabb();
 }
-AABB TriangleMesh::get_aabb() const {
+AABB Mesh::get_aabb() const {
   auto aabb = AABB{};
   for (size_t i = 0; i < num_triangles(); i++)
     aabb.extend(get_aabb(i));
   return aabb;
 }
 
-TriangleMesh heightmap(const Array2d<float>& height_map) {
+Mesh heightmap(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;
   auto height = height_map.size().y + 1;
   auto p2i = [width](int x, int y) { return x + y * width; };
@@ -595,19 +595,59 @@ TriangleMesh heightmap(const Array2d<float>& height_map) {
     indices[index] = vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1));
     indices[index + 1] = vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1));
   });
-  return TriangleMesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
+  return Mesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
 }
 
-TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function) {
+Mesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution, [&](vec2i p) { height_map[p] = height_function(p); });
   return heightmap(height_map);
 }
-TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
+Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
   auto height_map = Array2df(resolution);
   parallel_for(resolution,
                [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
   return heightmap(height_map);
+}
+
+bool SDF::hit(const Ray& ray) const {
+  auto t = ray.tmin;
+  auto prev_d = Infinity;
+  for (int i = 0; i < 128; i++) {
+    auto d = sdf(ray(t));
+    if (d < 1e-6f)
+      return true;
+    if (t >= ray.tmax || d >= prev_d)
+      return false;
+    prev_d = d;
+    t += d;
+  }
+
+  return false;
+}
+bool SDF::intersect(Ray& ray) const {
+  auto t = ray.tmin;
+  auto prev_d = Infinity;
+  for (int i = 0; i < 128; i++) {
+    auto d = sdf(ray(t));
+    if (d < 1e-6f) {
+      ray.tmax = t;
+      return true;
+    }
+    if (t >= ray.tmax || d >= prev_d)
+      return false;
+    prev_d = d;
+    t += d;
+  }
+
+  return false;
+}
+void SDF::compute_surface_info(SurfaceInteraction& it) const {
+  auto ops = 0.001f;
+  auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - sdf(it.p - vec3(ops, 0.0f, 0.0f));
+  auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - sdf(it.p - vec3(0.0f, ops, 0.0f));
+  auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - sdf(it.p - vec3(0.0f, 0.0f, ops));
+  it.n = normalize(vec3(dtdx, dtdy, dtdz));
 }
 
 void geometry_context(Context& ctx) {
@@ -632,21 +672,22 @@ void geometry_context(Context& ctx) {
   ctx.type<Line>("Line").ctor<vec3, vec3, float>();
   ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>().ctor<vec3, vec3, vec3, bool>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
-  ctx.type<TriangleMesh>("TriangleMesh")
-      .ctor(tag<TriangleMesh, psl::string>([&ctx](psl::string_view filename) {
-        return ctx.call<TriangleMesh>("load_mesh", filename);
-      }))
-      .method("apply", &TriangleMesh::apply);
+  ctx.type<SDF>("SDF")
+      .ctor<vec3, vec3, psl::function<float(vec3)>>()
+      .ctor<AABB, psl::function<float(vec3)>>();
+  ctx.type<Mesh>("Mesh")
+      .ctor([&ctx](psl::string_view filename) { return ctx.call<Mesh>("load_mesh", filename); })
+      .method("apply", &Mesh::apply);
   ctx.type<Shape>("Shape")
-      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, TriangleMesh>();
+      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, Mesh, SDF>();
   ctx.type<InstancedShape>("Instancing")
-      .ctor<TriangleMesh>()
+      .ctor<Mesh>()
       .method("add", overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add))
       .method("add", overloaded<mat4, Material>(&InstancedShape::add));
   ctx("heightmap") = [&](psl::string_view path) {
-    auto image = ctx.call<Image>("load_image", path);
-    return heightmap(image.size(),
-                     psl::function<float(vec2i)>([&](vec2i p) { return image[p].x; }));
+    auto image = ctx.call<psl::shared_ptr<Image>>("load_image", path);
+    return heightmap(image->size(),
+                     psl::function<float(vec2i)>([&](vec2i p) { return (*image)[p].x; }));
   };
   ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
 }

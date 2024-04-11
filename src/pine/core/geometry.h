@@ -129,10 +129,10 @@ private:
   vec3 n;
 };
 
-struct TriangleMesh {
-  TriangleMesh() = default;
-  TriangleMesh(psl::vector<vec3> vertices, psl::vector<vec3u32> indices,
-               psl::vector<vec2> texcoords = {}, psl::vector<vec3> normals = {});
+struct Mesh {
+  Mesh() = default;
+  Mesh(psl::vector<vec3> vertices, psl::vector<vec3u32> indices, psl::vector<vec2> texcoords = {},
+       psl::vector<vec3> normals = {});
 
   bool hit(const Ray&) const {
     PINE_UNREACHABLE;
@@ -163,7 +163,7 @@ struct TriangleMesh {
     return indices.size();
   }
 
-  TriangleMesh& apply(mat4 m) {
+  Mesh& apply(mat4 m) {
     for (auto& v : vertices)
       v = vec3(m * vec4(v, 1.0f));
     return *this;
@@ -191,11 +191,40 @@ struct TriangleMesh {
   psl::vector<vec3u32> indices;
 };
 
-TriangleMesh heightmap(const Array2d<float>& height_map);
-TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function);
-TriangleMesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
+Mesh heightmap(const Array2d<float>& height_map);
+Mesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function);
+Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 
-struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, TriangleMesh> {
+struct SDF {
+  SDF(vec3 center, vec3 size, psl::function<float(vec3)> sdf)
+      : aabb(center - size / 2, center + size / 2), sdf(psl::move(sdf)) {
+  }
+  SDF(AABB aabb, psl::function<float(vec3)> sdf) : aabb(aabb), sdf(psl::move(sdf)) {
+  }
+
+  bool hit(const Ray& ray) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
+
+  AABB get_aabb() const {
+    return aabb;
+  }
+  psl::optional<ShapeSample> sample(vec3, vec2) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+    PINE_UNREACHABLE;
+  }
+  float area() const {
+    PINE_UNREACHABLE;
+  }
+
+private:
+  AABB aabb;
+  psl::function<float(vec3)> sdf;
+};
+
+struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, Mesh, SDF> {
   using variant::variant;
 
   bool hit(const Ray& ray) const {
@@ -256,7 +285,7 @@ struct Geometry {
 };
 
 struct InstancedShape {
-  InstancedShape(TriangleMesh shape) : shape(psl::move(shape)) {
+  InstancedShape(Mesh shape) : shape(psl::move(shape)) {
   }
 
   InstancedShape& add(mat4 transform, Material material) {

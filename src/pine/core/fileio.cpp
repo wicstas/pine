@@ -191,7 +191,7 @@ psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const
   return result;
 }
 
-void scene_from(Scene &scene, void *tiny_gltf_model) {
+void scene_from(Scene &scene, void *tiny_gltf_model, mat4 m) {
   auto &model = *(tinygltf::Model *)tiny_gltf_model;
   tinygltf::TinyGLTF gltf_ctx;
 
@@ -208,7 +208,7 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
   }
 
   for (const auto &node : model.nodes) {
-    Debug(node.name.c_str());
+    // Debug(node.name.c_str());
     auto transform = mat4::identity();
     for (size_t i = 0; i < node.matrix.size(); i++)
       transform[i / 4][i % 4] = node.matrix[i];
@@ -218,14 +218,14 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
       transform = translate(T[0], T[1], T[2]) * transform;
 
     for (const auto &primitive : model.meshes[node.mesh].primitives) {
-      auto mesh_ = TriangleMesh();
+      auto mesh_ = Mesh();
       const auto &indicesAccessor = model.accessors[primitive.indices];
       const auto &indicesBbufferView = model.bufferViews[indicesAccessor.bufferView];
       const auto &indicesBuffer = model.buffers[indicesBbufferView.buffer];
       const auto indicesPtr =
           indicesBuffer.data.data() + indicesBbufferView.byteOffset + indicesAccessor.byteOffset;
       const auto indexSize = indicesAccessor.ByteStride(indicesBbufferView);
-      CHECK_EQ(indexSize, 2);
+      CHECK(indexSize == 2 || indexSize == 4);
       switch (primitive.mode) {
         case TINYGLTF_MODE_TRIANGLE_FAN: {
           Fatal("Fan");
@@ -234,9 +234,15 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
           Fatal("Strip");
         }
         case TINYGLTF_MODE_TRIANGLES: {
-          auto ptr = (uint16_t *)indicesPtr;
-          for (size_t i = 0; i < indicesAccessor.count; i += 3)
-            mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+          if (indexSize == 2) {
+            auto ptr = (uint16_t *)indicesPtr;
+            for (size_t i = 0; i < indicesAccessor.count; i += 3)
+              mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+          } else {
+            auto ptr = (uint32_t *)indicesPtr;
+            for (size_t i = 0; i < indicesAccessor.count; i += 3)
+              mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+          }
 
           for (const auto &attribute : primitive.attributes) {
             const auto accessor = model.accessors[attribute.second];
@@ -333,7 +339,9 @@ void scene_from(Scene &scene, void *tiny_gltf_model) {
         }
       }
 
-      mesh_.apply(transform);
+      basecolor = vec3(0.1, 0.2, 0);
+
+      mesh_.apply(m * transform);
       scene.add_geometry(psl::move(mesh_),
                          UberMaterial(basecolor, roughness, metallic, transmission, ior));
     }
@@ -392,7 +400,8 @@ UberMaterial material_from(void *tiny_gltf_model) {
   return UberMaterial(basecolor, roughness, metallic, transmission, ior);
 }
 
-void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string, Bytes> &files) {
+void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string, Bytes> &files,
+                mat4 m) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
@@ -436,7 +445,7 @@ void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string,
   if (!ret)
     Fatal("[FIleIO]Unable to create scene from GLTF file");
 
-  scene_from(scene, &model);
+  scene_from(scene, &model, m);
 }
 UberMaterial material_from(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
   tinygltf::Model model;
@@ -494,37 +503,40 @@ void interpret_file(Context &context, psl::string_view filename) {
 void fileio_context(Context &ctx) {
   ctx.type<Bytes>("Bytes");
   ctx("read_binary") = +[](psl::string_view filename) { return read_binary_file(filename); };
-  ctx("load") = tag<void, Scene &, psl::string>([&](Scene &scene, psl::string file_path) {
+  ctx("load") = [&](Scene &scene, psl::string file_path) {
     auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
     auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
     auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
-    scene_from(scene, scene_name, fs);
-  });
-  ctx("load_material") = tag<UberMaterial, psl::string>([&](psl::string file_path) {
+    scene_from(scene, scene_name, fs, mat4::identity());
+  };
+  ctx("load") = [&](Scene &scene, psl::string file_path, mat4 m) {
+    auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
+    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
+    auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
+    scene_from(scene, scene_name, fs, m);
+  };
+  ctx("load_material") = [&](psl::string file_path) {
     auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
     auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
     auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
     return material_from(scene_name, fs);
-  });
-  ctx("load_image") = tag<Image, psl::string_view>([&](psl::string_view filename) {
+  };
+  ctx("load_image") = [&](psl::string_view filename) {
     auto reader = [&ctx](psl::string_view filename) {
       return ctx.call<Bytes>("read_binary", filename);
     };
     return load_image(filename, reader);
-  });
-  ctx("save_image") =
-      +[](psl::string filename, const Array2d3f &array) { save_image(filename, array); };
-  ctx("save_image") = +[](psl::string filename, const Array2d3f &array, bool should_invert_y) {
+  };
+  ctx("save") = +[](const Image &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = +[](const Array2d3f &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = +[](const Array2d4f &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = +[](const Image &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
-  ctx("save_image") =
-      +[](psl::string filename, const Array2d4f &array) { save_image(filename, array); };
-  ctx("save_image") = +[](psl::string filename, const Array2d4f &array, bool should_invert_y) {
+  ctx("save") = +[](const Array2d3f &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
-  ctx("save_image") =
-      +[](psl::string filename, const Image &array) { save_image(filename, array); };
-  ctx("save_image") = +[](psl::string filename, const Image &array, bool should_invert_y) {
+  ctx("save") = +[](const Array2d4f &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
 

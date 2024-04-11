@@ -74,7 +74,7 @@ src/pine/impl/integrator/denoiser.cpp
 #src/pine/impl/integrator/ears.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
-#src/pine/impl/accel/embree.cpp
+src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 
 src/contrib/libgwavi/avi-utils.cpp
@@ -104,12 +104,12 @@ target_include_directories(pinelib PRIVATE src/contrib)
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
-add_subdirectory(src/contrib/zlib)
-target_link_libraries(pinelib psl Threads::Threads zlib)
+add_subdirectory(src/contrib/embree)
+target_link_libraries(pinelib psl Threads::Threads embree)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
-target_link_libraries(pine pinelib)
+target_link_libraries(pine pinelib  ${llvm_libs})
 
 #Gltf tool
 add_executable(gltf-tool src/cli/gltf-tool.cpp)
