@@ -90,13 +90,6 @@ SET(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/common/cmake" ${CMAKE_MODULE_
 
 INCLUDE(test)
 
-set(BUILD_DOC OFF CACHE INTERNAL "build documentation (internal only)")
-IF (BUILD_DOC)
-  ADD_SUBDIRECTORY(doc)
-ENDIF()
-
-OPTION(EMBREE_TUTORIALS    "Enable to build Embree tutorials" OFF)
-
 ##############################################################
 # Embree configuration
 ##############################################################
@@ -137,7 +130,7 @@ MARK_AS_ADVANCED(EMBREE_ZIP_MODE)
 OPTION(EMBREE_INSTALL_DEPENDENCIES "Install Embree dependencies in binary packages and install" OFF)
 MARK_AS_ADVANCED(EMBREE_INSTALL_DEPENDENCIES)
 
-OPTION(EMBREE_STAT_COUNTERS "Enables statistic counters.")
+OPTION(EMBREE_STAT_COUNTERS "Enables statistic counters." OFF)
 OPTION(EMBREE_STACK_PROTECTOR "When enabled Embree compiles with stack protection against return address overrides." OFF)
 
 IF (NOT APPLE)
@@ -399,14 +392,14 @@ IF (EMBREE_MAX_ISA STREQUAL "NONE")
     TRY_COMPILE(COMPILER_SUPPORTS_AVX2   "${CMAKE_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/common/cmake/check_isa.cpp" COMPILE_DEFINITIONS ${FLAGS_AVX2})
     TRY_COMPILE(COMPILER_SUPPORTS_AVX512 "${CMAKE_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/common/cmake/check_isa.cpp" COMPILE_DEFINITIONS ${FLAGS_AVX512})
   
-    OPTION(EMBREE_ISA_SSE2 "Enables SSE2 ISA." ON)
+    OPTION(EMBREE_ISA_SSE2 "Enables SSE2 ISA." OFF)
     OPTION(EMBREE_ISA_SSE42 "Enables SSE4.2 ISA." ON)
     OPTION(EMBREE_ISA_AVX "Enables AVX ISA." ${COMPILER_SUPPORTS_AVX})
     OPTION(EMBREE_ISA_AVX2 "Enables AVX2 ISA." ${COMPILER_SUPPORTS_AVX2})
     IF (WIN32 OR APPLE)
       OPTION(EMBREE_ISA_AVX512 "Enables AVX512 ISA." OFF)
     ELSE()
-      OPTION(EMBREE_ISA_AVX512 "Enables AVX512 ISA." ${COMPILER_SUPPORTS_AVX512})
+      OPTION(EMBREE_ISA_AVX512 "Enables AVX512 ISA." OFF)
     ENDIF()
     # Don't use OPTION, but still set them to OFF, so that embree-config.cmake is consisten with its definitions
     SET(EMBREE_ISA_NEON   OFF)

@@ -175,6 +175,7 @@ struct Variable {
   }
 
 private:
+  psl::Storage<64, 4> storage;
   psl::unique_ptr<VariableConcept> model;
 };
 
