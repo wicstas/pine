@@ -83,6 +83,16 @@ src/contrib/libgwavi/gwavi.cpp
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp
 src/contrib/tiny_gltf.cpp
+
+src/contrib/bluesobol/bluenoise_1spp.cpp
+src/contrib/bluesobol/bluenoise_2spp.cpp
+src/contrib/bluesobol/bluenoise_4spp.cpp
+src/contrib/bluesobol/bluenoise_8spp.cpp
+src/contrib/bluesobol/bluenoise_16spp.cpp
+src/contrib/bluesobol/bluenoise_32spp.cpp
+src/contrib/bluesobol/bluenoise_64spp.cpp
+src/contrib/bluesobol/bluenoise_128spp.cpp
+src/contrib/bluesobol/bluenoise_256spp.cpp
 )
 
 #add_library(pine_gui

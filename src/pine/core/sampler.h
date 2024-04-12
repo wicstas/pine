@@ -164,6 +164,44 @@ private:
   int nbase4_digits;
 };
 
+struct BlueSobolSampler {
+  BlueSobolSampler(int samples_per_pixel) : samples_per_pixel(psl::roundup2(samples_per_pixel)) {
+  }
+
+  void init(vec2i) {
+  }
+  int spp() const {
+    return samples_per_pixel;
+  }
+  void start_pixel(vec2i p, int sample_index) {
+    pixel = p;
+    index = sample_index;
+  }
+  void start_next_sample() {
+    dimension = 0;
+    index++;
+  }
+  float get1d() {
+    if (dimension >= 256)
+      dimension = 2;
+    return sample_dimension(dimension++);
+  }
+  vec2 get2d() {
+    if (dimension + 1 >= 256)
+      dimension = 2;
+    int dim = dimension;
+    dimension += 2;
+    return {sample_dimension(dim), sample_dimension(dim + 1)};
+  }
+  float sample_dimension(int dim) const;
+
+private:
+  int samples_per_pixel;
+  int dimension = 0;
+  vec2i pixel;
+  int index;
+};
+
 struct MltSampler {
   MltSampler(float sigma, float largeStepProbability, int streamCount, int seed)
       : rng(seed),
@@ -238,7 +276,7 @@ private:
   int64_t lastLargeStepIndex = 0;
 };
 
-struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSampler> {
+struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler> {
   using variant::variant;
 
   int spp() const {

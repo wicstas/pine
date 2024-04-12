@@ -36,6 +36,17 @@ struct default_deleter {
       delete ptr;
   }
 };
+template <typename T>
+struct no_free_deleter {
+  no_free_deleter() = default;
+  template <DerivedFrom<T> U>
+  no_free_deleter(const no_free_deleter<U>&) {
+  }
+
+  void operator()(T* ptr) const {
+    ptr->~T();
+  }
+};
 
 template <typename As, typename T>
 requires(sizeof(As) == sizeof(T))
@@ -145,7 +156,7 @@ public:
     return ptr != nullptr;
   }
 
-private:
+protected:
   template <typename U, typename UDeleter>
   void take(unique_ptr<U, UDeleter>& rhs) {
     this->~unique_ptr();
@@ -154,6 +165,8 @@ private:
   }
 
   Pointer ptr = nullptr;
+
+public:
   Deleter deleter = {};
 };
 
@@ -375,6 +388,7 @@ template <size_t bytes, size_t align_>
 struct Storage {
   template <typename T>
   void operator=(const T& x) {
+    static_assert(!psl::same_as<T, Storage>, "");
     static_assert(align_ % alignof(T) == 0, "");
     psl::memcpy(data, &x, sizeof(T));
   }
@@ -391,6 +405,23 @@ struct Storage {
 
 private:
   alignas(align_) unsigned char data[bytes];
+};
+template <size_t align_>
+struct Storage<0, align_> {
+  template <typename T>
+  void operator=(const T&) {
+  }
+
+  template <typename T>
+  T& as() {
+    return *(T*)nullptr;
+  }
+
+  void* ptr() const {
+    return nullptr;
+  }
+
+private:
 };
 
 }  // namespace psl

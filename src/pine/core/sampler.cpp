@@ -1,6 +1,16 @@
 #include <pine/core/sampler.h>
 #include <pine/core/context.h>
 
+float bluenoise_1spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_2spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_4spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_8spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_16spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_32spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_64spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_128spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+float bluenoise_256spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension);
+
 namespace pine {
 
 static void extendedGCD(uint64_t a, uint64_t b, int64_t& gcd, int64_t& x, int64_t& y) {
@@ -102,6 +112,29 @@ uint64_t SobolSampler::compute_sample_index() {
   return si;
 }
 
+float BlueSobolSampler::sample_dimension(int dim) const {
+  if (spp() == 1)
+    return bluenoise_1spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 2)
+    return bluenoise_2spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 4)
+    return bluenoise_4spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 8)
+    return bluenoise_8spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 16)
+    return bluenoise_16spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 32)
+    return bluenoise_32spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 64)
+    return bluenoise_64spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 128)
+    return bluenoise_128spp(pixel.x, pixel.y, index, dim);
+  else if (spp() == 256)
+    return bluenoise_256spp(pixel.x, pixel.y, index, dim);
+  else
+    PINE_UNREACHABLE;
+}
+
 void MltSampler::ensure_ready(int dim) {
   if (dim >= (int)X.size())
     X.resize(dim + 1);
@@ -146,8 +179,16 @@ void sampler_context(Context& ctx) {
       .method("start_next_sample", &SobolSampler::start_next_sample)
       .method("get1d", &SobolSampler::get1d)
       .method("get2d", &SobolSampler::get2d);
+  ctx.type<BlueSobolSampler>("BlueSobolSampler")
+      .ctor<int>()
+      .method("spp", &BlueSobolSampler::spp)
+      .method("start_pixel", &BlueSobolSampler::start_pixel)
+      .method("start_next_sample", &BlueSobolSampler::start_next_sample)
+      .method("get1d", &BlueSobolSampler::get1d)
+      .method("get2d", &BlueSobolSampler::get2d);
 
-  ctx.type<Sampler>("Sampler").ctor_variant<UniformSampler, HaltonSampler, SobolSampler>();
+  ctx.type<Sampler>("Sampler")
+      .ctor_variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler>();
 }
 
 }  // namespace pine

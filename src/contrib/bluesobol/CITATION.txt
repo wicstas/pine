@@ -1,0 +1,3 @@
+Eric Heitz, Laurent Belcour, Victor Ostromoukhov, David Coeurjolly, Jean-Claude Iehl. 
+A Low-Discrepancy Sampler that Distributes Monte Carlo Errors as a Blue Noise in Screen Space. 
+SIGGRAPH'19 Talks, Jul 2019, Los Angeles, United States.
