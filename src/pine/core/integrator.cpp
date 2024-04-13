@@ -73,10 +73,9 @@ void RayIntegrator::render(Scene& scene) {
   parallel_for(film.size(), [&](vec2i p) {
     Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
     auto L = vec3(0.0f);
-    for (int si = 0; si < spp; si++) {
-      auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
+    for (int si = 0; si < spp; si++, sampler.start_next_sample()) {
+      auto ray = scene.camera.gen_ray((p + sampler.rand2f()) / film.size(), sampler.rand2f());
       L += radiance(scene, ray, sampler);
-      sampler.start_next_sample();
     }
     scene.camera.film()[p] = vec4(L / spp, 1.0f);
     if (p.x % 64 == 0)

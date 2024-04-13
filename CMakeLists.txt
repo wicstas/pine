@@ -116,20 +116,21 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 add_subdirectory(src/contrib/embree)
-target_link_libraries(pinelib psl Threads::Threads embree)
+find_package(OpenImageDenoise REQUIRED)
+target_link_libraries(pinelib psl Threads::Threads embree OpenImageDenoise_common OpenImageDenoise)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib  ${llvm_libs})
 
 #Gltf tool
-add_executable(gltf-tool src/cli/gltf-tool.cpp)
-target_link_libraries(gltf-tool pinelib)
+#add_executable(gltf-tool src/cli/gltf-tool.cpp)
+#target_link_libraries(gltf-tool pinelib)
 
 #Image tool
-add_executable(image-tool src/cli/image-tool.cpp)
-target_link_libraries(image-tool pinelib)
+#add_executable(image-tool src/cli/image-tool.cpp)
+#target_link_libraries(image-tool pinelib)
 
 #Pine executable
-add_executable(pine-repl src/cli/pine-repl.cpp)
-target_link_libraries(pine-repl pinelib ncurses)
+#add_executable(pine-repl src/cli/pine-repl.cpp)
+#target_link_libraries(pine-repl pinelib ncurses)

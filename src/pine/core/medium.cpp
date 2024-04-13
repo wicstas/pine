@@ -36,7 +36,7 @@ psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
 
   auto r = ray;
   auto sigma = average(sigma_z);
-  auto t_sampled = -psl::log(1 - sampler.get1d()) / sigma;
+  auto t_sampled = -psl::log(1 - sampler.randf()) / sigma;
   auto t = 0.0f;
 
   while (true) {

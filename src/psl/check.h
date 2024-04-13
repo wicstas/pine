@@ -2,6 +2,9 @@
 
 namespace psl {
 
+struct Exception;
+class string message_of(const Exception& e);
+
 void throw_check_failure(const char* expr, const char* file, int line, const char* func);
 
 #ifndef NDEBUG

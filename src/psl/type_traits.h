@@ -69,7 +69,7 @@ struct _IsFunction : FalseType {};
 template <typename R, typename... Args>
 struct _IsFunction<R(Args...)> : TrueType {};
 template <typename R, typename... Args>
-struct _IsFunction<R(*)(Args...)> : TrueType {};
+struct _IsFunction<R (*)(Args...)> : TrueType {};
 template <typename T, typename R, typename... Args>
 struct _IsFunction<R (T::*)(Args...)> : TrueType {};
 template <typename T, typename R, typename... Args>
@@ -242,16 +242,16 @@ template <typename F, typename... Args>
 using ReturnType = decltype(psl::declval<F>()(psl::declval<Args>()...));
 
 template <typename From, typename To>
-struct _IsConverible {
-private:
-  static constexpr TrueType check(To);
-  static constexpr FalseType check(...);
+constexpr bool convertible = requires(From x) { To(x); };
 
-public:
-  static constexpr bool value = decltype(check(psl::declval<From>()))::value;
-};
-template <typename From, typename To>
-constexpr bool convertible = _IsConverible<From, To>::value;
+template <typename T>
+constexpr bool copyable = requires(T x) { T(x); };
+template <typename T>
+constexpr bool movable = requires(T x) { T(MOVE(x)); };
+template <typename T>
+constexpr bool copy_assignable = requires(T x) { x = x; };
+template <typename T>
+constexpr bool move_assignable = requires(T x) { x = MOVE(x); };
 
 template <typename Derived, typename Base>
 constexpr bool derived_from = convertible<const Derived *, const Base *>;

@@ -56,16 +56,16 @@ public:
 class CustomRayIntegrator : public RayIntegrator {
 public:
   CustomRayIntegrator(Accel accel, Sampler sampler,
-                      psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> radiance_)
+                      psl::function<vec3(CustomRayIntegrator&, Ray, Sampler&)> radiance_)
       : RayIntegrator(psl::move(accel), psl::move(sampler)), radiance_(psl::move(radiance_)) {
   }
 
-  vec3 radiance(Scene& scene, Ray ray, Sampler& sampler) override {
-    return radiance_(*this, scene, ray, sampler);
+  vec3 radiance(Scene&, Ray ray, Sampler& sampler) override {
+    return radiance_(*this, ray, sampler);
   }
 
 private:
-  psl::function<vec3(CustomRayIntegrator&, Scene&, Ray, Sampler&)> radiance_;
+  psl::function<vec3(CustomRayIntegrator&, Ray, Sampler&)> radiance_;
 };
 
 }  // namespace pine

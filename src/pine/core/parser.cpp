@@ -42,9 +42,11 @@ Context get_default_context() {
   ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
+  ctx.type<RayIntegrator>("RayIntegrator")
+      .method("intersect", &RayIntegrator::intersect)
+      .method("hit", &RayIntegrator::hit);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
-      .ctor(+[](Sampler sampler,
-                psl::function<vec3(CustomRayIntegrator &, Scene &, Ray, Sampler &)> f) {
+      .ctor(+[](Sampler sampler, psl::function<vec3(RayIntegrator &, Ray, Sampler &)> f) {
         return CustomRayIntegrator(EmbreeAccel(), sampler, psl::move(f));
       })
       .method("render", &CustomRayIntegrator::render);

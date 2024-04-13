@@ -612,14 +612,12 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
 
 bool SDF::hit(const Ray& ray) const {
   auto t = ray.tmin;
-  auto prev_d = Infinity;
   for (int i = 0; i < 128; i++) {
     auto d = sdf(ray(t));
     if (d < 1e-6f)
       return true;
-    if (t >= ray.tmax || d >= prev_d)
+    if (t >= ray.tmax)
       return false;
-    prev_d = d;
     t += d;
   }
 
@@ -627,36 +625,37 @@ bool SDF::hit(const Ray& ray) const {
 }
 bool SDF::intersect(Ray& ray) const {
   auto t = ray.tmin;
-  auto prev_d = Infinity;
   for (int i = 0; i < 128; i++) {
     auto d = sdf(ray(t));
     if (d < 1e-6f) {
       ray.tmax = t;
       return true;
     }
-    if (t >= ray.tmax || d >= prev_d)
+    if (t >= ray.tmax)
       return false;
-    prev_d = d;
     t += d;
   }
 
   return false;
 }
 void SDF::compute_surface_info(SurfaceInteraction& it) const {
-  auto ops = 0.001f;
-  auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - sdf(it.p - vec3(ops, 0.0f, 0.0f));
-  auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - sdf(it.p - vec3(0.0f, ops, 0.0f));
-  auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - sdf(it.p - vec3(0.0f, 0.0f, ops));
+  const auto ops = 0.0001f;
+  auto dc = sdf(it.p);
+  auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - dc;
+  auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - dc;
+  auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - dc;
   it.n = normalize(vec3(dtdx, dtdy, dtdz));
 }
 
 void geometry_context(Context& ctx) {
   ctx.type<Ray>("Ray")
+      .ctor<>()
       .member("o", &Ray::o)
       .member("d", &Ray::d)
       .member("tmin", &Ray::tmin)
       .member("tmax", &Ray::tmax);
   ctx.type<SurfaceInteraction>("SurfaceInteraction")
+      .ctor<>()
       .member("n", &SurfaceInteraction::n)
       .member("p", &SurfaceInteraction::p)
       .member("uv", &SurfaceInteraction::uv);
@@ -690,6 +689,14 @@ void geometry_context(Context& ctx) {
                      psl::function<float(vec2i)>([&](vec2i p) { return (*image)[p].x; }));
   };
   ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
+
+  ctx("torus_sdf") = +[](vec3 pos, float rad, float thickness) {
+    return SDF(pos, vec3(2 * (rad + thickness)), [pos, rad, thickness](vec3 p) {
+      p -= pos;
+      auto q = vec2(length(vec2(p.x, p.z)) - rad, p.y);
+      return length(q) - thickness;
+    });
+  };
 }
 
 }  // namespace pine

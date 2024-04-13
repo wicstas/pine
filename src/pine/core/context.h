@@ -72,6 +72,14 @@ auto overloaded_r(R (*f)(Args...)) {
   return f;
 }
 
+template <typename T>
+auto foward_ref(psl::TypeIdentity<T>& x) {
+  if constexpr (psl::is_reference<T>)
+    return psl::ref(x);
+  else
+    return x;
+}
+
 struct VariableConcept {
   virtual ~VariableConcept() = default;
   virtual psl::unique_ptr<VariableConcept> clone() = 0;
@@ -91,10 +99,14 @@ struct Variable {
       return psl::make_unique<VariableModel>(base);
     }
     psl::unique_ptr<VariableConcept> copy() override {
-      if constexpr (psl::is_psl_ref<T>)
-        return psl::make_unique<VariableModel<R, R>>(*base);
-      else
-        return psl::make_unique<VariableModel<R, R>>(base);
+      if constexpr (psl::copyable<R>) {
+        if constexpr (psl::is_psl_ref<T>)
+          return psl::make_unique<VariableModel<R, R>>(*base);
+        else
+          return psl::make_unique<VariableModel<R, R>>(base);
+      } else {
+        PINE_UNREACHABLE;
+      }
     }
     psl::unique_ptr<VariableConcept> create_ref() override {
       if constexpr (psl::is_psl_ref<T>)
@@ -276,7 +288,7 @@ struct Function {
     return model->call(args);
   }
   Variable operator()(auto&&... args) const {
-    Variable args_[]{Variable(FWD(args))...};
+    Variable args_[]{Variable(foward_ref<decltype(args)>(args))...};
     const Variable* args_ptr[sizeof...(args)];
     for (size_t i = 0; i < sizeof...(args); i++)
       args_ptr[i] = &args_[i];

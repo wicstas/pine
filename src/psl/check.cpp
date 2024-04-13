@@ -16,6 +16,10 @@ struct Exception {
   psl::string message;
 };
 
+string message_of(const Exception& e) {
+  return e.what();
+}
+
 void throw_check_failure(const char* expr, const char* file, int line, const char* func) {
   throw Exception{"Check `", expr, "` failed[", file, ':', line, ':', func, "()"};
 }

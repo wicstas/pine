@@ -1,5 +1,4 @@
 #pragma once
-
 #include <psl/algorithm.h>
 #include <psl/memory.h>
 #include <psl/check.h>
@@ -37,7 +36,7 @@ struct default_allocator {
 template <typename T, size_t capacity>
 struct static_allocator {
   T* alloc(size_t size [[maybe_unused]]) const {
-    psl_check(size < capacity);
+    psl_check(size <= capacity);
     return reinterpret_cast<T*>(storage.ptr());
   }
   void free(T* ptr [[maybe_unused]]) const {
@@ -322,13 +321,15 @@ struct static_vector : vector<T, static_allocator<T, capacity>> {
   using vector<T, static_allocator<T, capacity>>::vector;
 };
 
-template <typename T, int64_t max_static_capacity>
+template <typename T, size_t _max_static_capacity>
 struct smart_vector {
 public:
   using ValueType = T;
 
   using Iterator = T*;
   using ConstIterator = const T*;
+
+  static constexpr size_t max_static_capacity = psl::roundup2(_max_static_capacity);
 
   smart_vector() = default;
 

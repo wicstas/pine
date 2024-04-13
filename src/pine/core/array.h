@@ -34,15 +34,15 @@ struct Array2d {
       else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec3u8>)
         result[p] = vec4u8(x, uint8_t(255));
       else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec4>)
-        result[p] = vec4u8((vec3u8)min(x * 256, vec4(255)), uint8_t(255));
+        result[p] = vec4u8((vec3u8)min(pow(x, 1 / 2.2f) * 256, vec4(255)), uint8_t(255));
       else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec3>)
-        result[p] = vec4u8((vec3u8)min(x * 256, vec3(255)), uint8_t(255));
+        result[p] = vec4u8((vec3u8)min(pow(x, 1 / 2.2f) * 256, vec3(255)), uint8_t(255));
       else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec4u8>)
         result[p] = vec3u8(x);
       else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec4>)
-        result[p] = vec3u8(min(x * 256, vec4(255)));
+        result[p] = vec3u8(min(pow(x, 1 / 2.2f) * 256, vec4(255)));
       else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec3>)
-        result[p] = vec3u8(min(x * 256, vec3(255)));
+        result[p] = vec3u8(min(pow(x, 1 / 2.2f) * 256, vec3(255)));
       else
         static_assert(false, "not supported");
     });
