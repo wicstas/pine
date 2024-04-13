@@ -13,58 +13,13 @@
 
 namespace pine {
 
-template <typename... Fs>
-auto overload_fs(Fs... fs) {
-  struct FOverloads : Fs... {
-    using Fs::operator()...;
-  };
-  return FOverloads(fs...);
-}
-
-template <typename T>
-struct variant_deleter : psl::variant<psl::default_deleter<T>, psl::no_free_deleter<T>> {
-  using psl::variant<psl::default_deleter<T>, psl::no_free_deleter<T>>::variant;
-
-  template <psl::DerivedFrom<T> U>
-  variant_deleter(const variant_deleter<U>& rhs) {
-    rhs.dispatch(
-        overload_fs([this](const psl::default_deleter<U>&) { *this = psl::default_deleter<T>(); },
-                    [this](const psl::no_free_deleter<U>&) { *this = psl::no_free_deleter<T>(); }));
-  }
-
-  void operator()(psl::RemoveExtent<T>* ptr) const {
-    return this->dispatch([ptr](auto&& x) { x(ptr); });
-  }
-};
-
-template <typename T>
-struct static_ptr : psl::unique_ptr<T, variant_deleter<T>> {
-  using unique_ptr = psl::unique_ptr<T, variant_deleter<T>>;
-  using unique_ptr::deleter;
-  using unique_ptr::unique_ptr;
-
-  bool is_static() const {
-    return deleter.template is<psl::no_free_deleter<T>>();
-  }
-};
-
-template <typename T, typename... Args, size_t size, size_t alignment>
-static_ptr<T> make_static_ptr(psl::Storage<size, alignment>& storage, Args&&... args) {
-  if constexpr (sizeof(T) <= sizeof(storage)) {
-    psl::construct_at((T*)storage.ptr(), FWD(args)...);
-    return static_ptr<T>((T*)storage.ptr(), psl::no_free_deleter<T>());
-  } else {
-    return static_ptr<T>(new T(FWD(args)...), psl::default_deleter<T>());
-  }
-}
-
 struct TypeTag {
   TypeTag() = default;
   TypeTag(psl::string name, bool is_ref = false) : name(psl::move(name)), is_ref(is_ref) {
   }
 
   psl::string sig() const {
-    return is_ref ? name + "&" : name;
+    return name + (is_ref ? "&" : "");
   }
 
   friend bool operator==(const TypeTag& lhs, const TypeTag& rhs) {
@@ -117,13 +72,11 @@ auto overloaded_r(R (*f)(Args...)) {
   return f;
 }
 
-using Storage = psl::Storage<0, 0>;
-
 struct VariableConcept {
   virtual ~VariableConcept() = default;
-  virtual static_ptr<VariableConcept> clone(Storage& storage) const = 0;
-  virtual static_ptr<VariableConcept> copy(Storage& storage) const = 0;
-  virtual static_ptr<VariableConcept> create_ref(Storage& storage) = 0;
+  virtual psl::unique_ptr<VariableConcept> clone() = 0;
+  virtual psl::unique_ptr<VariableConcept> copy() = 0;
+  virtual psl::unique_ptr<VariableConcept> create_ref() = 0;
   virtual void* ptr() = 0;
   virtual size_t type_id() const = 0;
   virtual const psl::string& type_name() const = 0;
@@ -134,21 +87,20 @@ struct Variable {
   struct VariableModel : VariableConcept {
     VariableModel(T base) : base{psl::move(base)} {
     }
-
-    static_ptr<VariableConcept> clone(Storage& storage) const override {
-      return make_static_ptr<VariableModel>(storage, base);
+    psl::unique_ptr<VariableConcept> clone() override {
+      return psl::make_unique<VariableModel>(base);
     }
-    static_ptr<VariableConcept> copy(Storage& storage) const override {
+    psl::unique_ptr<VariableConcept> copy() override {
       if constexpr (psl::is_psl_ref<T>)
-        return make_static_ptr<VariableModel<R, R>>(storage, *base);
+        return psl::make_unique<VariableModel<R, R>>(*base);
       else
-        return make_static_ptr<VariableModel<R, R>>(storage, base);
+        return psl::make_unique<VariableModel<R, R>>(base);
     }
-    static_ptr<VariableConcept> create_ref(Storage& storage) override {
+    psl::unique_ptr<VariableConcept> create_ref() override {
       if constexpr (psl::is_psl_ref<T>)
-        return make_static_ptr<VariableModel<R, T>>(storage, base);
+        return psl::make_unique<VariableModel<R, T>>(base);
       else
-        return make_static_ptr<VariableModel<R, psl::Ref<T>>>(storage, psl::ref(base));
+        return psl::make_unique<VariableModel<R, psl::Ref<T>>>(psl::ref(base));
     }
     void* ptr() override {
       if constexpr (psl::is_psl_ref<T>)
@@ -169,61 +121,34 @@ struct Variable {
 
   friend struct VariableConcept;
 
-  struct NoInit {};
-
-  Variable(NoInit) {
-  }
   Variable() : Variable(psl::Any()) {
   }
   template <typename T>
-  Variable(T x) : model(make_static_ptr<VariableModel<T, T>>(storage, psl::move(x))) {
+  Variable(T x) : model(psl::make_unique<VariableModel<T, T>>(psl::move(x))) {
   }
   template <typename T>
-  Variable(psl::Ref<T> x)
-      : model(make_static_ptr<VariableModel<T, psl::Ref<T>>>(storage, psl::move(x))) {
+  Variable(psl::Ref<T> x) : model(psl::make_unique<VariableModel<T, psl::Ref<T>>>(psl::move(x))) {
   }
-  Variable(const Variable& rhs) : model(rhs.model->clone(storage)) {
+  Variable(psl::unique_ptr<VariableConcept> model) : model(psl::move(model)) {
+  }
+  Variable(const Variable& rhs) : model(rhs.model->clone()) {
   }
   Variable& operator=(const Variable& rhs) {
-    model.reset();
-    model = rhs.model->clone(storage);
+    model = rhs.model->clone();
     return *this;
   }
-  Variable(Variable&& rhs) {
-    if (rhs.model.is_static()) {
-      model.reset((VariableConcept*)storage.ptr());
-      model.deleter = psl::move(rhs.model.deleter);
-      rhs.model.release();
-      storage = rhs.storage;
-    } else {
-      model = psl::move(rhs.model);
-    }
-  }
-  Variable& operator=(Variable&& rhs) {
-    if (rhs.model.is_static()) {
-      model.reset((VariableConcept*)storage.ptr());
-      model.deleter = psl::move(rhs.model.deleter);
-      rhs.model.release();
-      storage = rhs.storage;
-    } else {
-      model = psl::move(rhs.model);
-    }
-    return *this;
-  }
+  Variable(Variable&& rhs) = default;
+  Variable& operator=(Variable&& rhs) = default;
   Variable(Variable*) = delete;
   Variable(const Variable*) = delete;
   Variable& operator=(Variable*) = delete;
   Variable& operator=(const Variable*) = delete;
 
   Variable copy() const {
-    auto r = Variable(NoInit());
-    r.model = model->copy(r.storage);
-    return r;
+    return Variable(model->copy());
   }
   Variable create_ref() const {
-    auto r = Variable(NoInit());
-    r.model = model->create_ref(r.storage);
-    return r;
+    return Variable(model->create_ref());
   }
   size_t type_id() const {
     return model->type_id();
@@ -250,8 +175,7 @@ struct Variable {
   }
 
 private:
-  Storage storage;
-  static_ptr<VariableConcept> model;
+  psl::unique_ptr<VariableConcept> model;
 };
 
 inline psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes) {

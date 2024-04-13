@@ -43,7 +43,7 @@ void PathIntegrator::render(Scene& scene) {
     Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
     auto L = vec3(0.0f);
     for (int si = 0; si < spp; si++, sampler.start_next_sample()) {
-      auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
+      auto ray = scene.camera.gen_ray((p + sampler.rand2f()) / film.size(), sampler.rand2f());
       L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
     if (!L.has_inf() && !L.has_nan())

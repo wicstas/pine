@@ -16,6 +16,11 @@ struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec4u8>, Array2d<vec3>, Arr
   vec2i size() const {
     return dispatch([](auto&& x) { return x.size(); });
   }
+
+  template <typename T>
+  T convert() const {
+    return dispatch([](auto&& x) { return T::from(x); });
+  }
 };
 using ImagePtr = psl::shared_ptr<Image>;
 

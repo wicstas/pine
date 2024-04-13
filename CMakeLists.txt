@@ -20,8 +20,8 @@ src/psl/system.cpp
 src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
-target_compile_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address -fno-omit-frame-pointer>)
-target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
+target_compile_options(psl PRIVATE $<$<CONFIG:Debug>: -fsanitize=address -fno-omit-frame-pointer>)
+target_link_options(psl PRIVATE $<$<CONFIG:Debug>:-g -fsanitize=address>)
 
 #psl Test
 add_executable(psl_test test/psl_test.cpp)
@@ -111,6 +111,7 @@ src/contrib/bluesobol/bluenoise_256spp.cpp
 
 target_include_directories(pinelib PUBLIC src/)
 target_include_directories(pinelib PRIVATE src/contrib)
+# target_compile_options(pinelib PRIVATE )
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)

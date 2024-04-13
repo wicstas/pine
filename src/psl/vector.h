@@ -81,7 +81,7 @@ public:
   explicit vector(ARange&& range) {
     if constexpr (psl::has_size<ARange>) {
       reserve(psl::size(range));
-      psl::inplace(begin(), range);
+      psl::copy_inplace(begin(), range);
       len = psl::size(range);
     } else {
       psl::insert([this](const auto& x) { push_back(x); }, range);
@@ -102,7 +102,7 @@ public:
     clear();
     allocator = rhs.allocator;
     reserve(rhs.size());
-    psl::inplace(begin(), rhs);
+    psl::copy_inplace(begin(), rhs);
     len = rhs.size();
 
     return *this;
@@ -132,7 +132,7 @@ public:
   }
 
   void pop_back() {
-    resize(size() - 1);
+    resize_less(size() - 1);
   }
   T consume_back() {
     auto x = back();
@@ -141,7 +141,7 @@ public:
   }
   void pop_back(size_t n) {
     psl_check(n <= size());
-    resize(size() - n);
+    resize_less(size() - n);
   }
   void pop_front() {
     erase(begin());
@@ -170,8 +170,8 @@ public:
     auto nlen = size() + psl::size(range);
     resize_less(p);
     reserve(nlen);
-    psl::inplace(begin() + p, range);
-    psl::inplace(begin() + p + psl::size(range), suffix);
+    psl::copy_inplace(begin() + p, range);
+    psl::copy_inplace(begin() + p + psl::size(range), suffix);
     len = nlen;
   }
 
@@ -320,6 +320,172 @@ protected:
 template <typename T, size_t capacity>
 struct static_vector : vector<T, static_allocator<T, capacity>> {
   using vector<T, static_allocator<T, capacity>>::vector;
+};
+
+template <typename T, int64_t max_static_capacity>
+struct smart_vector {
+public:
+  using ValueType = T;
+
+  using Iterator = T*;
+  using ConstIterator = const T*;
+
+  smart_vector() = default;
+
+  explicit smart_vector(size_t len) {
+    if (len <= max_static_capacity) {
+      st = St(len);
+    } else {
+      dy = Dy(len);
+      overflowed = true;
+    }
+  }
+  template <Range ARange>
+  explicit smart_vector(ARange&& range) {
+    if (psl::size(range) <= max_static_capacity) {
+      st = St(FWD(range));
+    } else {
+      dy = Dy(FWD(range));
+      overflowed = true;
+    }
+  }
+  template <ForwardIterator It>
+  smart_vector(It first, It last) {
+    if (psl::distance(first, last) <= max_static_capacity) {
+      st = St(first, last);
+    } else {
+      dy = Dy(first, last);
+      overflowed = true;
+    }
+  }
+
+  void push_back(T x) {
+    if (overflowed) {
+      dy.push_back(MOVE(x));
+    } else {
+      if (st.size() + 1 <= max_static_capacity) {
+        st.push_back(MOVE(x));
+      } else {
+        switch_to_dy(st.size() + 1);
+        dy._set_size(dy.size() + 1);
+        psl::construct_at(&dy.back(), psl::move(x));
+      }
+    }
+  }
+
+  void pop_back() {
+    resize_less(size() - 1);
+  }
+
+  void resize(size_t nlen) {
+    if (overflowed) {
+      dy.resize(nlen);
+    } else {
+      if (nlen > max_static_capacity) {
+        switch_to_dy(nlen, true);
+      } else {
+        st.resize(nlen);
+      }
+    }
+  }
+  void resize_less(size_t nlen) {
+    psl_check(nlen <= size());
+    if (overflowed)
+      dy.resize_less(nlen);
+    else
+      st.resize_less(nlen);
+  }
+
+  void reserve(size_t nreserved) {
+    if (overflowed) {
+      dy.reserve(nreserved);
+    } else {
+      if (nreserved > max_static_capacity) {
+        switch_to_dy(nreserved);
+      }
+    }
+  }
+
+  void clear() {
+    dy.clear();
+    st.clear();
+  }
+  void reset() {
+    dy.reset();
+    st.reset();
+  }
+
+  T& operator[](size_t i) {
+    return overflowed ? dy[i] : st[i];
+  }
+  const T& operator[](size_t i) const {
+    return overflowed ? dy[i] : st[i];
+  }
+
+  Iterator begin() {
+    return overflowed ? dy.begin() : st.begin();
+  }
+  Iterator end() {
+    return overflowed ? dy.end() : st.end();
+  }
+  ConstIterator begin() const {
+    return overflowed ? dy.begin() : st.begin();
+  }
+  ConstIterator end() const {
+    return overflowed ? dy.end() : st.end();
+  }
+  T& front() {
+    return overflowed ? dy.front() : st.front();
+  }
+  const T& front() const {
+    return overflowed ? dy.front() : st.front();
+  }
+  T& back() {
+    return overflowed ? dy.back() : st.back();
+  }
+  const T& back() const {
+    return overflowed ? dy.back() : st.back();
+  }
+
+  size_t size() const {
+    return overflowed ? dy.size() : st.size();
+  }
+  size_t byte_size() const {
+    return overflowed ? dy.byte_size() : st.byte_size();
+  }
+  size_t capacity() const {
+    return overflowed ? dy.capacity() : max_static_capacity;
+  }
+
+  const T* data() const {
+    return overflowed ? dy.data() : st.data();
+  }
+  T* data() {
+    return overflowed ? dy.data() : st.data();
+  }
+
+private:
+  void switch_to_dy(size_t new_size, bool zero_init = false) {
+    psl_check(!overflowed);
+    psl_check(new_size >= st.size());
+    dy.reserve(new_size);
+    psl::move_inplace(dy.begin(), st);
+    if (zero_init) {
+      for (size_t i = st.size(); i < new_size; i++)
+        psl::construct_at(&dy[i]);
+      dy._set_size(new_size);
+    } else {
+      dy._set_size(st.size());
+    }
+    st._set_size(0);
+    overflowed = true;
+  }
+
+  using Dy = vector<T>;
+  using St = static_vector<T, max_static_capacity>;
+  Dy dy;
+  St st;
+  bool overflowed = false;
 };
 
 template <typename T>

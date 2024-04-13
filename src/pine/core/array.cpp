@@ -20,10 +20,6 @@ void array2d_context(Context& context) {
       .ctor<vec2i>()
       .method("size", &Array2d2f::size)
       .method("[]", overloaded(&Array2d2f::operator[]));
-  context.type<Array2d<vec3u8>>("Array2d3u8")
-      .ctor<vec2i>()
-      .method("size", &Array2d<vec3u8>::size)
-      .method("[]", overloaded(&Array2d<vec3u8>::operator[]));
   context.type<Array2d3f>("Array2d3f")
       .ctor<vec2i>()
       .method("size", &Array2d3f::size)
@@ -32,6 +28,8 @@ void array2d_context(Context& context) {
       .ctor<vec2i>()
       .method("size", &Array2d4f::size)
       .method("[]", overloaded(&Array2d4f::operator[]));
+  context.type<Array2d3u8>("Array2d3u8").ctor<vec2i>();
+  context.type<Array2d4u8>("Array2d4u8").ctor<vec2i>();
 
   context("draw") = +[](vec2i size, psl::function<vec3(vec2)> fragment) {
     auto image = Array2d3f(size);

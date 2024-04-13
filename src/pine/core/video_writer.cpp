@@ -7,7 +7,7 @@
 namespace pine {
 
 VideoWriter::VideoWriter(psl::string filename, vec2i size, int fps)
-    : filename(filename), size(size){
+    : filename(filename), size(size) {
   ptr = psl::opaque_shared_ptr(gwavi_open(filename.c_str(), size.x, size.y, "JPEG", fps, nullptr),
                                [=](gwavi_t* ptr) {
                                  if (gwavi_close(ptr))
@@ -17,7 +17,7 @@ VideoWriter::VideoWriter(psl::string filename, vec2i size, int fps)
     Fatal("Unable to open `", filename, '`');
 }
 void VideoWriter::add_frame(const Array2d3f& pixels) {
-  auto pixel_data = to_uint8_array(size, 3, (float*)pixels.data(), true);
+  auto pixel_data = Array2d3u8::from(pixels, true);
   psl::vector<uint8_t> bytes;
   stbi_write_jpg_to_func(
       +[](void* context, void* data, int size) {
@@ -28,7 +28,7 @@ void VideoWriter::add_frame(const Array2d3f& pixels) {
         for (int i = 0; i < size; i++)
           bytes[pos + i] = ptr[i];
       },
-      &bytes, pixels.width(), pixels.height(), 3, pixel_data.data(), 90);
+      &bytes, pixels.width(), pixels.height(), 3, (uint8_t*)pixel_data.data(), 90);
   if (gwavi_add_frame((gwavi_t*)ptr.get(), bytes.data(), bytes.byte_size()))
     Warning("Failed to add frame to `", filename, '`');
 }

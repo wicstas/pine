@@ -13,10 +13,39 @@ struct Array2d {
     psl::memcpy(&data_[0], input, data_.size() * sizeof(T));
   }
   template <typename U>
-  static Array2d from(const Array2d<U> &rhs) {
+  static Array2d from(const Array2d<U> &rhs, bool invert_y = false) {
     auto result = Array2d(rhs.size());
-    for (size_t i = 0; i < result.data_.size(); i++)
-      result.data_[i] = T(rhs.data()[i]);
+    for_2d(rhs.size(), [&](vec2i p) {
+      auto x = invert_y ? rhs[{p.x, rhs.size().y - 1 - p.y}] : rhs[p];
+      if constexpr (psl::same_as<T, U>)
+        result[p] = x;
+      else if constexpr (psl::same_as<T, vec4> && psl::same_as<U, vec3>)
+        result[p] = vec4(x, 1.0f);
+      else if constexpr (psl::same_as<T, vec4> && psl::same_as<U, vec3u8>)
+        result[p] = vec4(x / 256.0f, 1.0f);
+      else if constexpr (psl::same_as<T, vec4> && psl::same_as<U, vec4u8>)
+        result[p] = vec4(x / 256.0f);
+      else if constexpr (psl::same_as<T, vec3> && psl::same_as<U, vec4>)
+        result[p] = vec3(x);
+      else if constexpr (psl::same_as<T, vec3> && psl::same_as<U, vec4u8>)
+        result[p] = vec3(x / 256.0f);
+      else if constexpr (psl::same_as<T, vec3> && psl::same_as<U, vec3u8>)
+        result[p] = vec3(x / 256.0f);
+      else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec3u8>)
+        result[p] = vec4u8(x, uint8_t(255));
+      else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec4>)
+        result[p] = vec4u8((vec3u8)min(x * 256, vec4(255)), uint8_t(255));
+      else if constexpr (psl::same_as<T, vec4u8> && psl::same_as<U, vec3>)
+        result[p] = vec4u8((vec3u8)min(x * 256, vec3(255)), uint8_t(255));
+      else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec4u8>)
+        result[p] = vec3u8(x);
+      else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec4>)
+        result[p] = vec3u8(min(x * 256, vec4(255)));
+      else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec3>)
+        result[p] = vec3u8(min(x * 256, vec3(255)));
+      else
+        static_assert(false, "not supported");
+    });
     return result;
   }
 
@@ -230,6 +259,8 @@ using Array2df = Array2d<float>;
 using Array2d2f = Array2d<vec2>;
 using Array2d3f = Array2d<vec3>;
 using Array2d4f = Array2d<vec4>;
+using Array2d3u8 = Array2d<vec3u8>;
+using Array2d4u8 = Array2d<vec4u8>;
 
 template <typename F>
 void for_2d(vec2i lower, vec2i upper, F f) {

@@ -194,7 +194,7 @@ public:
 Bytecodes compile(Context& context, psl::string source);
 void compile(Context& context, psl::string source, Bytecodes& bytecodes);
 
-template <typename T, typename Allocator = psl::default_allocator<T>>
+template <typename T>
 struct Stack {
   void push(T x) {
     storage.push_back(psl::move(x));
@@ -230,7 +230,7 @@ struct Stack {
   }
 
 private:
-  psl::vector<T, Allocator> storage;
+  psl::smart_vector<T, 16> storage;
 };
 
 struct VirtualMachine {

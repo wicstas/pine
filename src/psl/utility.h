@@ -16,6 +16,7 @@ T&& forward(TypeIdentity<T>& x) {
 }
 
 #define FWD(x) psl::forward<decltype(x)>(x)
+#define MOVE(x) psl::move(x)
 
 template <typename T>
 void swap(T& x, T& y) {

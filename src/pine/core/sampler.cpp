@@ -112,6 +112,13 @@ uint64_t SobolSampler::compute_sample_index() {
   return si;
 }
 
+BlueSobolSampler::BlueSobolSampler(int spp_) {
+  if (spp_ > 256) {
+    Warning("[BlueSobolSampler]Only support up to 256 samples per pixel");
+    spp_ = 256;
+  }
+  samples_per_pixel = psl::roundup2(spp_);
+}
 float BlueSobolSampler::sample_dimension(int dim) const {
   if (spp() == 1)
     return bluenoise_1spp(pixel.x, pixel.y, index, dim);
@@ -179,7 +186,7 @@ void sampler_context(Context& ctx) {
       .method("start_next_sample", &SobolSampler::start_next_sample)
       .method("get1d", &SobolSampler::get1d)
       .method("get2d", &SobolSampler::get2d);
-  ctx.type<BlueSobolSampler>("BlueSobolSampler")
+  ctx.type<BlueSobolSampler>("BlueSampler")
       .ctor<int>()
       .method("spp", &BlueSobolSampler::spp)
       .method("start_pixel", &BlueSobolSampler::start_pixel)

@@ -27,8 +27,6 @@ Bytes serialize(const psl::map<psl::string, Bytes>& fs);
 template <typename T>
 T deserialize(BytesView bytes);
 
-psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float* data,
-                                    bool flip_y = false, bool apply_gamma = true);
 void save_image(psl::string filename, vec2i size, int nchannel, const float* data);
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t* data);
 

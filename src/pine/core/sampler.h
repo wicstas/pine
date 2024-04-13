@@ -165,8 +165,7 @@ private:
 };
 
 struct BlueSobolSampler {
-  BlueSobolSampler(int samples_per_pixel) : samples_per_pixel(psl::roundup2(samples_per_pixel)) {
-  }
+  BlueSobolSampler(int samples_per_pixel);
 
   void init(vec2i) {
   }
@@ -276,16 +275,19 @@ private:
   int64_t lastLargeStepIndex = 0;
 };
 
-struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler> {
+struct Sampler
+    : private psl::variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler> {
   using variant::variant;
 
   int spp() const {
     return dispatch([&](auto&& x) { return x.spp(); });
   }
   void init(vec2i image_size) {
+    this->image_size = image_size;
     return dispatch([&](auto&& x) { return x.init(image_size); });
   }
   Sampler& start_pixel(vec2i p, int sample_index) {
+    rng = RNG(hash(p, sample_index));
     dispatch([&](auto&& x) { x.start_pixel(p, sample_index); });
     return *this;
   }
@@ -301,6 +303,17 @@ struct Sampler : private psl::variant<UniformSampler, HaltonSampler, SobolSample
   vec3 get3d() {
     return {get1d(), get1d(), get1d()};
   }
+
+  float randf() {
+    return rng.nextf();
+  }
+  vec2 rand2f() {
+    return rng.next2f();
+  }
+
+private:
+  vec2i image_size;
+  RNG rng;
 };
 
 // Helper function to save one call to `sampler.get1d()` in some cases
@@ -310,7 +323,7 @@ inline bool with_probability(float prob, Sampler& sampler) {
   else if (prob == 1)
     return true;
   else
-    return sampler.get1d() < prob;
+    return sampler.randf() < prob;
 }
 
 void sampler_context(Context& ctx);
