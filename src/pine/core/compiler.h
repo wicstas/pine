@@ -126,13 +126,11 @@ struct Bytecodes {
                  psl::span<uint16_t> args = {});
   void add_typed(SourceLoc sl, Bytecode::Instruction instruction, TypeTag type, size_t value,
                  uint16_t arg0) {
-    uint16_t args[]{arg0};
-    add_typed(sl, instruction, type, value, args);
+    add_typed(sl, instruction, type, value, psl::array_of(arg0));
   }
   void add_typed(SourceLoc sl, Bytecode::Instruction instruction, TypeTag type, size_t value,
                  uint16_t arg0, uint16_t arg1) {
-    uint16_t args[]{arg0, arg1};
-    add_typed(sl, instruction, type, value, args);
+    add_typed(sl, instruction, type, value, psl::array_of(arg0, arg1));
   }
 
   void name_top_var(psl::string name);
@@ -188,7 +186,6 @@ private:
 
 public:
   SourceLines sl;
-  size_t starting_position = 0;
 };
 
 Bytecodes compile(Context& context, psl::string source);
@@ -230,7 +227,7 @@ struct Stack {
   }
 
 private:
-  psl::smart_vector<T, 16> storage;
+  psl::context_vector<T> storage;
 };
 
 struct VirtualMachine {

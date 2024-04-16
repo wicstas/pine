@@ -1,7 +1,7 @@
+#include <pine/core/interpreter.h>
 #include <pine/core/integrator.h>
 #include <pine/core/profiler.h>
 #include <pine/core/context.h>
-#include <pine/core/parser.h>
 #include <pine/core/fileio.h>
 
 #include <future>
@@ -26,11 +26,9 @@ int main(int argc, char* argv[]) {
     auto task = std::async(std::launch::async, [&]() {
       try {
         interpret_file(context, argv[1]);
-      } catch (const Exception& e) {
-        Log(e.what());
-      } catch (const FallthroughException& e) {
-        Log(e.what());
       } catch (const std::exception& e) {
+        Log(e.what());
+      } catch (const psl::Exception& e) {
         Log(e.what());
       }
     });
@@ -42,11 +40,9 @@ int main(int argc, char* argv[]) {
         break;
     }
     Log("");
-  } catch (const Exception& e) {
-    Log(e.what());
-  } catch (const FallthroughException& e) {
-    Log(e.what());
   } catch (const std::exception& e) {
+    Log(e.what());
+  } catch (const psl::Exception& e) {
     Log(e.what());
   }
 

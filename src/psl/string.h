@@ -353,4 +353,16 @@ string space_by(string input, string spacer);
 string from_last_of(const string& str, char c);
 string until_last_of(const string& str, char c);
 
+
+struct MessagedException : Exception {
+  MessagedException(auto&&... args) : message(psl::to_string(args...)) {
+  }
+
+  psl::string_view what() const override {
+    return message;
+  }
+
+  psl::string message;
+};
+
 }  // namespace psl

@@ -36,6 +36,7 @@ src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/video_writer.cpp
 src/pine/core/interaction.cpp
+src/pine/core/interpreter.cpp
 src/pine/core/integrator.cpp
 src/pine/core/blackbody.cpp
 src/pine/core/geometry.cpp
@@ -49,7 +50,6 @@ src/pine/core/sampler.cpp
 src/pine/core/denoise.cpp
 src/pine/core/primes.cpp
 src/pine/core/fileio.cpp
-src/pine/core/parser.cpp
 src/pine/core/camera.cpp
 src/pine/core/medium.cpp
 src/pine/core/noise.cpp

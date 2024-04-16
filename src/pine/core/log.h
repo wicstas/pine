@@ -13,22 +13,11 @@ extern void (*log_stream)(psl::string_view data);
 extern void (*warning_stream)(psl::string_view data);
 extern void (*fatal_stream)(psl::string_view data);
 
-struct Exception {
+struct Exception : psl::Exception {
   Exception(psl::string message) : message{psl::move(message)} {
   }
 
-  psl::string_view what() const {
-    return message;
-  }
-
-private:
-  psl::string message;
-};
-struct FallthroughException {
-  FallthroughException(psl::string message) : message{psl::move(message)} {
-  }
-
-  psl::string_view what() const {
+  psl::string_view what() const override {
     return message;
   }
 
@@ -76,7 +65,7 @@ template <typename... Args>
 template <typename... Args>
 [[noreturn]] void ReturnControlToMain(const Args&... args) {
   using psl::to_string;
-  throw FallthroughException{to_string(args...)};
+  throw psl::MessagedException{to_string(args...)};
 }
 
 #define CHECK(x)                                                                            \

@@ -33,8 +33,8 @@ void Profiler::Finalize() {
       return;
     if (record.name != "") {
       Debug(psl::string_n_of(indent, ' '), pad(record.name, 24 - indent), " ",
-          pad(record.sampleCount, 6), pad(record.time, 8), "ms ",
-          pad((totalTime == 0.0f) ? 100.0 : 100.0 * record.time / totalTime, 8), "%");
+            pad(record.sampleCount, 6), pad(record.time, 8), "ms ",
+            pad((totalTime == 0.0f) ? 100.0 : 100.0 * record.time / totalTime, 8), "%");
       indent += 2;
     }
 
@@ -48,7 +48,7 @@ void Profiler::Finalize() {
   ReportRecord(ReportRecord, *profilerRecord, 0, 0.0f);
 }
 Profiler::Profiler(psl::string description) {
-  psl::shared_ptr<Record>& rec = profilerRecord->children[description];
+  auto& rec = profilerRecord->children[description];
   if (rec == nullptr)
     rec = psl::make_shared<Record>();
 
@@ -57,7 +57,7 @@ Profiler::Profiler(psl::string description) {
   profilerRecord = rec;
 }
 Profiler::~Profiler() {
-  psl::shared_ptr<Record> rec = profilerRecord;
+  auto rec = profilerRecord;
 
   rec->time += timer.elapsed_ms();
   rec->sampleCount++;

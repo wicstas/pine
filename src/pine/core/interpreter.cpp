@@ -1,6 +1,6 @@
+#include <pine/core/interpreter.h>
 #include <pine/core/compiler.h>
 #include <pine/core/parallel.h>
-#include <pine/core/parser.h>
 #include <pine/core/fileio.h>
 #include <pine/core/scene.h>
 #include <pine/core/rng.h>
@@ -97,6 +97,8 @@ Context get_default_context() {
 
 void interpret(Context &context, psl::string source) {
   auto bytecodes = compile(context, std::move(source));
+
+  Debug(bytecodes.to_string(context));
 
   execute(context, bytecodes);
 }

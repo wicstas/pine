@@ -1,5 +1,6 @@
 #include <pine/core/compiler.h>
 #include <pine/core/profiler.h>
+#include <pine/core/atomic.h>
 
 #include <psl/algorithm.h>
 #include <psl/variant.h>
@@ -18,11 +19,9 @@ template <typename T>
 struct ExplicitParameter {
   explicit ExplicitParameter(T value) : value(psl::move(value)) {
   }
-
   operator T&() {
     return value;
   }
-
   T value;
 };
 
@@ -1938,7 +1937,6 @@ Bytecodes compile(Context& context, psl::string source) {
 }
 void compile(Context& context, psl::string source, Bytecodes& bytecodes) {
   auto [block, sl] = parse_as_block(psl::move(source));
-  bytecodes.starting_position = bytecodes.length();
   bytecodes.sl = psl::move(sl);
   for (const auto& elem : block.elems)
     elem.emit(context, bytecodes);
@@ -1947,7 +1945,7 @@ void compile(Context& context, psl::string source, Bytecodes& bytecodes) {
 Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMachine& vm) {
   auto source_loc = SourceLoc();
   try {
-    for (size_t p = bytecodes.starting_position; p < bytecodes.length();) {
+    for (size_t p = 0; p < bytecodes.length();) {
       const auto& code = bytecodes[p];
       source_loc = code.sl;
       auto inc_p = true;
@@ -2139,8 +2137,61 @@ Variable execute(const Context& context, const Bytecodes& bytecodes, VirtualMach
   return Variable();
 }
 
+struct MemoryPool {
+  MemoryPool(size_t pool_byte_size) : pool_byte_size(pool_byte_size) {
+  }
+
+  struct Pool {
+    Pool(size_t size) {
+      bytes.reserve(size);
+    }
+    Pool(const Pool&) = delete;
+    Pool& operator=(const Pool&) = delete;
+    Pool(Pool&&) = default;
+    Pool& operator=(Pool&&) = default;
+
+    void* take(size_t size) {
+      auto ptr = &bytes[occupied];
+      occupied += size;
+      return ptr;
+    }
+
+    size_t free_space() const {
+      return bytes.capacity() - occupied;
+    }
+
+  private:
+    psl::vector<uint8_t> bytes;
+    size_t occupied = 0;
+  };
+
+  void* alloc(size_t size) {
+    prepare(size);
+    return pool().take(size);
+  }
+  void free(void*) {
+  }
+
+private:
+  void prepare(size_t size) {
+    if (pools.size() == 0) {
+      pools.push_back(Pool(psl::max(pool_byte_size, size)));
+    } else {
+      if (size > pool().free_space())
+        pools.push_back(Pool(psl::max(pool_byte_size, size)));
+    }
+  }
+  Pool& pool() {
+    return pools.back();
+  }
+
+  psl::vector<Pool> pools;
+  size_t pool_byte_size;
+};
+
 Variable execute(const Context& context, const Bytecodes& bytecodes) {
   Profiler _("[Interpreter]Execute");
+
   auto vm = VirtualMachine();
   return execute(context, bytecodes, vm);
 }

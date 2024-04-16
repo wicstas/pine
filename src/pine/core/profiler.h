@@ -9,7 +9,7 @@ namespace pine {
 
 struct Profiler {
   static void Initialize() {
-    main = psl::unique_ptr<Profiler>(new Profiler("Main"));
+    main = psl::make_unique<Profiler>("Main");
   }
   static void Finalize();
 

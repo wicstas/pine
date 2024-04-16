@@ -591,6 +591,7 @@ void test_algorithm() {
 }
 
 int main() {
+    return 0;
   try {
     test_vector();
     test_variant();

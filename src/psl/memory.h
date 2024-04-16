@@ -7,6 +7,26 @@
 
 namespace psl {
 
+void* context_alloc(size_t size);
+void context_free(const void* ptr);
+
+template <typename T, typename... Args>
+T* context_new(Args&&... args) {
+  auto ptr = (T*)context_alloc(sizeof(T));
+  new (ptr) T(FWD(args)...);
+  return ptr;
+}
+template <typename T>
+void context_delete(T* ptr) {
+  if (ptr) {
+    ptr->~T();
+    context_free(ptr);
+  }
+}
+
+void push_context_allocator(struct pm_allocator allocator);
+void pop_context_allocator();
+
 inline constexpr void memcpy(void* dst, const void* src, size_t size) {
   auto csrc = static_cast<const char*>(src);
   auto cdst = static_cast<char*>(dst);
@@ -29,11 +49,19 @@ struct default_deleter {
   default_deleter(const default_deleter<U>&) {
   }
 
-  void operator()(RemoveExtent<T>* ptr) const {
-    if constexpr (psl::is_array<T>)
-      delete[] ptr;
-    else
-      delete ptr;
+  void operator()(T* ptr) const {
+    delete ptr;
+  }
+};
+template <typename T>
+struct context_deleter {
+  context_deleter() = default;
+  template <DerivedFrom<T> U>
+  context_deleter(const context_deleter<U>&) {
+  }
+
+  void operator()(T* ptr) const {
+    context_delete(ptr);
   }
 };
 template <typename T>
@@ -169,10 +197,15 @@ protected:
 public:
   Deleter deleter = {};
 };
-
+template <typename T>
+using context_unique_ptr = unique_ptr<T, context_deleter<T>>;
+template <typename T, typename... Args>
+context_unique_ptr<T> make_context_unique(Args&&... args) {
+  return context_unique_ptr<T>(context_new<T>(FWD(args)...));
+}
 template <typename T, typename... Args>
 unique_ptr<T> make_unique(Args&&... args) {
-  return unique_ptr<T>{new T{forward<Args>(args)...}};
+  return unique_ptr<T>(new T(FWD(args)...));
 }
 
 template <typename T, typename Deleter = default_deleter<T>>
@@ -193,7 +226,7 @@ public:
   shared_ptr(nullptr_t) {
   }
   explicit shared_ptr(Pointer ptr, Deleter deleter = {})
-      : deleter(deleter), ptr(ptr), refcount(new size_t{1}) {
+      : deleter(deleter), ptr(ptr), refcount(new size_t(1)) {
   }
 
   shared_ptr(const shared_ptr& rhs) : shared_ptr() {
@@ -303,10 +336,61 @@ private:
   Pointer ptr = nullptr;
   size_t* refcount = nullptr;
 };
+template <typename T>
+using context_shared_ptr = shared_ptr<T, context_deleter<T>>;
+template <typename T, typename... Args>
+context_shared_ptr<T> make_context_shared(Args&&... args) {
+  return context_shared_ptr<T>(context_new<T>(FWD(args)...));
+}
 template <typename T, typename... Args>
 shared_ptr<T> make_shared(Args&&... args) {
-  return shared_ptr<T>{new T{psl::forward<Args>(args)...}};
+  return shared_ptr<T>(new T(FWD(args)...));
 }
+
+struct pm_allocator {
+  struct pm_concept {
+    virtual ~pm_concept() = default;
+    virtual void* alloc(size_t size) = 0;
+    virtual void free(void* ptr) = 0;
+  };
+  template <typename T>
+  struct pm_model : pm_concept {
+    pm_model(T base) : base(psl::move(base)) {
+    }
+    void* alloc(size_t size) override {
+      return base.alloc(size);
+    }
+    void free(void* ptr) override {
+      return base.free(ptr);
+    }
+
+  private:
+    T base;
+  };
+
+  template <typename T>
+  pm_allocator(T x) : model(psl::make_unique<pm_model<T>>(MOVE(x))) {
+  }
+
+  void* alloc(size_t size) {
+    return model->alloc(size);
+  }
+  void free(void* ptr) {
+    model->free(ptr);
+  }
+
+private:
+  unique_ptr<pm_concept> model;
+};
+
+struct global_allocator {
+  void* alloc(size_t size) {
+    return ::operator new(size);
+  }
+  void free(void* ptr) {
+    ::operator delete(ptr);
+  }
+};
 
 template <typename T>
 struct Ref {
@@ -420,8 +504,6 @@ struct Storage<0, align_> {
   void* ptr() const {
     return nullptr;
   }
-
-private:
 };
 
 }  // namespace psl

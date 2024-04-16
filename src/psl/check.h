@@ -2,8 +2,13 @@
 
 namespace psl {
 
-struct Exception;
-class string message_of(const Exception& e);
+class string_view;
+
+struct Exception {
+  virtual ~Exception() = default;
+
+  virtual psl::string_view what() const = 0;
+};
 
 void throw_check_failure(const char* expr, const char* file, int line, const char* func);
 

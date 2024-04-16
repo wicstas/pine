@@ -1,6 +1,4 @@
 #pragma once
-#pragma once
-
 #include <pine/core/context.h>
 #include <pine/core/scene.h>
 

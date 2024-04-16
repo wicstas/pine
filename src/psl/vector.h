@@ -11,14 +11,38 @@ namespace psl {
 
 template <typename T>
 struct default_allocator {
-  T* alloc(size_t size) const {
-    auto ptr = static_cast<T*>(::operator new(sizeof(T) * size));
+  T* alloc(size_t count) const {
+    auto ptr = (T*)::operator new(sizeof(T) * count);
     psl_check(ptr != nullptr);
     return ptr;
   }
   void free(T* ptr) const {
     psl_check(ptr != nullptr);
     ::operator delete(ptr);
+  }
+
+  template <typename... Args>
+  void construct_at(T* ptr, Args&&... args) const {
+    psl_check(ptr != nullptr);
+    psl::construct_at(ptr, psl::forward<Args>(args)...);
+  }
+
+  void destruct_at(T* ptr) const {
+    psl_check(ptr != nullptr);
+    psl::destruct_at(ptr);
+  }
+};
+
+template <typename T>
+struct context_allocator {
+  T* alloc(size_t count) const {
+    auto ptr = (T*)context_alloc(sizeof(T) * count);
+    psl_check(ptr != nullptr);
+    return ptr;
+  }
+  void free(T* ptr) const {
+    psl_check(ptr != nullptr);
+    context_free(ptr);
   }
 
   template <typename... Args>
@@ -321,6 +345,9 @@ struct static_vector : vector<T, static_allocator<T, capacity>> {
   using vector<T, static_allocator<T, capacity>>::vector;
 };
 
+template <typename T>
+using context_vector = vector<T, context_allocator<T>>;
+
 template <typename T, size_t _max_static_capacity>
 struct smart_vector {
 public:
@@ -507,15 +534,22 @@ auto vector_of(Ts... xs) {
     using T = FirstType<Us...>;
     if constexpr (sizeof...(Ts) == 0)
       return vector<T>{};
-    else
-      return vector<T>{std::initializer_list<T>{psl::move(xs)...}};
+    else {
+      auto r = vector<T>();
+      r.reserve(sizeof...(xs));
+      ((r.push_back(MOVE(xs))), ...);
+      return r;
+    }
   } else {
     if constexpr (sizeof...(Ts) == 0)
       static_assert(psl::deferred_bool<false, Ts...>,
                     "When the parameter pack can be null, please specify the vector type");
     else {
       using T = FirstType<Ts...>;
-      return vector<T>{std::initializer_list<T>{psl::move(xs)...}};
+      auto r = vector<T>();
+      r.reserve(sizeof...(xs));
+      ((r.push_back(MOVE(xs))), ...);
+      return r;
     }
   }
 }
