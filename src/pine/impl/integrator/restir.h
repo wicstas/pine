@@ -9,11 +9,8 @@ struct RestirIntegrator : public RTIntegrator {
 
   void render(Scene& scene) override;
 
-  struct RadianceResult {
-    vec3 Lo;
-    psl::optional<float> light_pdf;
-  };
   struct Vertex;
+  struct RadianceResult;
   RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv);
 
 private:

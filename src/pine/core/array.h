@@ -124,6 +124,10 @@ struct Array2d {
     return lhs /= rhs;
   }
 
+  void resize(vec2i new_size) {
+    size_ = new_size;
+    data_.resize(area(new_size));
+  }
   T *data() {
     return data_.data();
   }

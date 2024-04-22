@@ -41,8 +41,7 @@ psl::vector<psl::string> split(psl::string_view input, auto pred) {
 }
 
 SourceLines::SourceLines(psl::string_view tokens, size_t paddings)
-    : lines(split(tokens, [](char c) { return c == '\n' || c == '\r' || c == '\f'; })),
-      paddings(paddings) {
+    : lines(split(tokens, psl::equal_to_any('\n', '\r', '\f'))), paddings(paddings) {
 }
 
 psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
@@ -733,24 +732,24 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
     context.rtype_stack.pop_back();
 
     context(name) = Function(
-        tag<Function, psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes), rtype,
-                                                   cptypes, ptypes](
-                                                      psl::span<const Variable*> args) mutable {
-          auto cargs = psl::vector<Variable>(psl::indirection(args));
-          return Function(
-              lambda<psl::span<const Variable*>>([&context, fbcodes = psl::move(fbcodes),
-                                                  cargs = psl::move(cargs), cptypes,
-                                                  ptypes](psl::span<const Variable*> args) mutable {
-                auto vm = VirtualMachine();
-                vm.stack.reserve(cargs.size() + args.size());
-                for (size_t i = 0; i < cargs.size(); i++)
-                  vm.stack.push(cptypes[i].is_ref ? cargs[i].create_ref() : cargs[i].copy());
-                for (size_t i = 0; i < args.size(); i++)
-                  vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
-                return execute(context, fbcodes, vm);
-              }),
-              rtype, ptypes);
-        }),
+        tag<Function, psl::span<const Variable*>>(
+            [&context, fbcodes = psl::move(fbcodes), rtype, cptypes,
+             ptypes](psl::span<const Variable*> args) mutable {
+              auto vm_ = VirtualMachine();
+              vm_.stack.reserve(cptypes.size() + ptypes.size());
+              for (size_t i = 0; i < args.size(); i++)
+                vm_.stack.push(cptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
+              return Function(
+                  lambda<psl::span<const Variable*>>(
+                      [&context, fbcodes = psl::move(fbcodes), vm_ = psl::move(vm_), cptypes,
+                       ptypes](psl::span<const Variable*> args) mutable {
+                        auto vm = vm_;
+                        for (size_t i = 0; i < args.size(); i++)
+                          vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
+                        return execute(context, fbcodes, vm);
+                      }),
+                  rtype, ptypes);
+            }),
         TypeTag(signature_from(rtype, ptypes)), cptypes);
 
     return FunctionCall(sl, name, args).emit(context, bytecodes);
@@ -1400,7 +1399,7 @@ struct Parser {
     auto params = param_list();
     consume(")", "to end parameter definition");
     consume(":", "to specify return type");
-    auto return_type = id();
+    auto return_type = type_name();
     auto block_ = block();
     return FunctionDefinition(loc, psl::move(name), psl::move(return_type), psl::move(params),
                               psl::move(block_));
@@ -1624,7 +1623,7 @@ struct Parser {
     auto params = param_list();
     consume(")", "to end parameter defintion");
     consume(":", "to specify return type");
-    auto return_type = id();
+    auto return_type = type_name();
     auto body = block();
     return LambdaExpr(loc, captures, FunctionDefinition(loc, "()", return_type, params, body));
   }
@@ -2191,6 +2190,7 @@ private:
 
 Variable execute(const Context& context, const Bytecodes& bytecodes) {
   Profiler _("[Interpreter]Execute");
+  //   Debug(bytecodes.to_string(context));
 
   auto vm = VirtualMachine();
   return execute(context, bytecodes, vm);

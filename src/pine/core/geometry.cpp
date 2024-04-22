@@ -609,12 +609,11 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
                [&](vec2i p) { height_map[p] = height_function((p + vec2(0.5f)) / resolution); });
   return heightmap(height_map);
 }
-
 bool SDF::hit(const Ray& ray) const {
   auto t = ray.tmin;
-  for (int i = 0; i < 128; i++) {
+  for (int i = 0; i < 256; i++) {
     auto d = sdf(ray(t));
-    if (d < 1e-6f)
+    if (d < threshold)
       return true;
     if (t >= ray.tmax)
       return false;
@@ -625,9 +624,9 @@ bool SDF::hit(const Ray& ray) const {
 }
 bool SDF::intersect(Ray& ray) const {
   auto t = ray.tmin;
-  for (int i = 0; i < 128; i++) {
+  for (int i = 0; i < 256; i++) {
     auto d = sdf(ray(t));
-    if (d < 1e-6f) {
+    if (d < threshold * 200) {
       ray.tmax = t;
       return true;
     }
@@ -639,11 +638,10 @@ bool SDF::intersect(Ray& ray) const {
   return false;
 }
 void SDF::compute_surface_info(SurfaceInteraction& it) const {
-  const auto ops = 0.0001f;
-  auto dc = sdf(it.p);
-  auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - dc;
-  auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - dc;
-  auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - dc;
+  const auto ops = threshold * 5;
+  auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - sdf(it.p + vec3(-ops, 0.0f, 0.0f));
+  auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - sdf(it.p + vec3(0.0f, -ops, 0.0f));
+  auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - sdf(it.p + vec3(0.0f, 0.0f, -ops));
   it.n = normalize(vec3(dtdx, dtdy, dtdz));
 }
 
@@ -691,10 +689,87 @@ void geometry_context(Context& ctx) {
   ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
 
   ctx("torus_sdf") = +[](vec3 pos, float rad, float thickness) {
-    return SDF(pos, vec3(2 * (rad + thickness)), [pos, rad, thickness](vec3 p) {
+    return SDF(pos, vec3(2 * (rad + thickness)), [=](vec3 p) {
       p -= pos;
       auto q = vec2(length(vec2(p.x, p.z)) - rad, p.y);
       return length(q) - thickness;
+    });
+  };
+
+  auto sort = [](auto& x, auto& y) {
+    if (x < y)
+      psl::swap(x, y);
+  };
+
+  ctx("sdf1") = [sort]() {
+    return SDF(vec3(0), vec3(40), [sort](vec3 p) {
+      auto rot2d = [](vec2 q, float a) {
+        auto sa = psl::sin(a);
+        auto cs = vec2(psl::sin(a + 0.5f * Pi), sa);
+        return vec2(dot(q, vec2(cs.x, -cs.y)), dot({q.y, q.x}, cs));
+      };
+      auto PrBoxDf = [](vec3 p, vec3 b) {
+        auto d = abs(p) - b;
+        return psl::min(max_value(d), 0.0f) + length(max(d, vec3(0)));
+      };
+      const float nIt = 5.0f, sclFac = 2.4f;
+      auto b = (sclFac - 1.0f) * vec3(1.0f, 1.125f, 0.625f);
+      auto r = length(vec2(p.x, p.z));
+      auto a = (r > 0.) ? psl::atan2(p.z, -p.x) / (2. * Pi) : 0.0f;
+      p.x = psl::fract((16.0f * a + 1.0f) / 2) * 2 - 1.0f;
+      p.z = r - 32.0f / (2.0f * Pi);
+      auto res = rot2d({p.y, p.z}, Pi * a);
+      p.y = res.x;
+      p.z = res.y;
+      for (float n = 0.; n < nIt; n++) {
+        p = abs(p);
+        sort(p.x, p.y);
+        sort(p.x, p.z);
+        sort(p.y, p.z);
+        p = sclFac * p - b;
+        p.z += b.z * (-0.5 * b.z >= p.z ? 1.0f : 0.0f);
+      }
+      return 0.8 * PrBoxDf(p, vec3(1.)) / psl::pow(sclFac, nIt);
+    });
+  };
+
+  ctx("sdf2") = [sort]() {
+    return SDF(vec3(0), vec3(40), [sort](vec3 p) {
+      vec3 k = vec3(5, 2, 1);
+      p.y += 5.4f;
+      for (int j = 0; j < 8; ++j) {
+        p.x = psl::abs(p.x);
+        p.z = psl::abs(p.z);
+        sort(p.x, p.z);
+        p.z = 1.0f - psl::abs(p.z - 0.9f);
+        sort(p.x, p.y);
+        p.x -= 2.0f;
+        sort(p.x, p.y);
+        p.y += 1.0f;
+        p = k + (p - k) * 3.0f;
+      }
+      return length(p) / 1e4f;
+    });
+  };
+
+  ctx("sdf3") = [sort]() {
+    return SDF(vec3(0), vec3(20), [sort](vec3 p) {
+      auto s = 2.0f;
+      for (int j = 0; j < 7; j++) {
+        p.x = psl::abs(p.x) - 2.3f;
+        p.z = psl::abs(p.z) - 2.3f;
+        sort(p.x, p.z);
+        p.z = 1.5f - psl::abs(p.z - 1.3f + sin(p.z) * 0.2f);
+        sort(p.x, p.y);
+        p.x = 3.0f - psl::abs(p.x - 5.0f + sin(p.x * 3.0f) * 0.2f);
+        sort(p.x, p.y);
+        p.y = 0.9f - psl::abs(p.y - 0.4f);
+        auto e = 12.0f * psl::clamp(0.3f / psl::min(dot(p, p), 1.0f), 0.0f, 1.0f) +
+                 2.0f * psl::clamp(0.1f / psl::min(dot(p, p), 1.0f), 0.0f, 1.0f);
+        p = e * p - vec3(7, 1, 1);
+        s *= e;
+      }
+      return length(p) / s;
     });
   };
 }

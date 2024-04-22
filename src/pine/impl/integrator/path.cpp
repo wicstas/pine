@@ -46,10 +46,9 @@ void PathIntegrator::render(Scene& scene) {
       auto ray = scene.camera.gen_ray((p + sampler.rand2f()) / film.size(), sampler.rand2f());
       L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
-    if (!L.has_inf() && !L.has_nan())
-      film[p] = vec4(L / spp, 1.0f);
+    film[p] = vec4(L / spp, 1.0f);
     if (p.x % 64 == 0)
-      set_progress(float(p.x + p.y * film.size().x) / area(film.size()));
+      set_progress(progress_2d(p, film.size()));
   });
 }
 PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,

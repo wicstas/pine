@@ -9,6 +9,7 @@
 #include <pine/impl/integrator/guidedpath.h>
 #include <pine/impl/integrator/cachedpath.h>
 #include <pine/impl/integrator/denoiser.h>
+#include <pine/impl/integrator/restir.h>
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/ao.h>
@@ -83,12 +84,12 @@ Context get_default_context() {
         return GuidedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
       })
       .method("render", &GuidedPathIntegrator::render);
-  // ctx.type<EARSIntegrator>("EARSIntegrator")
-  //     .ctor<Accel, Sampler, LightSampler, int>()
-  //     .ctor(+[](Sampler sampler, int max_path_length) {
-  //       return EARSIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
-  //     })
-  //     .method("render", &EARSIntegrator::render);
+  ctx.type<RestirIntegrator>("RestirIntegrator")
+      .ctor<Accel, Sampler, LightSampler, int>()
+      .ctor(+[](Sampler sampler, int max_path_length) {
+        return RestirIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
+      })
+      .method("render", &RestirIntegrator::render);
   ctx("denoise") =
       +[](Scene &scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
 
@@ -97,8 +98,6 @@ Context get_default_context() {
 
 void interpret(Context &context, psl::string source) {
   auto bytecodes = compile(context, std::move(source));
-
-  Debug(bytecodes.to_string(context));
 
   execute(context, bytecodes);
 }

@@ -1,241 +1,240 @@
-// #include <pine/impl/integrator/restir.h>
-// #include <pine/core/profiler.h>
-// #include <pine/core/parallel.h>
-// #include <pine/core/scene.h>
+#include <pine/impl/integrator/restir.h>
+#include <pine/core/profiler.h>
+#include <pine/core/parallel.h>
+#include <pine/core/scene.h>
 
-// namespace pine {
+namespace pine {
 
-// RestirIntegrator::RestirIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
-//                                    int max_path_length)
-//     : RTIntegrator{psl::move(accel), psl::move(sampler)},
-//       light_sampler{psl::move(light_sampler)},
-//       max_path_length{max_path_length} {
-//   if (max_path_length <= 0)
-//     Fatal("`RestirIntegrator` expect `max_path_length` to be positive, get", max_path_length);
-// }
-// struct RestirIntegrator::Vertex {
-//   Vertex(vec2i q, int length, Interaction it, float pdf, bool is_delta = false)
-//       : q(q), length(length), it(psl::move(it)), pdf(pdf), is_delta(is_delta) {
-//   }
-//   static Vertex first_vertex(vec2i q) {
-//     return Vertex(q, 0, {}, 0.0f, true);
-//   }
-//   vec2i q;
-//   int length;
-//   Interaction it;
-//   float pdf;
-//   bool is_delta;
-// };
-// struct ReSample {
-//   vec3 xv, nv;
-//   vec3 xs, ns;
-//   vec3 Lo;
-// };
-// struct Reservoir {
-//   void update(ReSample s_new, float w_new, float u) {
-//     w += w_new;
-//     M += 1;
-//     if (u < w_new / w)
-//       s = s_new;
-//   }
+RestirIntegrator::RestirIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
+                                   int max_path_length)
+    : RTIntegrator{psl::move(accel), psl::move(sampler)},
+      light_sampler{psl::move(light_sampler)},
+      max_path_length{max_path_length} {
+  if (max_path_length <= 0)
+    Fatal("`RestirIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+}
+struct RestirIntegrator::Vertex {
+  Vertex(vec2i q, int length, Interaction it, float pdf, bool is_delta = false,
+         bool inside_subsurface = false)
+      : q(q),
+        length(length),
+        it(psl::move(it)),
+        pdf(pdf),
+        is_delta(is_delta),
+        inside_subsurface(inside_subsurface) {
+  }
+  static Vertex first_vertex(vec2i q) {
+    return Vertex(q, 0, {}, 0.0f, true);
+  }
+  vec2i q;
+  int length;
+  Interaction it;
+  float pdf;
+  bool is_delta;
+  bool inside_subsurface;
+};
+struct RestirIntegrator::RadianceResult {
+  vec3 Lo;
+  vec3 Lo_direct;
+  psl::optional<float> light_pdf;
+};
+struct ReSample {
+  float target_pdf() const {
+    return average(Lo);
+  }
 
-//   void merge(Reservoir r, float p_hat, float u) {
-//     if (r.s) {
-//       auto M0 = M;
-//       update(*r.s, p_hat * r.W * r.M, u);
-//       M = M0 + r.M;
-//     }
-//   }
+  bool valid = false;
+  vec3 xv, nv;
+  float pdf = 0.0f;
+  vec3 xs, ns;
+  vec3 Lo;
+  float t = float_max;
+};
+struct Reservoir {
+  void update(ReSample s_new, float w_new, float u) {
+    w += w_new;
+    M += 1;
+    if (u < w_new / w)
+      z = s_new;
+  }
 
-//   psl::optional<ReSample> s;
-//   float w = 0.0f;
-//   int M = 0;
-//   float W = 0.0f;
-// };
-// static Array2d<ReSample> initial_samples;
-// static Array2d<Reservoir> temporal_reservoir_back;
-// static Array2d<Reservoir> temporal_reservoir;
-// static Array2d<Reservoir> spatial_reservoir;
-// static Array2d<Reservoir> spatial_reservoir_back;
-// static int iteration = 0;
-// void RestirIntegrator::render(Scene& scene) {
-//   RTIntegrator::render(scene);
-//   light_sampler.build(&scene);
-//   auto& film = scene.camera.film();
+  void merge(Reservoir r, float p_hat, float u) {
+    auto M0 = M;
+    update(r.z, p_hat * r.W * r.M, u);
+    M = M0 + r.M;
+  }
 
-//   Profiler _("[Restir]Render");
-//   initial_samples = Array2d<ReSample>(film.size());
-//   temporal_reservoir = Array2d<Reservoir>(film.size());
-//   spatial_reservoir = Array2d<Reservoir>(film.size());
+  ReSample z;
+  float w = 0.0f;
+  int M = 0;
+  float W = 0.0f;
+};
+static Array2d<ReSample> initial_samples;
+static Array2d<Reservoir> temporal_reservior;
+static Array2d<Reservoir> spatial_reservior;
 
-//   parallel_for(film.size(), [&](vec2i p) {
-//     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
-//     if (auto it = SurfaceInteraction(); intersect(ray, it)) {
-//       initial_samples[p].xv = it.p;
-//       initial_samples[p].nv = it.n;
-//     }
-//   });
+void RestirIntegrator::render(Scene& scene) {
+  RTIntegrator::render(scene);
+  light_sampler.build(&scene);
+  auto& film = scene.camera.film().clear();
 
-//   for (int iter = 0; iter < spp; iter++) {
-//     iteration = iter;
-//     temporal_reservoir_back = temporal_reservoir;
-//     spatial_reservoir_back = spatial_reservoir;
-//     for (auto& s : initial_samples) {
-//       s.Lo = {};
-//       s.ns = {};
-//       s.xs = {};
-//     }
-//     parallel_for(film.size(), [&](vec2i p) {
-//       Sampler& sampler = samplers[threadIdx].start_pixel(p, iter);
-//       auto ray = scene.camera.gen_ray((p + sampler.get2d()) / film.size(), sampler.get2d());
-//       auto L = radiance(scene, ray, sampler, Vertex::first_vertex(p)).Lo;
-//       film.add_sample(p, L, (iter + 1) / 10.0f);
-//     });
-//     set_progress(float(iter) / spp);
-//   }
-// }
-// RestirIntegrator::RadianceResult RestirIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
-//                                                             Vertex pv) {
-//   auto result = RadianceResult();
-//   auto wi = -ray.d;
-//   auto& Lo = result.Lo;
+  initial_samples.resize(film.size());
+  temporal_reservior.resize(film.size());
+  spatial_reservior.resize(film.size());
 
-//   if (auto ittr = intersect_tr(ray, sampler); !ittr) {
-//     if (scene.env_light) {
-//       Lo += scene.env_light->color(ray.d);
-//       if (!pv.is_delta)
-//         result.light_pdf = scene.env_light->pdf(pv.it, ray.d);
-//     }
-//     return result;
-//   } else if (ittr->is<MediumInteraction>()) {
-//     if (pv.length + 1 < max_path_length) {
-//       auto& ms = ittr->as<MediumInteraction>();
-//       if (auto ls = light_sampler.sample(ms, sampler.get1d(), sampler.get2d())) {
-//         if (!hit(Ray(ms.p, ls->wo, 0.0f, ls->distance))) {
-//           auto tr = transmittance(ms.p, ls->wo, ls->distance, sampler);
-//           auto f = ms.pg.f(wi, ls->wo);
-//           if (ls->light->is_delta()) {
-//             Lo += ls->le * ms.sigma * tr * f / ls->pdf;
-//           } else {
-//             auto mis = balance_heuristic(ls->pdf, ms.pg.pdf(wi, ls->wo));
-//             Lo += ls->le * ms.sigma * tr * f / ls->pdf * mis;
-//           }
-//         }
-//       }
-//       auto ps = ms.pg.sample(wi, sampler.get2d());
-//       auto nv = Vertex(pv.q, pv.length + 1, *ittr, ps.pdf);
-//       auto rr = pv.length <= 1 ? 1.0f : psl::max(ms.sigma * luminance(ps.f) / ps.pdf, 0.05f);
-//       if (rr >= 1 || sampler.get1d() < rr) {
-//         auto [Li, light_pdf] = radiance(scene, Ray(ms.p, ps.wo), sampler, nv);
-//         auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
-//         Lo += Li * (ms.sigma * ps.f / ps.pdf * mis / psl::min(1.0f, rr));
-//       }
-//     }
-//     return result;
-//   } else {
-//     auto& it = ittr->as<SurfaceInteraction>();
-//     it.n = face_same_hemisphere(it.n, wi);
-//     if (it.material().is<EmissiveMaterial>()) {
-//       Lo += it.material().le({it, wi});
-//       if (!pv.is_delta)
-//         result.light_pdf = light_sampler.pdf(pv.it, it, ray);
-//       return result;
-//     }
+  Profiler _("[Restir]Render");
+  for (int si = 0; si < spp; si++) {
+    parallel_for(film.size(), [&](vec2i p) {
+      auto& S = initial_samples[p] = {};
+      Sampler& sampler = samplers[threadIdx].start_pixel(p, si);
+      auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), sampler.rand2f());
+      auto rad = radiance(scene, ray, sampler, Vertex::first_vertex(p));
+      film[p] += vec4(rad.Lo_direct / spp, 0.0f);
+      auto& R = temporal_reservior[p];
+      if (S.valid) {
+        auto w = S.target_pdf() / S.pdf;
+        R.update(S, w, sampler.randf());
+      } else {
+        R.M += 1;
+      }
+      R.W = R.w / (R.M * R.z.target_pdf());
 
-//     if (pv.length + 1 >= max_path_length)
-//       return result;
+      if (p.x % 64 == 0)
+        set_progress(progress_2d(p, film.size()) / spp + float(si) / spp);
+    });
+    parallel_for(film.size(), [&](vec2i q) {
+      Sampler& sampler = samplers[threadIdx];
+      auto& Rs = spatial_reservior[q];
+      auto Z = Rs.M;
+      for (int i = 0; i < 16; i++) {
+        auto qn = vec2i(q + (sampler.rand2f() - vec2(0.5f)) * 32);
+        qn = clamp(qn, vec2i(0), film.size() - vec2i(1));
+        if (dot(initial_samples[q].nv, initial_samples[qn].nv) < 0.995f)
+          continue;
+        if (psl::abs(initial_samples[q].t - initial_samples[qn].t) > 0.1f)
+          continue;
+        auto Rn = temporal_reservior[qn];
+        if (Rn.z.valid) {
+          //   auto vr = initial_samples[q].xv - Rn.z.xs;
+          //   auto vq = initial_samples[qn].xv - Rn.z.xs;
+          //   auto nq = Rn.z.ns;
+          //   auto jac = psl::max(absdot(normalize(vr), nq) / absdot(normalize(vq), nq) *
+          //                           length_squared(vq) / length_squared(vr),
+          //                       0.01f);
+          auto p_hat = Rn.z.target_pdf();
+          if (hit(spawn_ray(initial_samples[q].xv, initial_samples[q].nv,
+                            normalize(Rn.z.xs - initial_samples[q].xv),
+                            length(Rn.z.xs - initial_samples[q].xv)))) {
+            p_hat = 0.0f;
+          }
+          Rs.merge(Rn, p_hat, sampler.randf());
+          if (p_hat > 0)
+            Z += Rn.M;
+        }
+      }
+      Rs.W = Rs.w / (Z * Rs.z.target_pdf());
+    });
+  }
+  parallel_for(film.size(), [&](vec2i p) {
+    const auto& R = spatial_reservior[p];
+    if (!R.z.valid)
+      return;
+    Sampler& sampler = samplers[threadIdx].start_pixel(p, 0);
+    auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), sampler.rand2f());
+    auto wi = -ray.d, wo = normalize(R.z.xs - R.z.xv);
+    auto [mit, it] = intersect_tr(ray, sampler);
+    if (it && !it->material().is_delta(*it)) {
+      auto cosine = absdot(wo, it->n);
+      auto f = it->material().f({*it, wi, wo});
+      auto Lo_indirect = R.z.Lo * R.W * cosine * f;
+      film[p] += vec4(Lo_indirect, 0.0f);
+    }
+  });
+}
+RestirIntegrator::RadianceResult RestirIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
+                                                            Vertex pv) {
+  auto result = RadianceResult();
+  auto wi = -ray.d;
+  auto& Lo = result.Lo;
 
-//     if (!it.material().is_delta()) {
-//       if (auto ls = light_sampler.sample(*ittr, sampler.get1d(), sampler.get2d())) {
-//         if (!hit(it.spawn_ray(ls->wo, ls->distance))) {
-//           auto cosine = absdot(ls->wo, it.n);
-//           auto tr = transmittance(it.p, ls->wo, ls->distance, sampler);
-//           if (ls->light->is_delta()) {
-//             auto f = it.material().f({it, wi, ls->wo});
-//             Lo += ls->le * tr * cosine * f / ls->pdf;
-//           } else {
-//             auto [f, bsdf_pdf] = it.material().f_pdf({it, wi, ls->wo});
-//             auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-//             Lo += ls->le * tr * cosine * f / ls->pdf * mis;
-//           }
-//         }
-//       }
-//     }
+  auto [mit, it] = intersect_tr(ray, sampler);
 
-//     auto indirect = vec3(0.0f);
-//     // if (auto bs = it.material().sample({it, wi, sampler.get1d(), sampler.get2d()})) {
-//     auto bs = psl::optional<BSDFSample>(BSDFSample());
-//     CHECK(bs);
-//     bs->wo = uniform_sphere(sampler.get2d());
-//     if (dot(bs->wo, face_same_hemisphere(it.n, wi)) < 0)
-//       bs->wo *= -1;
-//     bs->f = it.material().albedo({it.p, it.n, it.uv}) / Pi;
-//     bs->pdf = 1.0f / (2 * Pi);
-//     auto cosine = absdot(bs->wo, it.n);
-//     auto nv = Vertex(pv.q, pv.length + 1, *ittr, bs->pdf, it.material().is_delta());
-//     auto rr = pv.length <= 1 ? 1.0f : psl::max(luminance(cosine * bs->f / bs->pdf), 0.05f);
-//     if (rr >= 1 || sampler.get1d() < rr) {
-//       auto [Li, light_pdf] = radiance(scene, it.spawn_ray(bs->wo), sampler, nv);
-//       auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
-//       indirect += Li * bs->f * (cosine / bs->pdf * mis / psl::min(1.0f, rr));
-//     }
-//     // }
-//     if (pv.length == 1) {
-//       initial_samples[pv.q].Lo = Lo;
-//       initial_samples[pv.q].xs = it.p;
-//       initial_samples[pv.q].ns = it.n;
-//     }
-//     if (pv.length == 0) {
-//       auto& S = initial_samples[pv.q];
-//       auto& R = temporal_reservoir[pv.q];
-//       auto w = luminance(S.Lo) / (1 / (2 * Pi));
-//       if (w > 1e-6f) {
-//         R.update(S, w, sampler.get1d());
-//         R.W = R.w / (R.M * psl::max(epsilon, luminance(R.s->Lo)));
-//       }
-//       // if (R.s) {
-//       //   auto wo = normalize(R.s->xs - it.p);
-//       // Lo += R.W * R.s->Lo * absdot(wo, it.n) * it.material().f({it, wi, wo});
-//       // }
+  auto Tr = transmittance(ray.o, ray.d, ray.tmax, sampler);
+  if (!it) {
+    if (scene.env_light) {
+      Lo += Tr * scene.env_light->color(ray.d);
+      if (!pv.is_delta)
+        result.light_pdf = scene.env_light->pdf(pv.it, ray.d);
+    }
+    return result;
+  }
 
-//       if (iteration > 0) {
-//         auto& Rs = spatial_reservoir[pv.q];
-//         auto Z = 0.0f;
-//         if (Rs.s && luminance(Rs.s->Lo) > 0.0f)
-//           Z += Rs.M;
-//         for (int i = 0; i < 9; i++) {
-//           auto qn = pv.q + vec2i((sampler.get2d() - vec2(0.5f)) * 36);
-//           qn = clamp(qn, vec2i(0), spatial_reservoir.size() - vec2i(1));
-//           if (i == 0)
-//             qn = pv.q;
-//           else if (qn == pv.q)
-//             continue;
-//           if (dot(S.nv, initial_samples[qn].nv) < 0.95f)
-//             continue;
-//           const auto& Rn = temporal_reservoir_back[qn];
-//           if (!Rn.s)
-//             continue;
-//           float dvr, dvq;
-//           auto vr = normalize(S.xv - Rn.s->xs, dvr);
-//           auto vq = normalize(Rn.s->xv - Rn.s->xs, dvq);
-//           auto J = absdot(vr, Rn.s->ns) / absdot(vq, Rn.s->ns) * dvq * dvq / (dvr * dvr);
-//           if (!(J > 1e-6f))
-//             continue;
-//           auto p_hat_prime = luminance(Rn.s->Lo) / J;
-//           Rs.merge(Rn, p_hat_prime, sampler.get1d());
-//           if (Rs.s && luminance(Rs.s->Lo) > 0.0f)
-//             Z += Rn.M;
-//         }
-//         Rs.W = Rs.w / (Z * luminance(Rs.s->Lo));
+  if (pv.length == 1) {
+    initial_samples[pv.q].xs = it->p;
+    initial_samples[pv.q].ns = it->n;
+    initial_samples[pv.q].valid = true;
+  }
 
-//         auto wo = normalize(Rs.s->xs - it.p);
-//         Lo += Rs.W * Rs.s->Lo * absdot(wo, it.n) * it.material().f({it, wi, wo});
-//       }
-//     } else {
-//       Lo += indirect;
-//     }
-//     return result;
-//   }
-// }
+  if (it->material().is<EmissiveMaterial>()) {
+    Lo += Tr * it->material().le({*it, wi});
+    if (!pv.is_delta)
+      result.light_pdf = light_sampler.pdf(pv.it, *it, ray);
+    return result;
+  }
 
-// }  // namespace pine
+  if (pv.length + 1 >= max_path_length)
+    return result;
+
+  if (pv.length == 0) {
+    initial_samples[pv.q].xv = it->p;
+    initial_samples[pv.q].nv = it->n;
+    initial_samples[pv.q].t = ray.tmax;
+  }
+
+  auto lo = vec3(0.0f);
+  auto rr_m = average(Tr);
+  if (with_probability(1 - rr_m, sampler))
+    return result;
+
+  if (!it->material().is_delta(*it)) {
+    if (auto ls = light_sampler.sample(*it, sampler.get1d(), sampler.get2d())) {
+      if (!hit(it->spawn_ray(ls->wo, ls->distance))) {
+        auto cosine = absdot(ls->wo, it->n);
+        auto tr = transmittance(it->p, ls->wo, ls->distance, sampler);
+        if (ls->light->is_delta()) {
+          auto f = it->material().f({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+          lo += ls->le * tr * cosine * f / ls->pdf;
+        } else {
+          auto [f, bsdf_pdf] = it->material().f_pdf({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+          auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+          lo += ls->le * tr * cosine * f / ls->pdf * mis;
+        }
+      }
+    }
+    result.Lo_direct = lo;
+  }
+
+  if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
+    if (pv.length == 0)
+      initial_samples[pv.q].pdf = bs->pdf;
+    auto cosine = absdot(bs->wo, it->n);
+    auto nv = Vertex(pv.q, pv.length + 1, *it, bs->pdf, it->material().is_delta(*it),
+                     bs->enter_subsurface);
+    auto albedo = luminance(cosine * bs->f / bs->pdf);
+    auto rr = psl::min(pv.length <= 1 ? 1.0f : albedo, 1.0f);
+    if (with_probability(rr, sampler)) {
+      auto R = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);
+      auto mis = R.light_pdf ? balance_heuristic(bs->pdf, *R.light_pdf) : 1.0f;
+      lo += R.Lo * bs->f * (cosine / bs->pdf * mis / rr);
+      if (R.light_pdf || nv.is_delta)
+        result.Lo_direct = lo;
+      else if (pv.length == 0)
+        initial_samples[pv.q].Lo = R.Lo;
+    }
+  }
+  lo /= rr_m;
+  Lo += lo * Tr;
+  return result;
+}
+
+}  // namespace pine

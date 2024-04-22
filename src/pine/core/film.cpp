@@ -10,9 +10,10 @@ void save_film_as_image(psl::string_view filename, Film film) {
   save_image(psl::string(filename), film.pixels, true);
 }
 
-void Film::clear() {
+Film& Film::clear() {
   for (auto& pixel : pixels)
     pixel = {};
+  return *this;
 }
 void Film::finalize(float scale) {
   for (auto& pixel : pixels) {

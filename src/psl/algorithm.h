@@ -311,6 +311,10 @@ template <typename T>
 auto equal_to(T value) {
   return _equal_to<T>{psl::move(value)};
 }
+template <typename... Ts>
+auto equal_to_any(Ts... values) {
+  return [=](const auto& rhs) { return ((rhs == values) || ...); };
+}
 template <typename T>
 auto less_or_equal_to(T value) {
   return _less_or_equal_to<T>{psl::move(value)};

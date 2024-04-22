@@ -6,6 +6,16 @@ namespace pine {
 
 struct Any {};
 
+psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes) {
+  auto r = psl::string("(");
+  for (const auto& ptype : ptypes)
+    r += ptype.sig() + ", ";
+  if (ptypes.size() != 0)
+    r.pop_back(2);
+  r += "): " + rtype.sig();
+  return r;
+}
+
 Context::Context() {
   auto& context = *this;
   context.type<Any>("any");

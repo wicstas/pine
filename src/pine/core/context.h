@@ -190,15 +190,7 @@ private:
   psl::unique_ptr<VariableConcept> model;
 };
 
-inline psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes) {
-  auto r = psl::string("(");
-  for (const auto& ptype : ptypes)
-    r += ptype.sig() + ", ";
-  if (ptypes.size() != 0)
-    r.pop_back(2);
-  r += "): " + rtype.sig();
-  return r;
-}
+psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes);
 
 struct Function {
   struct FunctionConcept {

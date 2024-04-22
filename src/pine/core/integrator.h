@@ -10,6 +10,10 @@
 
 namespace pine {
 
+inline float progress_2d(vec2 p, vec2i size) {
+  return (p.x + p.y * size.x) / area(size);
+}
+
 void set_progress(float progress);
 float get_progress();
 

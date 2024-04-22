@@ -13,7 +13,7 @@ struct Film {
   float aspect() const {
     return float(size().x) / size().y;
   }
-  void clear();
+  Film& clear();
   void finalize(float scale = 1.0f);
 
   vec4& operator[](vec2i p) {

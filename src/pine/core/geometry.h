@@ -198,8 +198,10 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 struct SDF {
   SDF(vec3 center, vec3 size, psl::function<float(vec3)> sdf)
       : aabb(center - size / 2, center + size / 2), sdf(psl::move(sdf)) {
+    threshold = min_value(aabb.diagonal()) * 1e-6f;
   }
   SDF(AABB aabb, psl::function<float(vec3)> sdf) : aabb(aabb), sdf(psl::move(sdf)) {
+    threshold = min_value(aabb.diagonal()) * 1e-6f;
   }
 
   bool hit(const Ray& ray) const;
@@ -222,6 +224,7 @@ struct SDF {
 private:
   AABB aabb;
   psl::function<float(vec3)> sdf;
+  float threshold;
 };
 
 struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, Mesh, SDF> {
