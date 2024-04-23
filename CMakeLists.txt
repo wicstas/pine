@@ -124,8 +124,8 @@ add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib  ${llvm_libs})
 
 #Gltf tool
-#add_executable(gltf-tool src/cli/gltf-tool.cpp)
-#target_link_libraries(gltf-tool pinelib)
+add_executable(gltf-tool src/cli/gltf-tool.cpp)
+target_link_libraries(gltf-tool pinelib)
 
 #Image tool
 #add_executable(image-tool src/cli/image-tool.cpp)

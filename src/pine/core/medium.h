@@ -77,7 +77,32 @@ private:
   float temperature_scale = 1.0f;
 };
 
-struct Medium : psl::variant<HomogeneousMedium, VDBMedium> {
+struct LambdaMedium {
+  LambdaMedium(mat4 transform, psl::function<float(vec3)> density, vec3 sigma_a, vec3 sigma_s,
+               float blackbody_intensity = 1.0f, float temperature_scale = 1.0f);
+  psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
+  vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
+  AABB get_aabb() const {
+    return AABB(bbox);
+  }
+
+private:
+  psl::function<float(vec3)> density;
+  psl::function<float(vec3)> temperature;
+  psl::function<float(vec3)> flame;
+  OBB bbox;
+  vec3 sigma_majs;
+  vec3 sigma_maj_invs;
+  float sigma_maj;
+  float sigma_maj_inv;
+  vec3 sigma_a;
+  vec3 sigma_s;
+  vec3 sigma_z;
+  float blackbody_intensity = 1.0f;
+  float temperature_scale = 1.0f;
+};
+
+struct Medium : psl::variant<HomogeneousMedium, VDBMedium, LambdaMedium> {
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const {
     return dispatch([&](auto&& x) { return x.intersect_tr(ray, sampler); });
   }

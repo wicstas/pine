@@ -174,7 +174,7 @@ struct GlossyMaterial {
 };
 
 struct GlassMaterial {
-  GlassMaterial(Node3f albedo, Nodef roughness, Nodef eta)
+  GlassMaterial(Node3f albedo, Nodef roughness, Nodef eta = 1.4f)
       : bsdf{psl::move(albedo), psl::move(roughness), psl::move(eta)} {
   }
 
@@ -328,8 +328,8 @@ struct SubsurfaceMaterial {
   vec3 sigma_s;
 };
 
-struct Material : psl::variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, UberMaterial,
-                               SubsurfaceMaterial> {
+struct Material : psl::variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, GlassMaterial,
+                               UberMaterial, SubsurfaceMaterial> {
 public:
   using variant::variant;
 

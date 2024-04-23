@@ -208,7 +208,9 @@ void scene_from(Scene &scene, void *tiny_gltf_model, mat4 m) {
   }
 
   for (const auto &node : model.nodes) {
-    // Debug(node.name.c_str());
+    if (node.mesh < 0)
+      continue;
+    Debug(node.name.c_str());
     auto transform = mat4::identity();
     for (size_t i = 0; i < node.matrix.size(); i++)
       transform[i / 4][i % 4] = node.matrix[i];
@@ -338,8 +340,6 @@ void scene_from(Scene &scene, void *tiny_gltf_model, mat4 m) {
           }
         }
       }
-
-      basecolor = vec3(0.1, 0.2, 0);
 
       mesh_.apply(m * transform);
       scene.add_geometry(psl::move(mesh_),

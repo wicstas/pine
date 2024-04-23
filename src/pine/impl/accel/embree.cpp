@@ -35,7 +35,6 @@ static void intersect_func(const RTCIntersectFunctionNArguments* args) {
     args->valid[0] = -1;
   }
 }
-
 static void hit_func(const RTCOccludedFunctionNArguments* args) {
   if (!args->valid[0])
     return;
@@ -64,11 +63,19 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
     }
   }
 }
+static void filter_func(const RTCFilterFunctionNArguments* args) {
+  if (!args->valid[0])
+    return;
+
+  //   const auto& geo = *reinterpret_cast<const Geometry*>(args->geometryUserPtr);
+//   args->valid[0] = 0;
+}
 static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& shape,
                        uint32_t expected_index) {
   if (shape.is<Mesh>()) {
     auto mesh = shape.as<Mesh>();
     RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_TRIANGLE);
+    rtcSetGeometryEnableFilterFunctionFromArguments(geom, true);
 
     float* vb = (float*)rtcSetNewGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3,
                                                 sizeof(vec3), mesh.vertices.size());
@@ -82,6 +89,7 @@ static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& sh
     rtcReleaseGeometry(geom);
   } else {
     RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_USER);
+    rtcSetGeometryEnableFilterFunctionFromArguments(geom, true);
     rtcSetGeometryUserPrimitiveCount(geom, 1);
     rtcSetGeometryUserData(geom, (void*)&shape);
     rtcSetGeometryBoundsFunction(geom, bounds_func, nullptr);
@@ -95,9 +103,12 @@ void EmbreeAccel::build(const Scene* scene) {
   rtc_device = psl::opaque_shared_ptr(
       rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
+  rtcSetDeviceErrorFunction(
+      rtc_device, +[](void*, enum RTCError, const char* str) { Fatal("[Embree]", str); }, nullptr);
   rtc_scene = psl::opaque_shared_ptr(
       rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); });
   auto rtc_scene = RTCScene(this->rtc_scene.get());
+  rtcSetSceneFlags(rtc_scene, RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS);
   rtcSetSceneBuildQuality(rtc_scene, RTC_BUILD_QUALITY_HIGH);
 
   for (uint32_t i = 0; i < scene->geometries.size(); i++) {
@@ -110,12 +121,14 @@ void EmbreeAccel::build(const Scene* scene) {
     this->instancing_scenes.push_back(psl::opaque_shared_ptr(
         rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); }));
     auto instancing_scene = RTCScene(instancing_scenes.back().get());
+    rtcSetSceneFlags(instancing_scene, RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS);
     rtcSetSceneBuildQuality(instancing_scene, RTC_BUILD_QUALITY_HIGH);
     build_geom(rtc_device, instancing_scene, scene->instancings[i].shape, 0);
     rtcCommitScene(instancing_scene);
 
     for (size_t k = 0; k < scene->instancings[i].instances.size(); k++) {
       RTCGeometry geom = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_INSTANCE);
+      rtcSetGeometryEnableFilterFunctionFromArguments(geom, true);
       rtcSetGeometryInstancedScene(geom, instancing_scene);
       rtcSetGeometryTransform(geom, 0, RTCFormat::RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
                               &scene->instancings[i].instances[k].transform[0][0]);
@@ -143,7 +156,9 @@ bool EmbreeAccel::hit(Ray ray) const {
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.occluded = hit_func;
+  args.filter = filter_func;
   args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
+                                      RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcOccluded1(RTCScene(rtc_scene.get()), &ray_, &args);
   return ray_.tfar < 0;
@@ -165,7 +180,9 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.occluded = hit8_func;
+  args.filter = filter_func;
   args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
+                                      RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   int valid[8]{-1, -1, -1, -1, -1, -1, -1, -1};
   rtcOccluded8(valid, RTCScene(rtc_scene.get()), &ray_, &args);
@@ -193,7 +210,9 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
   args.intersect = intersect_func;
+  args.filter = filter_func;
   args.feature_mask = RTCFeatureFlags(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
+                                      RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcIntersect1(RTCScene(rtc_scene.get()), &rayhit, &args);
   if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID)

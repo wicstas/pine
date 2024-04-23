@@ -254,12 +254,102 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   return tr;
 }
 
+LambdaMedium::LambdaMedium(mat4 transform, psl::function<float(vec3)> density, vec3 sigma_a,
+                           vec3 sigma_s, float blackbody_intensity, float temperature_scale)
+    : density(density),
+      bbox(OBB(AABB(vec3(-1, -1, -1), vec3(1, 1, 1)), transform)),
+      sigma_a(sigma_a),
+      sigma_s(sigma_s),
+      sigma_z(sigma_a + sigma_s),
+      blackbody_intensity(blackbody_intensity),
+      temperature_scale(temperature_scale) {
+  sigma_majs = sigma_z;
+  sigma_maj_invs = vec3(1) / sigma_majs;
+  sigma_maj = max_value(sigma_majs);
+  sigma_maj_inv = 1.0f / sigma_maj;
+}
+psl::optional<MediumInteraction> LambdaMedium::intersect_tr(const Ray& ray,
+                                                            Sampler& sampler) const {
+  auto tmin = ray.tmin, tmax = ray.tmax;
+  if (!bbox.intersect(ray.o, ray.d, tmin, tmax))
+    return psl::nullopt;
+  auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
+
+  auto f = vec3d(1.0f);
+  auto c = int(rng.nextf() * 3);
+  auto u = rng.nextd();
+
+  while (true) {
+    auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_invs[c];
+    tmin += dt;
+    if (tmin >= tmax)
+      return psl::nullopt;
+    auto D = density(ray(tmin));
+    auto sig_a = sigma_a * D;
+    auto sig_s = sigma_s * D;
+    auto sig_t = sig_a + sig_s;
+    auto sig_n = sigma_majs - sig_t;
+    auto prob_n = sig_n[c] / sigma_majs[c];
+    auto prob_s = sig_s[c] / sigma_majs[c];
+    if (u < prob_n) {  // null-scattering
+      u /= prob_n;
+      f = normalize(f * exp(-sigma_majs * dt) * sig_n);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
+    } else if (u < prob_n + prob_s) {  // real-scattering
+      f = normalize(f * exp(-sigma_majs * dt) * sig_s);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
+      return MediumInteraction(tmin, ray(tmin), f / average(f), HgPhaseFunction(0.0f));
+    } else {  // absorption
+      f = normalize(f * exp(-sigma_majs * dt) * sig_a);
+      if (average(f) == 0.0f)
+        return psl::nullopt;
+      return MediumInteraction(f / average(f), sig_a);
+    }
+  }
+}
+vec3 LambdaMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
+  auto tmin = 0.0f;
+  if (!bbox.intersect(p, d, tmin, tmax))
+    return vec3(1.0f);
+
+  auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
+  auto u0 = rng.nextd();
+  double u[]{u0, u0, u0};
+  auto tr = vec3(1.0f);
+
+  auto n_channel_remaining = 3;
+  bool active_channels[]{true, true, true};
+  while (n_channel_remaining) {
+    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+    if (tmin >= tmax)
+      break;
+    auto dd = vec3(1.0f) - sigma_z * density(p + tmin * d) * sigma_maj_inv;
+    for (int channel = 0; channel < 3; channel++) {
+      if (!active_channels[channel])
+        continue;
+      if (u[channel] < dd[channel]) {
+        u[channel] /= dd[channel];
+      } else {
+        tr[channel] = 0;
+        n_channel_remaining--;
+        active_channels[channel] = false;
+      }
+    }
+  }
+  return tr;
+}
+
 void medium_context(Context& context) {
   context.type<HomogeneousMedium>("HomoMedium").ctor<Shape, vec3, vec3>();
   context.type<VDBMedium>("VDBMedium")
       .ctor<psl::string, mat4, vec3, vec3>()
       .ctor<psl::string, mat4, vec3, vec3, float, float>();
-  context.type<Medium>("Medium").ctor_variant<HomogeneousMedium, VDBMedium>();
+  context.type<LambdaMedium>("LambdaMedium")
+      .ctor<mat4, psl::function<float(vec3)>, vec3, vec3>()
+      .ctor<mat4, psl::function<float(vec3)>, vec3, vec3, float, float>();
+  context.type<Medium>("Medium").ctor_variant<HomogeneousMedium, VDBMedium, LambdaMedium>();
 }
 
 }  // namespace pine
