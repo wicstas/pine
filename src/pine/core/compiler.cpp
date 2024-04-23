@@ -741,9 +741,15 @@ uint16_t LambdaExpr::emit(Context& context, Bytecodes& bytecodes) const {
                 vm_.stack.push(cptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
               return Function(
                   lambda<psl::span<const Variable*>>(
-                      [&context, fbcodes = psl::move(fbcodes), vm_ = psl::move(vm_), cptypes,
+                      [&context, fbcodes = psl::move(fbcodes), vm_ = psl::move(vm_),
                        ptypes](psl::span<const Variable*> args) mutable {
-                        auto vm = vm_;
+                        static thread_local VirtualMachine vm;
+                        if (vm.stack.size() == 0) {
+                          for (const auto& var : vm_.stack)
+                            vm.stack.push(var);
+                        } else {
+                          vm.stack.unwind(vm_.stack.size());
+                        }
                         for (size_t i = 0; i < args.size(); i++)
                           vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy());
                         return execute(context, fbcodes, vm);
@@ -1101,8 +1107,9 @@ void FunctionDefinition::emit(Context& context, Bytecodes& bytecodes) const {
                                  [&context, fbcodes = psl::move(fbcodes), ptypes]
                                  (psl::span<const Variable*> args) mutable {
       DCHECK_EQ(args.size(), ptypes.size());
-      auto vm = VirtualMachine();
+      static thread_local VirtualMachine vm;
       vm.stack.reserve(args.size() * 2);
+      vm.stack.unwind(0);
       for (size_t i = 0; i < args.size(); i++) {
           vm.stack.push(ptypes[i].is_ref ? args[i]->create_ref() : args[i]->copy()) ;
       }

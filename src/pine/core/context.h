@@ -13,6 +13,59 @@
 
 namespace pine {
 
+template <typename T, size_t max_static_bytes>
+struct smart_unique_ptr {
+  template <typename U>
+  smart_unique_ptr(psl::unique_ptr<U> rhs) : ptr(psl::unique_ptr<T>(MOVE(rhs))), is_local(false) {
+  }
+  template <typename U>
+  smart_unique_ptr(U x) : is_local(true) {
+    static_assert(sizeof(U) <= max_static_bytes, "");
+    psl::construct_at(local.template ptr<U>(), MOVE(x));
+  }
+  ~smart_unique_ptr() {
+    if (is_local)
+      psl::destruct_at(local.template ptr<T>());
+  }
+  smart_unique_ptr(smart_unique_ptr&& rhs) {
+    if ((is_local = psl::exchange(rhs.is_local, false)))
+      local = rhs.local;
+    else
+      ptr = MOVE(rhs.ptr);
+  }
+  smart_unique_ptr& operator=(smart_unique_ptr&& rhs) {
+    if ((is_local = psl::exchange(rhs.is_local, false)))
+      local = rhs.local;
+    else
+      ptr = MOVE(rhs.ptr);
+    return *this;
+  }
+
+  T* get() {
+    return is_local ? local.template ptr<T>() : ptr.get();
+  }
+  T* get() const {
+    return is_local ? local.template ptr<T>() : ptr.get();
+  }
+  T& operator*() {
+    return *get();
+  }
+  const T& operator*() const {
+    return *get();
+  }
+  T* operator->() {
+    return get();
+  }
+  T* operator->() const {
+    return get();
+  }
+
+private:
+  psl::unique_ptr<T> ptr;
+  psl::Storage<max_static_bytes, 8> local;
+  bool is_local;
+};
+
 struct TypeTag {
   TypeTag() = default;
   TypeTag(psl::string name, bool is_ref = false) : name(psl::move(name)), is_ref(is_ref) {
@@ -81,10 +134,13 @@ auto foward_ref(psl::TypeIdentity<T>& x) {
 }
 
 struct VariableConcept {
+  static constexpr size_t max_static_bytes = 16;
+  using ModelPtr = smart_unique_ptr<VariableConcept, max_static_bytes>;
+
   virtual ~VariableConcept() = default;
-  virtual psl::unique_ptr<VariableConcept> clone() = 0;
-  virtual psl::unique_ptr<VariableConcept> copy() = 0;
-  virtual psl::unique_ptr<VariableConcept> create_ref() = 0;
+  virtual ModelPtr clone() = 0;
+  virtual ModelPtr copy() = 0;
+  virtual ModelPtr create_ref() = 0;
   virtual void* ptr() = 0;
   virtual size_t type_id() const = 0;
   virtual const psl::string& type_name() const = 0;
@@ -95,10 +151,10 @@ struct Variable {
   struct VariableModel : VariableConcept {
     VariableModel(T base) : base{psl::move(base)} {
     }
-    psl::unique_ptr<VariableConcept> clone() override {
+    ModelPtr clone() override {
       return psl::make_unique<VariableModel>(base);
     }
-    psl::unique_ptr<VariableConcept> copy() override {
+    ModelPtr copy() override {
       if constexpr (psl::copyable<R>) {
         if constexpr (psl::is_psl_ref<T>)
           return psl::make_unique<VariableModel<R, R>>(*base);
@@ -108,7 +164,7 @@ struct Variable {
         PINE_UNREACHABLE;
       }
     }
-    psl::unique_ptr<VariableConcept> create_ref() override {
+    ModelPtr create_ref() override {
       if constexpr (psl::is_psl_ref<T>)
         return psl::make_unique<VariableModel<R, T>>(base);
       else
@@ -136,12 +192,18 @@ struct Variable {
   Variable() : Variable(psl::Any()) {
   }
   template <typename T>
-  Variable(T x) : model(psl::make_unique<VariableModel<T, T>>(psl::move(x))) {
+  Variable(T x)
+      : model([&]() -> VariableConcept::ModelPtr {
+          if constexpr (sizeof(VariableModel<T, T>) > VariableConcept::max_static_bytes)
+            return psl::make_unique<VariableModel<T, T>>(MOVE(x));
+          else
+            return VariableModel<T, T>(MOVE(x));
+        }()) {
   }
   template <typename T>
-  Variable(psl::Ref<T> x) : model(psl::make_unique<VariableModel<T, psl::Ref<T>>>(psl::move(x))) {
+  Variable(psl::Ref<T> x) : model(VariableModel<T, psl::Ref<T>>(MOVE(x))) {
   }
-  Variable(psl::unique_ptr<VariableConcept> model) : model(psl::move(model)) {
+  Variable(VariableConcept::ModelPtr model) : model(psl::move(model)) {
   }
   Variable(const Variable& rhs) : model(rhs.model->clone()) {
   }
@@ -187,7 +249,7 @@ struct Variable {
   }
 
 private:
-  psl::unique_ptr<VariableConcept> model;
+  VariableConcept::ModelPtr model;
 };
 
 psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes);

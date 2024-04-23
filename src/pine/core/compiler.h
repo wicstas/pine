@@ -225,9 +225,21 @@ struct Stack {
   size_t size() const {
     return storage.size();
   }
+  auto begin() {
+    return storage.begin();
+  }
+  auto begin() const {
+    return storage.begin();
+  }
+  auto end() {
+    return storage.end();
+  }
+  auto end() const {
+    return storage.end();
+  }
 
 private:
-  psl::context_vector<T> storage;
+  psl::vector<T> storage;
 };
 
 struct VirtualMachine {

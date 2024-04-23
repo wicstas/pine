@@ -470,21 +470,13 @@ private:
 
 template <size_t bytes, size_t align_>
 struct Storage {
-  template <typename T>
-  void operator=(const T& x) {
-    static_assert(!psl::same_as<T, Storage>, "");
-    static_assert(align_ % alignof(T) == 0, "");
-    psl::memcpy(data, &x, sizeof(T));
+  template <typename T = void>
+  T* ptr() {
+    return (T*)data;
   }
-
-  template <typename T>
-  T& as() {
-    static_assert(align_ % alignof(T) == 0, "");
-    return *reinterpret_cast<T*>(data);
-  }
-
-  void* ptr() const {
-    return const_cast<unsigned char*>(data);
+  template <typename T = void>
+  T* ptr() const {
+    return (T*)data;
   }
 
 private:
