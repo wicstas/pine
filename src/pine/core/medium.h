@@ -10,7 +10,7 @@
 namespace pine {
 
 struct HomogeneousMedium {
-  HomogeneousMedium(Shape shape, vec3 sigma_a, vec3 sigma_s);
+  HomogeneousMedium(Shape shape, PhaseFunction pf, vec3 sigma_a, vec3 sigma_s);
   ~HomogeneousMedium();  // = default
 
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
@@ -23,31 +23,14 @@ private:
   psl::shared_ptr<Scene> scene;
   AABB aabb;
   Accel accel;
+  PhaseFunction pf;
   vec3 sigma_s;
   vec3 sigma_z;
   float max_dim;
 };
 
-struct MajorantGrid {
-  struct Node {
-    float majorant;
-  };
-
-  struct Traverer {
-    Ray ray;
-    MajorantGrid& grid;
-  };
-
-  Traverer traver(const Ray& ray) {
-    return Traverer{ray, *this};
-  }
-
-private:
-  Array3d<Node> grid;
-};
-
 struct VDBMedium {
-  VDBMedium(psl::string filename, mat4 transform, vec3 sigma_a, vec3 sigma_s,
+  VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec3 sigma_a, vec3 sigma_s,
             float blackbody_intensity = 1.0f, float temperature_scale = 1.0f);
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
@@ -59,14 +42,16 @@ private:
   psl::opaque_shared_ptr density_handle;
   psl::opaque_shared_ptr flame_handle;
   psl::opaque_shared_ptr temperature_handle;
-  void* density_grid;
-  void* flame_grid;
-  void* temperature_grid;
+  void* density_grid = nullptr;
+  void* flame_grid = nullptr;
+  void* temperature_grid = nullptr;
   OBB bbox;
-  vec3 sigma_majs;
-  vec3 sigma_maj_invs;
+  PhaseFunction pf;
   float sigma_maj;
   float sigma_maj_inv;
+  float sigma_a_;
+  float sigma_s_;
+  float sigma_z_;
   vec3 sigma_a;
   vec3 sigma_s;
   vec3 sigma_z;
@@ -78,8 +63,8 @@ private:
 };
 
 struct LambdaMedium {
-  LambdaMedium(mat4 transform, psl::function<float(vec3)> density, vec3 sigma_a, vec3 sigma_s,
-               float blackbody_intensity = 1.0f, float temperature_scale = 1.0f);
+  LambdaMedium(mat4 transform, psl::function<float(vec3)> density, PhaseFunction pf, vec3 sigma_a,
+               vec3 sigma_s);
   psl::optional<MediumInteraction> intersect_tr(const Ray& ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const;
   AABB get_aabb() const {
@@ -88,18 +73,16 @@ struct LambdaMedium {
 
 private:
   psl::function<float(vec3)> density;
-  psl::function<float(vec3)> temperature;
-  psl::function<float(vec3)> flame;
   OBB bbox;
-  vec3 sigma_majs;
-  vec3 sigma_maj_invs;
+  PhaseFunction pf;
   float sigma_maj;
   float sigma_maj_inv;
+  float sigma_a_;
+  float sigma_s_;
+  float sigma_z_;
   vec3 sigma_a;
   vec3 sigma_s;
   vec3 sigma_z;
-  float blackbody_intensity = 1.0f;
-  float temperature_scale = 1.0f;
 };
 
 struct Medium : psl::variant<HomogeneousMedium, VDBMedium, LambdaMedium> {

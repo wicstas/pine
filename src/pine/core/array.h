@@ -44,7 +44,7 @@ struct Array2d {
       else if constexpr (psl::same_as<T, vec3u8> && psl::same_as<U, vec3>)
         result[p] = vec3u8(min(pow(x, 1 / 2.2f) * 256, vec3(255)));
       else
-        static_assert(false, "not supported");
+        static_assert(psl::deferred_bool<false, U>, "not supported");
     });
     return result;
   }

@@ -56,7 +56,7 @@ inline float balance_heuristic(float pF, float pG) {
   return pF / (pF + pG);
 }
 
-inline bool with_prob(float prob, auto& u) {
+inline bool with_prob(float prob, float& u) {
   if (u < prob) {
     u /= prob;
     return true;

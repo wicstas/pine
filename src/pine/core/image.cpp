@@ -15,6 +15,19 @@ vec4 Image::operator[](vec2i p) const {
       return vec4(value);
   });
 }
+vec4 Image::filtered(vec2 p) const {
+  auto& img = *this;
+  using psl::ceil;
+  using psl::floor;
+  using psl::fract;
+  auto c0 = img[{floor(p.x), floor(p.y)}];
+  auto c1 = img[{ceil(p.x), floor(p.y)}];
+  auto c2 = img[{floor(p.x), ceil(p.y)}];
+  auto c3 = img[{ceil(p.x), ceil(p.y)}];
+  auto cy0 = lerp(fract(p.x), c0, c1);
+  auto cy1 = lerp(fract(p.x), c2, c3);
+  return lerp(fract(p.y), cy0, cy1);
+}
 
 float mse(const Image& a, const Image& b) {
   CHECK_EQ(a.size(), b.size());

@@ -17,7 +17,7 @@ psl::shared_ptr<pine::Geometry> Scene::add_geometry(Shape shape,
   std::lock_guard<std::mutex> lock{mutex};
   if (material->is<SubsurfaceMaterial>()) {
     auto sigma_s = material->as<SubsurfaceMaterial>().sigma_s;
-    add_medium(Medium(HomogeneousMedium(shape, sigma_s / 8, sigma_s)));
+    add_medium(Medium(HomogeneousMedium(shape, HgPhaseFunction(0.0f), sigma_s / 8, sigma_s)));
   }
   geometries.push_back(psl::make_shared<Geometry>(psl::move(shape), material));
   if (geometries.back()->material->is<EmissiveMaterial>())

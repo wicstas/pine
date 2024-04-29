@@ -41,11 +41,10 @@ RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
   auto it = SurfaceInteraction();
   auto hit_surface = intersect(ray, it);
 
-  auto mray = ray;
   auto mit = psl::optional<MediumInteraction>();
   for (size_t i = 0; i < scene->mediums.size(); i++) {
-    if (mit.accept(scene->mediums[i].intersect_tr(mray, sampler)))
-      mit->medium_index = uint32_t(i);
+    if (mit.accept(scene->mediums[i].intersect_tr(ray, sampler)))
+      ray.tmax = mit->t;
   }
 
   if (hit_surface)
@@ -53,14 +52,11 @@ RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
   else
     return {psl::move(mit), psl::nullopt};
 }
-vec3 RTIntegrator::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler,
-                                 int skip_medium_index) const {
+vec3 RTIntegrator::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler, int) const {
   auto tr = vec3(1.0f);
   auto N = int(scene->mediums.size());
-  for (int i = 0; i < N; i++) {
-    if (i != skip_medium_index)
-      tr *= scene->mediums[i].transmittance(p, d, tmax, sampler);
-  }
+  for (int i = 0; i < N; i++)
+    tr *= scene->mediums[i].transmittance(p, d, tmax, sampler);
   return tr;
 }
 

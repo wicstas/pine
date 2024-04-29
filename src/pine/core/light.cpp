@@ -91,9 +91,9 @@ float Sky::pdf(const Interaction& it, vec3 wo) const {
     return 1 / (4 * Pi);
 }
 
-static vec2i sc2ic(vec2 sc, vec2i image_size) {
-  auto ic = vec2i{sc * image_size};
-  return clamp(ic, vec2i{0}, image_size - vec2i{1});
+static vec2 sc2ic(vec2 sc, vec2i image_size) {
+  auto ic = sc * image_size;
+  return clamp(ic, vec2(0), image_size - vec2(1));
 }
 static vec2 ic2sc(vec2 ic, vec2i image_size) {
   return ic / image_size;
@@ -136,7 +136,7 @@ ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint, float elevation, fl
     : image{psl::move(image_)}, tint{tint} {
   CHECK(image);
   auto density = Array2d<float>{image->size()};
-  for_2d(image->size(), [&](auto p) { density[p] = length((*image)[p]); });
+  for_2d(image->size(), [&](auto p) { density[p] = length((vec3)(*image)[p]); });
   distr = Distribution2D(density, 20);
   if (elevation != 0.0f || rotation != 0.0f) {
     l2w = rotate_x(elevation * Pi) * rotate_y(rotation * Pi * 2);
@@ -149,7 +149,7 @@ vec3 ImageSky::color(vec3 wo) const {
   psl::swap(wo.y, wo.z);
   auto sc = inverse_uniform_sphere(wo);
   auto ic = sc2ic(sc, image->size());
-  return tint * (vec3)(*image)[ic];
+  return tint * (vec3)image->filtered(ic);
 }
 psl::optional<LightSample> ImageSky::sample(const Interaction&, vec2 u2) const {
   auto ls = LightSample{};

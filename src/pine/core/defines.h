@@ -9,9 +9,11 @@
 #define PINE_UNLIKELY(x) __builtin_expect(x, false)
 #define PINE_RESTRICT __restrict
 #define PINE_ALWAYS_INLINE __attribute__((always_inline))
-#define PINE_UNREACHABLE                                            \
-  Fatal("Should never be_ reached[", __FILE__, ":", __LINE__, "]"); \
-  __builtin_unreachable();
+#define PINE_UNREACHABLE                                              \
+  {                                                                   \
+    Fatal("Should never be_ reached[", __FILE__, ":", __LINE__, "]"); \
+    __builtin_unreachable();                                          \
+  }
 #else
 #define PINE_LIKELY(x) x
 #define PINE_UNLIKELY(x) x

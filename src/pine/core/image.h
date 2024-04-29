@@ -12,6 +12,7 @@ struct Image : psl::variant<Array2d<vec3u8>, Array2d<vec4u8>, Array2d<vec3>, Arr
   using variant::variant;
 
   vec4 operator[](vec2i p) const;
+  vec4 filtered(vec2 p) const;
 
   vec2i size() const {
     return dispatch([](auto&& x) { return x.size(); });

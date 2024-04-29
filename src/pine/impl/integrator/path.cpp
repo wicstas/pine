@@ -61,39 +61,41 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
 
   if (mit) {
     auto lo = vec3(0.0f);
-    if (mit->le)
-      lo += *mit->le;
-    else if (pv.length + 1 < max_path_length) {
-      if (!pv.inside_subsurface)
-        if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
-          if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {
-            auto tr = transmittance(mit->p, ls->wo, ls->distance, sampler);
-            auto f = mit->pg.f(wi, ls->wo);
-            if (ls->light->is_delta()) {
-              lo += ls->le * tr * f / ls->pdf;
-            } else {
-              auto mis = balance_heuristic(ls->pdf, mit->pg.pdf(wi, ls->wo));
-              lo += ls->le * tr * f / ls->pdf * mis;
+    auto rr = psl::min(average(mit->W), 1.0f);
+    if (with_probability(rr, sampler)) {
+      if (mit->le) {
+        lo += *mit->le;
+      } else if (pv.length + 1 < max_path_length) {
+        if (!pv.inside_subsurface)
+          if (auto ls = light_sampler.sample(*mit, sampler.get1d(), sampler.get2d())) {
+            if (!hit(Ray(mit->p, ls->wo, 0.0f, ls->distance))) {
+              auto tr = transmittance(mit->p, ls->wo, ls->distance, sampler);
+              auto f = mit->pg.f(wi, ls->wo);
+              if (ls->light->is_delta()) {
+                lo += ls->le * tr * f / ls->pdf;
+              } else {
+                auto mis = balance_heuristic(ls->pdf, mit->pg.pdf(wi, ls->wo));
+                lo += ls->le * tr * f / ls->pdf * mis;
+              }
             }
           }
+        auto ps = mit->pg.sample(wi, sampler.get2d());
+        auto nv = Vertex(pv.length + 1, *mit, ps.pdf, false, pv.inside_subsurface);
+        auto rr = psl::min(pv.length <= 1 ? 1.0f : ps.f / ps.pdf, 1.0f);
+        if (with_probability(rr, sampler)) {
+          auto [Li, light_pdf] = radiance(scene, Ray(mit->p, ps.wo), sampler, nv);
+          auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
+          lo += Li * (ps.f / ps.pdf * mis / rr);
         }
-      auto ps = mit->pg.sample(wi, sampler.get2d());
-      auto nv = Vertex(pv.length + 1, *mit, ps.pdf, false, pv.inside_subsurface);
-      auto rr = psl::min(pv.length <= 1 ? 1.0f : ps.f / ps.pdf, 1.0f);
-      if (with_probability(rr, sampler)) {
-        auto [Li, light_pdf] = radiance(scene, Ray(mit->p, ps.wo), sampler, nv);
-        auto mis = light_pdf ? balance_heuristic(ps.pdf, *light_pdf) : 1.0f;
-        lo += Li * (ps.f / ps.pdf * mis / rr);
       }
+      Lo += lo * mit->W / rr;
     }
-    auto Tr = transmittance(ray.o, ray.d, mit->t, sampler, mit->medium_index);
-    Lo += lo * Tr * mit->W;
+    return result;
   }
 
-  auto Tr = transmittance(ray.o, ray.d, ray.tmax, sampler);
   if (!it) {
     if (scene.env_light) {
-      Lo += Tr * scene.env_light->color(ray.d);
+      Lo += scene.env_light->color(ray.d);
       if (!pv.is_delta)
         result.light_pdf = scene.env_light->pdf(pv.it, ray.d);
     }
@@ -101,7 +103,7 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   }
 
   if (it->material().is<EmissiveMaterial>()) {
-    Lo += Tr * it->material().le({*it, wi});
+    Lo += it->material().le({*it, wi});
     if (!pv.is_delta)
       result.light_pdf = light_sampler.pdf(pv.it, *it, ray);
     return result;
@@ -111,39 +113,36 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
     return result;
 
   auto lo = vec3(0.0f);
-  if (auto rr_m = average(Tr); with_probability(rr_m, sampler)) {
-    if (!it->material().is_delta(*it)) {
-      if (auto ls = light_sampler.sample(*it, sampler.get1d(), sampler.get2d())) {
-        if (!hit(it->spawn_ray(ls->wo, ls->distance))) {
-          auto cosine = absdot(ls->wo, it->n);
-          auto tr = transmittance(it->p, ls->wo, ls->distance, sampler);
-          if (ls->light->is_delta()) {
-            auto f = it->material().f({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
-            lo += ls->le * tr * cosine * f / ls->pdf;
-          } else {
-            auto [f, bsdf_pdf] = it->material().f_pdf({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
-            auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
-            lo += ls->le * tr * cosine * f / ls->pdf * mis;
-          }
+  if (!it->material().is_delta(*it)) {
+    if (auto ls = light_sampler.sample(*it, sampler.get1d(), sampler.get2d())) {
+      if (!hit(it->spawn_ray(ls->wo, ls->distance))) {
+        auto cosine = absdot(ls->wo, it->n);
+        auto tr = transmittance(it->p, ls->wo, ls->distance, sampler);
+        if (ls->light->is_delta()) {
+          auto f = it->material().f({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+          lo += ls->le * tr * cosine * f / ls->pdf;
+        } else {
+          auto [f, bsdf_pdf] = it->material().f_pdf({*it, wi, ls->wo, pv.is_delta ? 0.0f : 0.2f});
+          auto mis = balance_heuristic(ls->pdf, bsdf_pdf);
+          lo += ls->le * tr * cosine * f / ls->pdf * mis;
         }
       }
     }
-
-    if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
-      auto cosine = absdot(bs->wo, it->n);
-      auto nv =
-          Vertex(pv.length + 1, *it, bs->pdf, it->material().is_delta(*it), bs->enter_subsurface);
-      auto albedo = luminance(cosine * bs->f / bs->pdf);
-      auto rr = psl::min(pv.length <= 1 ? 1.0f : albedo, 1.0f);
-      if (with_probability(rr, sampler)) {
-        auto [Li, light_pdf] = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);
-        auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
-        lo += Li * bs->f * (cosine / bs->pdf * mis / rr);
-      }
-    }
-    lo /= rr_m;
   }
-  Lo += lo * Tr;
+
+  if (auto bs = it->material().sample({*it, wi, sampler.get1d(), sampler.get2d()})) {
+    auto cosine = absdot(bs->wo, it->n);
+    auto nv =
+        Vertex(pv.length + 1, *it, bs->pdf, it->material().is_delta(*it), bs->enter_subsurface);
+    auto albedo = luminance(cosine * bs->f / bs->pdf);
+    auto rr = psl::min(pv.length <= 1 ? 1.0f : albedo, 1.0f);
+    if (with_probability(rr, sampler)) {
+      auto [Li, light_pdf] = radiance(scene, it->spawn_ray(bs->wo), sampler, nv);
+      auto mis = light_pdf ? balance_heuristic(bs->pdf, *light_pdf) : 1.0f;
+      lo += Li * bs->f * (cosine / bs->pdf * mis / rr);
+    }
+  }
+  Lo += lo;
 
   return result;
 }

@@ -224,7 +224,7 @@ CachedPathIntegrator::RadianceResult CachedPathIntegrator::radiance(Scene& scene
       if (learning_phase)
         stree.add_sample(mit->p, wi, lo);
     }
-    auto Tr = transmittance(ray.o, ray.d, mit->t, sampler, mit->medium_index);
+    auto Tr = transmittance(ray.o, ray.d, mit->t, sampler);
     Lo += lo * Tr * mit->W;
   }
 

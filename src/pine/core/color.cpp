@@ -12,14 +12,14 @@ vec3 uncharted2_filmic(vec3 v) {
   return mapping(v * 2.0f) * vec3(1.0f) / mapping(vec3(11.2f));
 }
 
-vec3 ACES(vec3 v) {
+vec3 ACES(vec3 x) {
   float a = 2.51f;
-  vec3 b = vec3(0.03f);
+  float b = 0.03f;
   float c = 2.43f;
-  vec3 d = vec3(0.59f);
-  vec3 e = vec3(0.14f);
-  v = v * (a * v + b) / (v * (c * v + d) + e);
-  return clamp(pow(0.2f * v * (a * v + b) / (v * (c * v + d) + e), 0.4f), vec3(0.0f), vec3(1.0f));
+  float d = 0.59f;
+  float e = 0.14f;
+  auto r = (x * (a * x + vec3(b))) / (x * (c * x + vec3(d)) + vec3(e));
+  return clamp(r, vec3(0), vec3(1));
 }
 
 vec3 color_map(float v) {
