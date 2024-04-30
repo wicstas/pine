@@ -164,6 +164,14 @@ struct Array2d {
       val = T();
   }
 
+  psl::string to_string() const {
+    auto res = psl::string("[");
+    for (const auto &val : data_)
+      res += psl::to_string(val) + ' ';
+    res.back() = ']';
+    return res;
+  }
+
 private:
   vec2i size_;
   psl::vector<T> data_;
@@ -252,6 +260,14 @@ struct Array3d {
   void set_to_zero() {
     for (auto &val : data_)
       val = T();
+  }
+
+  psl::string to_string() const {
+    auto res = psl::string("[");
+    for (const auto &val : data_)
+      res += psl::to_string(val) + ' ';
+    res.back() = ']';
+    return res;
   }
 
 private:

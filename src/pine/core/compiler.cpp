@@ -1323,7 +1323,7 @@ struct Parser {
         ;
     }
 
-    for (auto [ctor, init_size] : psl::tie(ctors, ctor_init_sizes))
+    for (auto [ctor, init_size] : psl::tie_adapter(ctors, ctor_init_sizes))
       for (const auto& member : members) {
         auto loc = ctor.sl;
         CHECK_GE(ctor.block.elems.size(), 1);

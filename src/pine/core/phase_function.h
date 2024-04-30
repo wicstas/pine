@@ -33,6 +33,20 @@ private:
   float g;
 };
 
+struct TwoLobeHgPhaseFunction {
+  TwoLobeHgPhaseFunction(float g0, float g1, float w) : g0(g0), g1(g1), w(w) {
+  }
+
+  PhaseFunctionSample sample(vec3 wi, vec2 u) const;
+  float f(vec3 wi, vec3 wo) const;
+  float pdf(vec3 wi, vec3 wo) const {
+    return f(wi, wo);
+  }
+
+private:
+  float g0, g1, w;
+};
+
 struct CloudPhaseFunction {
   CloudPhaseFunction(float d = 10.0f);
 
@@ -51,7 +65,7 @@ private:
   float w;
 };
 
-struct PhaseFunction : psl::variant<HgPhaseFunction, CloudPhaseFunction> {
+struct PhaseFunction : psl::variant<HgPhaseFunction, TwoLobeHgPhaseFunction, CloudPhaseFunction> {
   using variant::variant;
 
   PhaseFunctionSample sample(vec3 wi, vec2 u) const {

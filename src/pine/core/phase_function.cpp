@@ -72,7 +72,7 @@ float sample_draine_cos(float xi, float g, float a) {
   const float T4a = 432 * T1a3 + T2 + 432 * (a - a * g2) * T3 * T3;
   const float T4b = -144 * a * g2 + 288 * a * g4 - 144 * a * g6;
   const float T4b3 = T4b * T4b * T4b;
-  const float T4 = T4a + ::sqrt(-4 * T4b3 + T4a * T4a);
+  const float T4 = T4a + psl::sqrt(-4 * T4b3 + T4a * T4a);
   const float T4p3 = psl::pow(T4, 1.0f / 3.0f);
   const float T6 =
       (2 * T1a + (48 * psl::pow(2.0f, 1.0f / 3.0f) * (-(a * g2) + 2 * a * g4 - a * g6)) / T4p3 +
@@ -80,11 +80,32 @@ float sample_draine_cos(float xi, float g, float a) {
       (a - a * g2);
   const float T5 = 6 * (1 + g2) + T6;
   return (1 + g2 -
-          psl::powi(
-              -0.5f * psl::sqrt(T5) +
-                  psl::sqrt(6 * (1 + g2) - (8 * T3) / (a * (-1 + g2) * psl::sqrt(T5)) - T6) / 2.0f,
-              2)) /
+          psl::sqr(-0.5f * psl::sqrt(T5) +
+                   psl::sqrt(6 * (1 + g2) - (8 * T3) / (a * (-1 + g2) * psl::sqrt(T5)) - T6) /
+                       2.0f)) /
          (2.0f * g);
+}
+
+PhaseFunctionSample TwoLobeHgPhaseFunction::sample(vec3 wi, vec2 u) const {
+  auto ps = PhaseFunctionSample();
+  float cos_theta;
+  if (with_prob(w, u[0]))
+    cos_theta = sample_henyey_greenstein(u[0], g1);
+  else
+    cos_theta = sample_henyey_greenstein(u[0], g0);
+  ps.f = psl::lerp(w, eval_henyey_greenstein(cos_theta, g0), eval_henyey_greenstein(cos_theta, g1));
+  ps.pdf = ps.f;
+
+  auto sin_theta = psl::safe_sqrt(1 - sqr(cos_theta));
+  auto phi = 2 * Pi * u[1];
+  ps.wo = coordinate_system(wi) * spherical_to_cartesian(phi, sin_theta, cos_theta);
+
+  return ps;
+}
+
+float TwoLobeHgPhaseFunction::f(vec3 wi, vec3 wo) const {
+  auto cos_theta = dot(wi, wo);
+  return psl::lerp(w, eval_henyey_greenstein(cos_theta, g0), eval_henyey_greenstein(cos_theta, g1));
 }
 
 PhaseFunctionSample HgPhaseFunction::sample(vec3 wi, vec2 u) const {
@@ -108,21 +129,18 @@ CloudPhaseFunction::CloudPhaseFunction(float d) {
 }
 PhaseFunctionSample CloudPhaseFunction::sample(vec3 wi, vec2 u) const {
   auto ps = PhaseFunctionSample();
+  float cos_theta;
   if (with_prob(w, u[0])) {
-    auto cos_theta = sample_draine_cos(u[0], g_d, a);
-    auto sin_theta = psl::safe_sqrt(1 - sqr(cos_theta));
-    auto phi = 2 * Pi * u[1];
-    ps.wo = coordinate_system(wi) * spherical_to_cartesian(phi, sin_theta, cos_theta);
-    ps.pdf = eval_draine(cos_theta, g_d, a);
-    ps.f = ps.pdf;
+    cos_theta = sample_draine_cos(u[0], g_d, a);
   } else {
-    auto cos_theta = sample_henyey_greenstein(u[0], g_hg);
-    auto sin_theta = psl::safe_sqrt(1 - sqr(cos_theta));
-    auto phi = 2 * Pi * u[1];
-    ps.wo = coordinate_system(wi) * spherical_to_cartesian(phi, sin_theta, cos_theta);
-    ps.pdf = eval_henyey_greenstein(cos_theta, g_hg);
-    ps.f = ps.pdf;
+    cos_theta = sample_henyey_greenstein(u[0], g_hg);
   }
+  ps.f = psl::lerp(w, eval_henyey_greenstein(cos_theta, g_hg), eval_draine(cos_theta, g_d, a));
+  ps.pdf = ps.f;
+
+  auto sin_theta = psl::safe_sqrt(1 - sqr(cos_theta));
+  auto phi = 2 * Pi * u[1];
+  ps.wo = coordinate_system(wi) * spherical_to_cartesian(phi, sin_theta, cos_theta);
 
   return ps;
 }

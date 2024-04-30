@@ -66,7 +66,7 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
-# src/pine/core/gui.cpp
+src/pine/core/jit.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
@@ -116,16 +116,25 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 add_subdirectory(src/contrib/embree)
-find_package(OpenImageDenoise REQUIRED)
-target_link_libraries(pinelib psl Threads::Threads embree OpenImageDenoise_common OpenImageDenoise)
+#find_package(OpenImageDenoise REQUIRED)
+find_package(LLVM 17 REQUIRED CONFIG)
+llvm_map_components_to_libnames(llvm_libs 
+Core
+ExecutionEngine
+Interpreter
+MC
+MCJIT
+Support
+nativecodegen)
+target_link_libraries(pinelib psl Threads::Threads embree)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
-target_link_libraries(pine pinelib  ${llvm_libs})
+target_link_libraries(pine pinelib ${llvm_libs})
 
 #Gltf tool
-add_executable(gltf-tool src/cli/gltf-tool.cpp)
-target_link_libraries(gltf-tool pinelib)
+#add_executable(gltf-tool src/cli/gltf-tool.cpp)
+#target_link_libraries(gltf-tool pinelib)
 
 #Image tool
 #add_executable(image-tool src/cli/image-tool.cpp)

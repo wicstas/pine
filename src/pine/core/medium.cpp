@@ -83,6 +83,70 @@ vec3 HomogeneousMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler&) cons
   }
 }
 
+struct Grid {
+  Grid() = default;
+  Grid(vec3i resolution, nanovdb::FloatGrid* grid) : majorants(resolution) {
+    auto acc = grid->getAccessor();
+    auto mi = grid->indexBBox().min();
+    auto ma = grid->indexBBox().max();
+    for (int i = 0; i < 3; i++) {
+      min[i] = mi[i];
+      max[i] = ma[i];
+    }
+    auto size = max - min;
+    resolution_to_size = resolution / vec3(size);
+    for_3d(min, max, [&](vec3 p) {
+      auto& maj = majorants[(p - min) * resolution_to_size];
+      maj = psl::max(maj, acc(p.x, p.y, p.z));
+    });
+  }
+
+  struct Cell {
+    float maj;
+    float tmax;
+  };
+  psl::optional<Cell> get_cell(vec3 p, vec3 d, float tmin) const {
+    p = p + d * tmin;
+    auto idx = (p - min) * resolution_to_size;
+    if (idx.x < 0 || idx.y < 0 || idx.z < 0 || idx.x >= majorants.size().x ||
+        idx.y >= majorants.size().y || idx.z >= majorants.size().z)
+      return psl::nullopt;
+    auto maj = majorants[idx];
+
+    auto t_x = d.x == 0.0f ? 0.0f
+                           : (d.x > 0 ? psl::ceil(idx.x) - idx.x : psl::floor(idx.x) - idx.x) /
+                                 resolution_to_size.x / d.x;
+    auto t_y = d.y == 0.0f ? 0.0f
+                           : (d.y > 0 ? psl::ceil(idx.y) - idx.y : psl::floor(idx.y) - idx.y) /
+                                 resolution_to_size.y / d.y;
+    auto t_z = d.z == 0.0f ? 0.0f
+                           : (d.z > 0 ? psl::ceil(idx.z) - idx.z : psl::floor(idx.z) - idx.z) /
+                                 resolution_to_size.z / d.z;
+    auto t = psl::min(t_x, t_y, t_z);
+    return Cell{maj, tmin + t};
+  }
+
+private:
+  vec3 min, max, resolution_to_size;
+  Array3d<float> majorants;
+};
+
+auto get_grid_info(nanovdb::FloatGrid* grid) {
+  auto aabb = AABB();
+  auto index_start = vec3(), index_end = vec3();
+  for (int i = 0; i < 3; i++) {
+    aabb.lower[i] = grid->worldBBox().min()[i];
+    aabb.upper[i] = grid->worldBBox().max()[i];
+    index_start[i] = grid->indexBBox().min()[i];
+    index_end[i] = grid->indexBBox().max()[i];
+  }
+  return psl::make_tuple(
+      aabb, inverse(translate(aabb.lower) * scale(aabb.diagonal()) *
+                    scale(1.0f / (index_end - index_start)) * translate(-index_start)));
+}
+
+static Grid g;
+
 VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec3 sigma_a,
                      vec3 sigma_s, float blackbody_intensity, float temperature_scale)
     : pf(pf),
@@ -95,6 +159,9 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
   {
     auto handle = nanovdb::io::readGrid(filename.c_str(), "density");
     auto grid = handle.grid<float>();
+
+    g = Grid(vec3i(32, 32, 32), grid);
+
     if (!grid)
       Fatal("[VDBMedium]`", filename, " `has no density attribute");
     sigma_a_ = average(sigma_a);
@@ -102,38 +169,21 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     sigma_z_ = sigma_a_ + sigma_s_;
     sigma_maj = sigma_z_ * grid->tree().root().getMax();
     sigma_maj_inv = 1.0f / sigma_maj;
-    auto aabb = AABB();
-    auto index_start = vec3(), index_end = vec3();
-    for (int i = 0; i < 3; i++) {
-      aabb.lower[i] = grid->worldBBox().min()[i];
-      aabb.upper[i] = grid->worldBBox().max()[i];
-      index_start[i] = grid->indexBBox().min()[i];
-      index_end[i] = grid->indexBBox().max()[i];
-    }
+    auto [aabb, mat] = get_grid_info(grid);
     bbox = OBB(aabb, transform);
-    world2index = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
-                          scale(1.0f / (index_end - index_start)) * translate(-index_start));
-    this->density_grid = grid;
-    this->density_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+    world2index = mat * inverse(transform);
+    density_grid = grid;
+    density_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
   }
   if (nanovdb::io::hasGrid(filename.c_str(), "flames")) {
     auto handle = nanovdb::io::readGrid(filename.c_str(), "flames");
     auto grid = handle.grid<float>();
     if (grid) {
       Debug("[VDBMedium]", filename, " has flames attribute");
-      auto aabb = AABB();
-      auto index_start = vec3(), index_end = vec3();
-      for (int i = 0; i < 3; i++) {
-        aabb.lower[i] = grid->worldBBox().min()[i];
-        aabb.upper[i] = grid->worldBBox().max()[i];
-        index_start[i] = grid->indexBBox().min()[i];
-        index_end[i] = grid->indexBBox().max()[i];
-      }
-      world2index_flame =
-          inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
-                  scale(1.0f / (index_end - index_start)) * translate(-index_start));
-      this->flame_grid = grid;
-      this->flame_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+      auto [aabb, mat] = get_grid_info(grid);
+      world2index_flame = mat * inverse(transform);
+      flame_grid = grid;
+      flame_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
     }
   }
   if (nanovdb::io::hasGrid(filename.c_str(), "temperature")) {
@@ -141,18 +191,10 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     auto grid = handle.grid<float>();
     if (grid) {
       Debug("[VDBMedium]", filename, " has temperature attribute");
-      auto aabb = AABB();
-      auto index_start = vec3(), index_end = vec3();
-      for (int i = 0; i < 3; i++) {
-        aabb.lower[i] = grid->worldBBox().min()[i];
-        aabb.upper[i] = grid->worldBBox().max()[i];
-        index_start[i] = grid->indexBBox().min()[i];
-        index_end[i] = grid->indexBBox().max()[i];
-      }
-      world2index_tem = inverse(transform * translate(aabb.lower) * scale(aabb.diagonal()) *
-                                scale(1.0f / (index_end - index_start)) * translate(-index_start));
-      this->temperature_grid = grid;
-      this->temperature_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+      auto [aabb, mat] = get_grid_info(grid);
+      world2index_tem = mat * inverse(transform);
+      temperature_grid = grid;
+      temperature_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
     }
   }
 }
@@ -168,38 +210,48 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
   auto u = rng.nextd();
 
-  while (true) {
-    auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_inv;
-    tmin += dt;
-    if (tmin >= tmax)
-      return psl::nullopt;
-    auto cr = pi0 + tmin * di;
-    auto D = density(cr.x, cr.y, cr.z);
-    auto sig_a = sigma_a_ * D;
-    auto sig_s = sigma_s_ * D;
-    auto sig_t = sig_a + sig_s;
-    auto sig_n = sigma_maj - sig_t;
-    auto prob_n = sig_n * sigma_maj_inv;
-    auto prob_s = sig_s * sigma_maj_inv;
-    if (u < prob_n) {  // null-scattering
-      u /= prob_n;
-    } else if (u < prob_n + prob_s) {  // real-scattering
-      return MediumInteraction(tmin, ray(tmin), vec3(1.0f), pf);
-    } else {  // absorption
-      auto blackbody_color = vec3(0.0f);
-      if (flame_grid) {
-        auto pc = world2index_flame * vec4(ray(tmin), 1.0f);
-        auto flame = ((nanovdb::FloatGrid*)flame_grid)->getAccessor()(pc.x, pc.y, pc.z);
-        blackbody_color = vec3(blackbody_intensity * flame);
-        if (temperature_grid) {
-          auto pc = world2index_tem * vec4(ray(tmin), 1.0f);
-          auto T = ((nanovdb::FloatGrid*)temperature_grid)->getAccessor()(pc.x, pc.y, pc.z);
-          blackbody_color *= blackbody(temperature_scale * 4000 * T);
+  tmin = tmin * (1 + 1e-7f) + 1e-7f;
+  while (auto cell = g.get_cell(pi0, di, tmin)) {
+    auto sigma_maj = sigma_z_ * cell->maj;
+    if (sigma_maj > 0.0f) {
+      auto sigma_maj_inv = 1.0f / sigma_maj;
+      while (true) {
+        auto dt = -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+        tmin += dt;
+        if (tmin >= cell->tmax)
+          break;
+        auto cr = pi0 + tmin * di;
+        auto D = density(cr.x, cr.y, cr.z);
+        auto sig_a = sigma_a_ * D;
+        auto sig_s = sigma_s_ * D;
+        auto sig_t = sig_a + sig_s;
+        auto sig_n = sigma_maj - sig_t;
+        auto prob_n = sig_n * sigma_maj_inv;
+        auto prob_s = sig_s * sigma_maj_inv;
+        if (u < prob_n) {  // null-scattering
+          u /= prob_n;
+        } else if (u < prob_n + prob_s) {  // real-scattering
+          return MediumInteraction(tmin, ray(tmin), vec3(1.0f), pf);
+        } else {  // absorption
+          auto blackbody_color = vec3(0.0f);
+          if (flame_grid) {
+            auto pc = world2index_flame * vec4(ray(tmin), 1.0f);
+            auto flame = ((nanovdb::FloatGrid*)flame_grid)->getAccessor()(pc.x, pc.y, pc.z);
+            blackbody_color = vec3(blackbody_intensity * flame);
+            if (temperature_grid) {
+              auto pc = world2index_tem * vec4(ray(tmin), 1.0f);
+              auto T = ((nanovdb::FloatGrid*)temperature_grid)->getAccessor()(pc.x, pc.y, pc.z);
+              blackbody_color *= blackbody(temperature_scale * 4000 * T);
+            }
+          }
+          return MediumInteraction(tmin, ray(tmin), vec3(1.0f), sig_a * blackbody_color);
         }
       }
-      return MediumInteraction(tmin, ray(tmin), vec3(1.0f), sig_a * blackbody_color);
     }
+    tmin = cell->tmax * (1 + 1e-7f) + 1e-7f;
   }
+
+  return psl::nullopt;
 }
 vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
   auto tmin = 0.0f;
@@ -282,8 +334,10 @@ vec3 LambdaMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) c
 
 void medium_context(Context& context) {
   context.type<HgPhaseFunction>("HgPF").ctor<>().ctor<float>();
+  context.type<TwoLobeHgPhaseFunction>("Hg2PF").ctor<float, float, float>();
   context.type<CloudPhaseFunction>("CloudPF").ctor<>().ctor<float>();
-  context.type<PhaseFunction>("PhaseFunction").ctor_variant<HgPhaseFunction, CloudPhaseFunction>();
+  context.type<PhaseFunction>("PhaseFunction")
+      .ctor_variant<HgPhaseFunction, TwoLobeHgPhaseFunction, CloudPhaseFunction>();
 
   context.type<HomogeneousMedium>("HomoMedium").ctor<Shape, PhaseFunction, vec3, vec3>();
   context.type<VDBMedium>("VDBMedium")

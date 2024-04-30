@@ -55,20 +55,57 @@ pair<T, U> make_pair(T a, U b) {
 constexpr auto first_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).first; };
 constexpr auto second_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).second; };
 
-template <typename T, typename... Ts>
-struct tuple {
-  tuple(T value, Ts... rest) : value(static_cast<T&&>(value)), rest{static_cast<Ts&&>(rest)...} {
+template <typename... Ts>
+struct tuple;
+
+template <typename T0>
+struct tuple<T0> {
+  tuple(T0 v0) : v0(FWD(v0)) {
   }
-  T value;
-  tuple<Ts...> rest;
+  template <typename U0>
+  tuple& operator=(const tuple<U0>& rhs) {
+    v0 = rhs.v0;
+    return *this;
+  }
+  T0 v0;
+};
+template <typename T0, typename T1>
+struct tuple<T0, T1> {
+  tuple(T0 v0, T1 v1) : v0(FWD(v0)), v1(FWD(v1)) {
+  }
+  template <typename U0, typename U1>
+  tuple& operator=(const tuple<U0, U1>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+};
+template <typename T0, typename T1, typename T2>
+struct tuple<T0, T1, T2> {
+  tuple(T0 v0, T1 v1, T2 v2) : v0(FWD(v0)), v1(FWD(v1)), v2(FWD(v2)) {
+  }
+  template <typename U0, typename U1, typename U2>
+  tuple& operator=(const tuple<U0, U1, U2>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
 };
 
-template <typename T>
-struct tuple<T> {
-  tuple(T value) : value(static_cast<T&&>(value)) {
-  }
-  T value;
-};
+template <typename... Ts>
+auto make_tuple(Ts... xs) {
+  return tuple<Ts...>(MOVE(xs)...);
+}
+template <typename... Ts>
+auto tie(Ts&... xs) {
+  return tuple<Ts&...>(xs...);
+}
 
 template <typename T, typename F, typename... Ts, typename... Us>
 auto apply(tuple<T, Ts...> t, F&& f, Us... args) {

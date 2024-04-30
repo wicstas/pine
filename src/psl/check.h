@@ -25,7 +25,7 @@ void throw_check_failure(const char* expr, const char* file, int line, const cha
 #define psl_check_always(expr)                                  \
   {                                                             \
     if (!(expr))                                                \
-      throw_check_failure(#expr, __FILE__, __LINE__, __func__); \
+      psl::throw_check_failure(#expr, __FILE__, __LINE__, __func__); \
   }
 
 }  // namespace psl

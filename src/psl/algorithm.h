@@ -727,7 +727,7 @@ auto find_last_of(Range auto&& range, const auto& value) {
 }
 
 template <Range RangeA, Range RangeB>
-auto tie(RangeA&& a, RangeB&& b) {
+auto tie_adapter(RangeA&& a, RangeB&& b) {
   struct Ranger {
     struct Iterator {
       decltype(auto) operator*() {

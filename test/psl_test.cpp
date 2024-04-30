@@ -580,7 +580,7 @@ void test_algorithm() {
   auto xs = _xs_;
   auto ys = xs | psl::reverse_() | psl::to_<psl::vector<int>>();
   auto i = 0;
-  for (auto [x, y] : psl::tie(xs, ys)) {
+  for (auto [x, y] : psl::tie_adapter(xs, ys)) {
     CHECK_EQ(x, xs[i]);
     CHECK_EQ(y, ys[i]);
     i++;
