@@ -8,7 +8,7 @@ namespace pine {
 Plane::Plane(vec3 position, vec3 normal) : position(position), n(normalize(normal)) {
   if (length(n) == 0)
     Fatal("`Plane` can't have degenerated normal");
-  coordinate_system(normal, u, v);
+  coordinate_system(n, u, v);
 }
 bool Plane::hit(const Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / dot(ray.d, n);
@@ -110,8 +110,8 @@ AABB Sphere::get_aabb() const {
   return {c - vec3(r), c + vec3(r)};
 }
 
-Disk::Disk(vec3 position, vec3 normal, float r) : position(position), n(normal), r(r) {
-  coordinate_system(normal, u, v);
+Disk::Disk(vec3 position, vec3 normal, float r) : position(position), n(normalize(normal)), r(r) {
+  coordinate_system(n, u, v);
   if (r < 0.0f)
     Fatal("`Disk` can't have negative radius ", r);
   if (length(n) == 0.0f)
@@ -126,7 +126,7 @@ bool Disk::hit(const Ray& ray) const {
     return false;
   if (t >= ray.tmax)
     return false;
-  vec3 p = ray.o + t * ray.d - position;
+  vec3 p = ray(t) - position;
   if (length_squared(p) > psl::sqr(r))
     return false;
   return true;
@@ -138,7 +138,7 @@ bool Disk::intersect(Ray& ray) const {
   float t = (dot(position, n) - dot(ray.o, n)) / denom;
   if (t < ray.tmin || t > ray.tmax)
     return false;
-  vec3 p = ray.o + t * ray.d - position;
+  vec3 p = ray(t) - position;
   if (length_squared(p) > psl::sqr(r))
     return false;
 
@@ -298,7 +298,7 @@ bool Rect::hit(const Ray& ray) const {
   float t = (dot(position - ray.o, n)) / denom;
   if (t <= ray.tmin || t >= ray.tmax)
     return false;
-  vec3 p = ray.o + t * ray.d - position;
+  vec3 p = ray(t) - position;
   float u = dot(p, rx);
   if (u < -0.5f || u > 0.5f)
     return false;
@@ -314,7 +314,7 @@ bool Rect::intersect(Ray& ray) const {
   float t = (dot(position - ray.o, n)) / denom;
   if (t <= ray.tmin || t >= ray.tmax)
     return false;
-  vec3 p = ray.o + t * ray.d - position;
+  vec3 p = ray(t) - position;
   float u = dot(p, rx);
   if (u < -0.5f || u > 0.5f)
     return false;
@@ -519,10 +519,10 @@ AABB Triangle::get_aabb() const {
 
 Mesh::Mesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> indices_, psl::vector<vec2> texcoords_,
            psl::vector<vec3> normals_)
-    : vertices{psl::move(vertices_)},
-      normals{psl::move(normals_)},
-      texcoords{psl::move(texcoords_)},
-      indices{psl::move(indices_)} {
+    : vertices{MOVE(vertices_)},
+      normals{MOVE(normals_)},
+      texcoords{MOVE(texcoords_)},
+      indices{MOVE(indices_)} {
   if (normals.size() != 0)
     CHECK_EQ(vertices.size(), normals.size());
   if (texcoords.size() != 0)
@@ -595,7 +595,7 @@ Mesh heightmap(const Array2d<float>& height_map) {
     indices[index] = vec3i(p2i(x, y), p2i(x + 1, y), p2i(x + 1, y + 1));
     indices[index + 1] = vec3i(p2i(x, y), p2i(x + 1, y + 1), p2i(x, y + 1));
   });
-  return Mesh(psl::move(vertices), psl::move(indices), psl::move(texcoords));
+  return Mesh(MOVE(vertices), MOVE(indices), MOVE(texcoords));
 }
 
 Mesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function) {
@@ -672,9 +672,7 @@ void geometry_context(Context& ctx) {
   ctx.type<SDF>("SDF")
       .ctor<vec3, vec3, psl::function<float(vec3)>>()
       .ctor<AABB, psl::function<float(vec3)>>();
-  ctx.type<Mesh>("Mesh")
-      .ctor([&ctx](psl::string_view filename) { return ctx.call<Mesh>("load_mesh", filename); })
-      .method("apply", &Mesh::apply);
+  ctx.type<Mesh>("Mesh").method("apply", &Mesh::apply);
   ctx.type<Shape>("Shape")
       .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, Mesh, SDF>();
   ctx.type<InstancedShape>("Instancing")

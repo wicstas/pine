@@ -131,7 +131,7 @@ struct NodeUV {
 
 template <typename T, char op>
 struct NodeBinary {
-  NodeBinary(Mnode<T> a, Mnode<T> b) : a{psl::move(a)}, b(psl::move(b)){};
+  NodeBinary(Mnode<T> a, Mnode<T> b) : a{MOVE(a)}, b(MOVE(b)){};
   T eval(const NodeEvalCtx& ctx) const {
     using psl::pow;
     if constexpr (op == '+')
@@ -154,7 +154,7 @@ private:
 
 template <typename T, char op>
 struct NodeUnary {
-  NodeUnary(Mnode<T> x) : x{psl::move(x)} {};
+  NodeUnary(Mnode<T> x) : x{MOVE(x)} {};
   T eval(const NodeEvalCtx& ctx) const {
     using psl::abs;
     using psl::fract;
@@ -179,7 +179,7 @@ private:
 };
 
 struct NodeComponent {
-  NodeComponent(Mnode<vec3> x, int n) : x{psl::move(x)}, n{n} {
+  NodeComponent(Mnode<vec3> x, int n) : x{MOVE(x)}, n{n} {
     if (n < 0 || n > 2)
       Fatal("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
   };
@@ -193,9 +193,9 @@ private:
 };
 
 struct NodeToVec3 {
-  NodeToVec3(Mnode<float> x) : x{psl::move(x)} {};
+  NodeToVec3(Mnode<float> x) : x{MOVE(x)} {};
   NodeToVec3(Mnode<float> x, Mnode<float> y, Mnode<float> z)
-      : x{psl::move(x)}, y{psl::move(y)}, z{psl::move(z)} {};
+      : x{MOVE(x)}, y{MOVE(y)}, z{MOVE(z)} {};
   vec3 eval(const NodeEvalCtx& ctx) const {
     if (!y)
       return vec3{x(ctx)};
@@ -207,7 +207,7 @@ struct NodeToVec3 {
 };
 
 struct NodeNoisef {
-  NodeNoisef(Node3f p, Nodef octaves) : p{psl::move(p)}, octaves{psl::move(octaves)} {};
+  NodeNoisef(Node3f p, Nodef octaves) : p{MOVE(p)}, octaves{MOVE(octaves)} {};
   float eval(const NodeEvalCtx& ctx) const;
 
 private:
@@ -216,7 +216,7 @@ private:
 };
 
 struct NodeNoise3f {
-  NodeNoise3f(Node3f p, Nodef octaves) : p{psl::move(p)}, octaves{psl::move(octaves)} {};
+  NodeNoise3f(Node3f p, Nodef octaves) : p{MOVE(p)}, octaves{MOVE(octaves)} {};
   vec3 eval(const NodeEvalCtx& ctx) const;
 
 private:
@@ -225,7 +225,7 @@ private:
 };
 
 struct NodeCheckerboard {
-  NodeCheckerboard(Node3f p, float ratio = 0.5f) : p{psl::move(p)}, ratio{ratio} {};
+  NodeCheckerboard(Node3f p, float ratio = 0.5f) : p{MOVE(p)}, ratio{ratio} {};
   float eval(const NodeEvalCtx& ctx) const;
 
 private:
@@ -234,7 +234,7 @@ private:
 };
 
 struct NodeImage {
-  NodeImage(Node3f p, psl::shared_ptr<Image> image) : p{psl::move(p)}, image{psl::move(image)} {};
+  NodeImage(Node3f p, psl::shared_ptr<Image> image) : p{MOVE(p)}, image{MOVE(image)} {};
   vec3 eval(const NodeEvalCtx& ctx) const;
 
 private:
@@ -242,7 +242,7 @@ private:
   psl::shared_ptr<Image> image;
 };
 struct NodeImagef {
-  NodeImagef(Node3f p, psl::shared_ptr<Image> image) : p{psl::move(p)}, image{psl::move(image)} {};
+  NodeImagef(Node3f p, psl::shared_ptr<Image> image) : p{MOVE(p)}, image{MOVE(image)} {};
   float eval(const NodeEvalCtx& ctx) const;
 
 private:
@@ -252,7 +252,7 @@ private:
 
 template <typename T>
 struct NodeFunction {
-  NodeFunction(psl::function<T(NodeEvalCtx)> f) : f(psl::move(f)) {
+  NodeFunction(psl::function<T(NodeEvalCtx)> f) : f(MOVE(f)) {
   }
   T eval(const NodeEvalCtx& ctx) const {
     return f(ctx);
@@ -264,10 +264,10 @@ private:
 
 template <typename T>
 requires psl::one_of<T, Mnode<float>::Types>
-Mnode<float>::Mnode(T value) : value{psl::move(value)} {};
+Mnode<float>::Mnode(T value) : value{MOVE(value)} {};
 inline Mnode<float>::Mnode(float value) : value{NodeConstant{value}} {};
 inline Mnode<float>::Mnode(psl::function<float(NodeEvalCtx)> value)
-    : value{NodeFunction<float>{psl::move(value)}} {};
+    : value{NodeFunction<float>{MOVE(value)}} {};
 inline Mnode<float>::~Mnode() = default;
 inline Mnode<float>::Mnode(Mnode<float>&&) = default;
 inline Mnode<float>::Mnode(const Mnode<float>&) = default;
@@ -279,10 +279,10 @@ inline float Mnode<float>::operator()(const NodeEvalCtx& nc) const {
 
 template <typename T>
 requires psl::one_of<T, Mnode<vec3>::Types>
-Mnode<vec3>::Mnode(T value) : value{psl::move(value)} {};
+Mnode<vec3>::Mnode(T value) : value{MOVE(value)} {};
 inline Mnode<vec3>::Mnode(vec3 value) : value{NodeConstant{value}} {};
 inline Mnode<vec3>::Mnode(psl::function<vec3(NodeEvalCtx)> value)
-    : value{NodeFunction<vec3>{psl::move(value)}} {};
+    : value{NodeFunction<vec3>{MOVE(value)}} {};
 inline Mnode<vec3>::~Mnode() = default;
 inline Mnode<vec3>::Mnode(Mnode<vec3>&&) = default;
 inline Mnode<vec3>::Mnode(const Mnode<vec3>&) = default;

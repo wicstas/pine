@@ -40,7 +40,7 @@ struct LeEvalCtx : NodeEvalCtx {
 };
 
 struct EmissiveMaterial {
-  EmissiveMaterial(Node3f color) : color{psl::move(color)} {
+  EmissiveMaterial(Node3f color) : color{MOVE(color)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx&) const {
@@ -68,7 +68,7 @@ struct EmissiveMaterial {
 };
 
 struct DiffuseMaterial {
-  DiffuseMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
+  DiffuseMaterial(Node3f albedo) : bsdf{MOVE(albedo)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
@@ -94,7 +94,7 @@ struct DiffuseMaterial {
 };
 
 struct MirrorMaterial {
-  MirrorMaterial(Node3f albedo) : bsdf{psl::move(albedo)} {
+  MirrorMaterial(Node3f albedo) : bsdf{MOVE(albedo)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
@@ -121,7 +121,7 @@ private:
 };
 
 struct MetalMaterial {
-  MetalMaterial(Node3f albedo, Nodef roughness) : bsdf{psl::move(albedo), psl::move(roughness)} {
+  MetalMaterial(Node3f albedo, Nodef roughness) : bsdf{MOVE(albedo), MOVE(roughness)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
@@ -148,7 +148,7 @@ struct MetalMaterial {
 
 struct GlossyMaterial {
   GlossyMaterial(Node3f albedo, Nodef roughness, Nodef eta)
-      : bsdf{psl::move(albedo), psl::move(roughness), psl::move(eta)} {
+      : bsdf{MOVE(albedo), MOVE(roughness), MOVE(eta)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
@@ -175,7 +175,7 @@ struct GlossyMaterial {
 
 struct GlassMaterial {
   GlassMaterial(Node3f albedo, Nodef roughness, Nodef eta = 1.4f)
-      : bsdf{psl::move(albedo), psl::move(roughness), psl::move(eta)} {
+      : bsdf{MOVE(albedo), MOVE(roughness), MOVE(eta)} {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
@@ -199,11 +199,36 @@ struct GlassMaterial {
 
   RefractiveDielectricBSDF bsdf;
 };
+struct DispersionMaterial {
+  DispersionMaterial(Node3f albedo) : bsdf{MOVE(albedo)} {
+  }
+
+  psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc) const {
+    return bsdf.sample(mc.wi, mc.u1, mc.u2, mc);
+  }
+  vec3 f(const MaterialEvalCtx& mc) const {
+    return bsdf.f(mc.wi, mc.wo, mc);
+  }
+  float pdf(const MaterialEvalCtx& mc) const {
+    return bsdf.pdf(mc.wi, mc.wo, mc);
+  }
+  vec3 le(const LeEvalCtx&) const {
+    return {};
+  }
+  float roughness_amount(const BxdfEvalCtx& bc) const {
+    return bsdf.roughness_amount(bc);
+  }
+  vec3 albedo(const BxdfEvalCtx& bc) const {
+    return bsdf.albedo(bc);
+  }
+
+  DispersionGlassBSDF bsdf;
+};
 
 template <typename A, typename B>
 struct BlendMaterial {
   BlendMaterial(Nodef factor, A a, B b)
-      : factor(psl::move(factor)), a(psl::move(a)), b(psl::move(b)) {
+      : factor(MOVE(factor)), a(MOVE(a)), b(MOVE(b)) {
   }
 
   psl::optional<BSDFSample> sample(const MaterialSampleCtx& mc_) const {
@@ -329,7 +354,7 @@ struct SubsurfaceMaterial {
 };
 
 struct Material : psl::variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, GlassMaterial,
-                               UberMaterial, SubsurfaceMaterial> {
+                               DispersionMaterial, UberMaterial, SubsurfaceMaterial> {
 public:
   using variant::variant;
 

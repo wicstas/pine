@@ -17,9 +17,9 @@ float get_progress() {
   return g_progress;
 }
 
-RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{psl::move(accel)} {
+RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{MOVE(accel)} {
   spp = sampler.spp();
-  samplers.push_back(psl::move(sampler));
+  samplers.push_back(MOVE(sampler));
 }
 void RTIntegrator::render(Scene& scene) {
   this->scene = &scene;
@@ -48,9 +48,9 @@ RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
   }
 
   if (hit_surface)
-    return {psl::move(mit), psl::move(it)};
+    return {MOVE(mit), MOVE(it)};
   else
-    return {psl::move(mit), psl::nullopt};
+    return {MOVE(mit), psl::nullopt};
 }
 vec3 RTIntegrator::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler, int) const {
   auto tr = vec3(1.0f);

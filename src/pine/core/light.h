@@ -47,7 +47,7 @@ struct DirectionalLight {
   vec3 color;
 };
 struct AreaLight {
-  AreaLight(psl::shared_ptr<Geometry> geometry) : geometry{psl::move(geometry)} {};
+  AreaLight(psl::shared_ptr<Geometry> geometry) : geometry{MOVE(geometry)} {};
 
   psl::optional<LightSample> sample(const Interaction& it, vec2 u2) const;
 

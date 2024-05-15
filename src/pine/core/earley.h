@@ -42,7 +42,7 @@ template <typename T>
 concept GrammarItem_ = is_grammar_item<T>;
 
 struct Sym {
-  Sym(psl::string sym) : sym(psl::move(sym)) {
+  Sym(psl::string sym) : sym(MOVE(sym)) {
   }
   psl::string sym;
 };
@@ -220,7 +220,7 @@ struct Object {
   template <typename T, bool final_ = false>
   struct Model : Concept {
     Model() = default;
-    Model(T base) : base{psl::move(base)} {
+    Model(T base) : base{MOVE(base)} {
     }
     psl::unique_ptr<Concept> make_optional() const override {
       CHECK(!final_);
@@ -237,7 +237,7 @@ struct Object {
     }
     void move_append(Object &vector) override {
       CHECK(!final_);
-      vector.as<psl::vector<T>>().push_back(psl::move(base));
+      vector.as<psl::vector<T>>().push_back(MOVE(base));
     }
     psl::unique_ptr<Concept> clone() const override {
       return psl::make_unique<Model>(*this);
@@ -258,7 +258,7 @@ struct Object {
 
   Object() = default;
   template <typename T>
-  Object(T base) : model(psl::make_unique<Model<T>>(psl::move(base))) {
+  Object(T base) : model(psl::make_unique<Model<T>>(MOVE(base))) {
   }
 
   Object(Object &&) = default;
@@ -267,7 +267,7 @@ struct Object {
       model = rhs.model->clone();
   }
   Object &operator=(Object rhs) {
-    model = psl::move(rhs.model);
+    model = MOVE(rhs.model);
     return *this;
   }
 

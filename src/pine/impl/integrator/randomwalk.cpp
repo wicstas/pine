@@ -4,7 +4,7 @@
 namespace pine {
 
 RandomWalkIntegrator::RandomWalkIntegrator(Accel accel, Sampler sampler, int max_path_length)
-    : RayIntegrator{psl::move(accel), psl::move(sampler)}, max_path_length{max_path_length} {
+    : RayIntegrator{MOVE(accel), MOVE(sampler)}, max_path_length{max_path_length} {
   if (max_path_length <= 0)
     Fatal("`RandomWalkIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }

@@ -7,7 +7,8 @@
 namespace psl {
 
 template <typename Key, typename Value, typename Pred = less<>>
-struct map : std::map<Key, Value, Pred> {};
+struct map : std::map<Key, Value, Pred> {
+};
 
 template <typename Key, typename Value, typename Pred = less<>>
 struct multimap : std::multimap<Key, Value, Pred> {};

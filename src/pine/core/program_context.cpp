@@ -1,4 +1,4 @@
-#include <pine/core/interpreter.h>
+#include <pine/core/program_context.h>
 #include <pine/core/compiler.h>
 #include <pine/core/parallel.h>
 #include <pine/core/fileio.h>
@@ -18,7 +18,7 @@
 
 namespace pine {
 
-Context get_default_context() {
+Context get_program_context() {
   auto ctx = Context{};
   math_context(ctx);
   vecmath_context(ctx);
@@ -48,7 +48,7 @@ Context get_default_context() {
       .method("hit", &RayIntegrator::hit);
   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
       .ctor(+[](Sampler sampler, psl::function<vec3(RayIntegrator &, Ray, Sampler &)> f) {
-        return CustomRayIntegrator(EmbreeAccel(), sampler, psl::move(f));
+        return CustomRayIntegrator(EmbreeAccel(), sampler, MOVE(f));
       })
       .method("render", &CustomRayIntegrator::render);
   ctx.type<AOIntegrator>("AOIntegrator")
@@ -94,12 +94,6 @@ Context get_default_context() {
       +[](Scene &scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
 
   return ctx;
-}
-
-void interpret(Context &context, psl::string source) {
-  auto bytecodes = compile(context, std::move(source));
-
-  execute(context, bytecodes);
 }
 
 }  // namespace pine

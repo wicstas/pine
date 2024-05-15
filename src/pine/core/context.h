@@ -68,7 +68,7 @@ private:
 
 struct TypeTag {
   TypeTag() = default;
-  TypeTag(psl::string name, bool is_ref = false) : name(psl::move(name)), is_ref(is_ref) {
+  TypeTag(psl::string name, bool is_ref = false) : name(MOVE(name)), is_ref(is_ref) {
   }
 
   psl::string sig() const {
@@ -88,17 +88,17 @@ inline psl::string to_string(const TypeTag& type) {
 
 template <typename F, typename R, typename... Args>
 struct Lambda {
-  Lambda(F lambda) : lambda(psl::move(lambda)) {
+  Lambda(F lambda) : lambda(MOVE(lambda)) {
   }
   F lambda;
 };
 template <typename R, typename... Args, typename F>
 auto tag(F lambda) {
-  return Lambda<F, R, Args...>(psl::move(lambda));
+  return Lambda<F, R, Args...>(MOVE(lambda));
 }
 template <typename... Args, typename F>
 auto lambda(F lambda) {
-  return Lambda<F, psl::ReturnType<F, Args...>, Args...>(psl::move(lambda));
+  return Lambda<F, psl::ReturnType<F, Args...>, Args...>(MOVE(lambda));
 }
 template <typename T, typename U, typename R, typename... Args>
 auto derived(R (U::*f)(Args...)) {
@@ -149,7 +149,7 @@ struct VariableConcept {
 struct Variable {
   template <typename R, typename T>
   struct VariableModel : VariableConcept {
-    VariableModel(T base) : base{psl::move(base)} {
+    VariableModel(T base) : base{MOVE(base)} {
     }
     ModelPtr clone() override {
       return psl::make_unique<VariableModel>(base);
@@ -203,7 +203,7 @@ struct Variable {
   template <typename T>
   Variable(psl::Ref<T> x) : model(VariableModel<T, psl::Ref<T>>(MOVE(x))) {
   }
-  Variable(VariableConcept::ModelPtr model) : model(psl::move(model)) {
+  Variable(VariableConcept::ModelPtr model) : model(MOVE(model)) {
   }
   Variable(const Variable& rhs) : model(rhs.model->clone()) {
   }
@@ -261,6 +261,11 @@ struct Function {
     virtual Variable call(psl::span<const Variable*> args) = 0;
     virtual TypeTag rtype() const = 0;
     virtual psl::span<const TypeTag> ptypes() const = 0;
+    virtual const psl::string& name() const = 0;
+
+    virtual void* ptr() const = 0;
+    virtual void* object_ptr() const = 0;
+    virtual size_t byte_size() const = 0;
   };
 
   template <typename Repr, typename F>
@@ -269,8 +274,11 @@ struct Function {
   struct FunctionModel<Repr, R(Args...)> : FunctionConcept {
     static_assert(sizeof...(Args) <= 8, "Function can only have up to 8 parameters");
 
-    FunctionModel(Repr f, TypeTag rtype, psl::vector<TypeTag> ptypes)
-        : f(psl::move(f)), rtype_(psl::move(rtype)), ptypes_(psl::move(ptypes)) {
+    FunctionModel(Repr f, TypeTag rtype, psl::vector<TypeTag> ptypes, psl::string name)
+        : f(MOVE(f)),
+          rtype_(MOVE(rtype)),
+          ptypes_(MOVE(ptypes)),
+          name_(MOVE(name)) {
     }
 
     Variable call(psl::span<const Variable*> args) override {
@@ -306,36 +314,58 @@ struct Function {
     psl::span<const TypeTag> ptypes() const override {
       return ptypes_;
     }
+    const psl::string& name() const override {
+      return name_;
+    }
+    void* ptr() const override {
+      return (void*)+[](uint8_t* ptr) {
+        auto& f = *(Repr*)ptr;
+        ptr += sizeof(Repr);
+        if constexpr (psl::is_void<R>)
+          psl::apply(*(psl::tuple<Args...>*)(ptr), f);
+        else
+          new ((R*)ptr) R(psl::apply(*(psl::tuple<Args...>*)(ptr + sizeof(R)), f));
+      };
+    }
+    void* object_ptr() const override {
+      return (void*)&f;
+    }
+    size_t byte_size() const override {
+      return sizeof(Repr);
+    }
 
   private:
     Repr f;
     TypeTag rtype_;
     psl::vector<TypeTag> ptypes_;
+    psl::string name_;
   };
 
   template <typename R, typename... Args>
-  Function(R (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes)
-      : model(psl::make_shared<FunctionModel<R (*)(Args...), R(Args...)>>(f, psl::move(rtype),
-                                                                          psl::move(ptypes))) {
+  Function(R (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes, psl::string name = "<>")
+      : model(psl::make_shared<FunctionModel<R (*)(Args...), R(Args...)>>(
+            f, MOVE(rtype), MOVE(ptypes), MOVE(name))) {
   }
   template <typename R, typename... Args>
-  Function(R& (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes) {
+  Function(R& (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes, psl::string name = "<>") {
     auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args&&>(args)...)); };
     model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
-        lambda, psl::move(rtype), psl::move(ptypes));
+        lambda, MOVE(rtype), MOVE(ptypes), MOVE(name));
   }
   template <typename T, typename R, typename... Args>
-  Function(Lambda<T, R, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes)
-      : model(psl::make_shared<FunctionModel<T, R(Args...)>>(psl::move(f.lambda), psl::move(rtype),
-                                                             psl::move(ptypes))) {
+  Function(Lambda<T, R, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes,
+           psl::string name = "<>")
+      : model(psl::make_shared<FunctionModel<T, R(Args...)>>(MOVE(f.lambda), MOVE(rtype),
+                                                             MOVE(ptypes), MOVE(name))) {
   }
   template <typename T, typename R, typename... Args>
-  Function(Lambda<T, R&, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes) {
-    auto lambda = [f = psl::move(f.lambda)](Args... args) {
+  Function(Lambda<T, R&, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes,
+           psl::string name = "<>") {
+    auto lambda = [f = MOVE(f.lambda)](Args... args) {
       return psl::ref(f(static_cast<Args&&>(args)...));
     };
     model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
-        lambda, psl::move(rtype), psl::move(ptypes));
+        lambda, MOVE(rtype), MOVE(ptypes), MOVE(name));
   }
 
   Variable call(psl::span<const Variable*> args) const {
@@ -348,6 +378,9 @@ struct Function {
       args_ptr[i] = &args_[i];
     return call(args_ptr);
   }
+  const psl::string& name() const {
+    return model->name();
+  }
   size_t parameter_count() const {
     return ptypes().size();
   }
@@ -358,7 +391,16 @@ struct Function {
     return model->ptypes();
   }
   psl::string signature() const {
-    return signature_from(rtype(), ptypes());
+    return name() + signature_from(rtype(), ptypes());
+  }
+  void* ptr() const {
+    return model->ptr();
+  }
+  void* object_ptr() const {
+    return model->object_ptr();
+  }
+  size_t byte_size() const {
+    return model->byte_size();
   }
 
 private:
@@ -372,7 +414,7 @@ struct Overloads {
 template <typename... Ts, typename F>
 requires(sizeof...(Ts) > 0)
 auto overloads(F f) {
-  return Overloads<F, Ts...>(psl::move(f));
+  return Overloads<F, Ts...>(MOVE(f));
 }
 
 template <typename F, typename... Ts>
@@ -381,15 +423,15 @@ struct OverloadsSet {
 };
 template <typename... Ts, typename F>
 auto overloads_set(F f) {
-  return OverloadsSet<F, Ts...>(psl::move(f));
+  return OverloadsSet<F, Ts...>(MOVE(f));
 }
 
 struct Context {
   struct Proxy {
-    Proxy(Context& ctx, psl::string name) : ctx(ctx), name(psl::move(name)) {
+    Proxy(Context& ctx, psl::string name) : ctx(ctx), name(MOVE(name)) {
     }
     void operator=(auto x) const {
-      add(psl::move(x));
+      add(MOVE(x));
     }
 
   private:
@@ -408,23 +450,23 @@ struct Context {
     template <typename F>
     requires psl::is_function<F>
     void add(F f) const {
-      ctx.add_f(psl::move(name), f);
+      ctx.add_f(MOVE(name), f);
     }
     template <typename F, typename R, typename... Args>
     void add(Lambda<F, R, Args...> lambda) const {
-      ctx.add_f(psl::move(name), psl::move(lambda));
+      ctx.add_f(MOVE(name), MOVE(lambda));
     }
     void add(Function f) const {
-      ctx.add_f(psl::move(name), psl::move(f));
+      ctx.add_f(MOVE(name), MOVE(f));
     }
     template <typename T>
     requires requires { &T::operator(); }
     void add(T f) const {
-      ctx.add_f(psl::move(name), psl::move(f));
+      ctx.add_f(MOVE(name), MOVE(f));
     }
     template <typename T>
     void add(T value) const {
-      ctx.add_variable(psl::move(name), psl::move(value));
+      ctx.add_variable(MOVE(name), MOVE(value));
     }
 
   private:
@@ -434,7 +476,8 @@ struct Context {
 
   struct TypeTrait {
     TypeTrait() = default;
-    TypeTrait(psl::string type_name) : type_name_(psl::move(type_name)) {
+    TypeTrait(psl::string type_name, size_t byte_size)
+        : type_name_(MOVE(type_name)), byte_size_(byte_size) {
     }
     void add_member_accessor(psl::string member_name, size_t index) {
       member_accessors[member_name] = index;
@@ -451,11 +494,17 @@ struct Context {
     const psl::string& type_name() const {
       return type_name_;
     }
+    size_t byte_size() const {
+      return byte_size_;
+    }
+
+    void* copy_operator = nullptr;
 
   private:
     psl::string type_name_;
     psl::map<psl::string, size_t> member_accessors;
     psl::map<psl::string, size_t> from_converters;
+    size_t byte_size_;
   };
 
   enum TypeClass { None, Float, Complex };
@@ -467,7 +516,7 @@ struct Context {
     template <typename U>
     TypeProxy& member(psl::string name, U T::*ptr) {
       trait.add_member_accessor(name, ctx.functions.size());
-      ctx.add_f(pine::tag<U&, T&>([ptr](T& x) -> U& { return x.*ptr; }));
+      ctx.add_f(".", pine::tag<U&, T&>([ptr](T& x) -> U& { return x.*ptr; }));
       return *this;
     }
     template <typename U, typename R, typename... Args>
@@ -487,26 +536,22 @@ struct Context {
     }
     template <typename... Args>
     TypeProxy& ctor() {
-      ctx.add_f(
-          trait.type_name(), +[](Args... args) { return T(FWD(args)...); });
+      ctx.add_f(trait.type_name(), +[](Args... args) { return T(FWD(args)...); });
       return *this;
     }
     template <typename... Args>
     TypeProxy& ctor(psl::string name) {
-      ctx.add_f(
-          name, +[](Args... args) { return T(FWD(args)...); });
+      ctx.add_f(name, +[](Args... args) { return T(FWD(args)...); });
       return *this;
     }
     template <typename F>
     TypeProxy& ctor(F f) {
-      ctx.add_f(trait.type_name(), psl::move(f));
+      ctx.add_f(trait.type_name(), MOVE(f));
       return *this;
     }
     template <typename... Args>
     TypeProxy& ctor_variant_explicit() {
-      (ctx.add_f(
-           trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }),
-       ...);
+      (ctx.add_f(trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }), ...);
       return *this;
     }
     template <typename... Args>
@@ -552,9 +597,7 @@ struct Context {
     }
     template <typename... Args>
     TypeProxy& ctor_variant_explicit() {
-      (ctx.add_f(
-           trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }),
-       ...);
+      (ctx.add_f(trait.type_name(), +[](Args arg) { return T(static_cast<Args&&>(arg)); }), ...);
       return *this;
     }
     template <typename... Args>
@@ -586,7 +629,7 @@ struct Context {
   Context();
 
   Proxy operator()(psl::string name) {
-    return Proxy(*this, psl::move(name));
+    return Proxy(*this, MOVE(name));
   }
   template <typename T>
   auto type() {
@@ -597,7 +640,7 @@ struct Context {
 
   template <typename F>
   void add_f(psl::string name, F f) {
-    auto func = wrap(f);
+    auto func = wrap(name, f);
     auto [first, last] = functions_map.equal_range(name);
     while (first != last) {
       const auto& [fname, fi] = *first;
@@ -608,12 +651,8 @@ struct Context {
         ++first;
       }
     }
-    functions_map.insert({psl::move(name), functions.size()});
-    add_f(psl::move(func));
-  }
-  template <typename F>
-  void add_f(F f) {
-    add_f(wrap(psl::move(f)));
+    functions_map.insert({MOVE(name), functions.size()});
+    add_f(MOVE(func));
   }
   void add_f(Function func);
 
@@ -648,8 +687,8 @@ struct Context {
   uint16_t find_variable(psl::string_view name) const;
   template <typename T>
   void add_variable(psl::string name, T x) {
-    variables_map.insert({psl::move(name), variables.size()});
-    variables.push_back({tag<T>(), psl::move(x)});
+    variables_map.insert({MOVE(name), variables.size()});
+    variables.push_back({tag<T>(), MOVE(x)});
   }
 
   TypeTrait& get_type_trait(psl::string_view name);
@@ -687,7 +726,7 @@ struct Context {
   }
   template <typename T>
   TypeTag tag() const {
-    return TypeTag(name_of<T>(), psl::is_reference<T> && !psl::is_const_ref<T>);
+    return TypeTag(name_of<T>(), psl::is_reference<T>);
   }
   template <typename... Ts>
   psl::vector<TypeTag> tags() const {
@@ -713,49 +752,58 @@ struct Context {
   psl::vector<TypeTag> rtype_stack;
 
 private:
-  Function wrap(Function f) const {
+  Function wrap(psl::string, Function f) const {
     return f;
   }
   template <typename R, typename... Args>
-  Function wrap(R (*f)(Args...)) const {
-    return Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+  Function wrap(psl::string name, R (*f)(Args...)) const {
+    return Function(f, tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...), MOVE(name));
   }
   template <typename T, typename R, typename... Args>
-  Function wrap(R (T::*f)(Args...)) const {
+  Function wrap(psl::string name, R (T::*f)(Args...)) const {
     auto lambda = pine::tag<R, T&, Args...>(
         [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args&&>(args)...); });
-    return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...));
+    return Function(MOVE(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...),
+                    MOVE(name));
   }
   template <typename T, typename R, typename... Args>
-  Function wrap(R (T::*f)(Args...) const) const {
+  Function wrap(psl::string name, R (T::*f)(Args...) const) const {
     auto lambda = pine::tag<R, const T&, Args...>(
         [f](const T& x, Args... args) -> R { return (x.*f)(static_cast<Args&&>(args)...); });
-    return Function(psl::move(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...));
+    return Function(MOVE(lambda), tag<R>(), psl::vector_of(tag<const T&>(), tag<Args>()...),
+                    MOVE(name));
   }
   template <typename T, typename R, typename... Args>
-  Function wrap(Lambda<T, R, Args...> f) const {
-    return Function(psl::move(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...));
+  Function wrap(psl::string name, Lambda<T, R, Args...> f) const {
+    return Function(MOVE(f), tag<R>(), psl::vector_of<TypeTag>(tag<Args>()...), MOVE(name));
   }
   template <typename T>
-  Function wrap(T lambda) const {
-    return wrap(psl::move(lambda), &T::operator());
+  Function wrap(psl::string name, T lambda) const {
+    return wrap(MOVE(name), MOVE(lambda), &T::operator());
   }
   template <typename T, typename R, typename... Args>
-  Function wrap(T f, R (T::*)(Args...)) const {
-    return Function(Lambda<T, R, Args...>(psl::move(f)), tag<R>(),
-                    psl::vector_of<TypeTag>(tag<Args>()...));
+  Function wrap(psl::string name, T f, R (T::*)(Args...)) const {
+    return Function(Lambda<T, R, Args...>(MOVE(f)), tag<R>(),
+                    psl::vector_of<TypeTag>(tag<Args>()...), MOVE(name));
   }
   template <typename T, typename R, typename... Args>
-  Function wrap(T f, R (T::*)(Args...) const) const {
-    return Function(Lambda<T, R, Args...>(psl::move(f)), tag<R>(),
-                    psl::vector_of<TypeTag>(tag<Args>()...));
+  Function wrap(psl::string name, T f, R (T::*)(Args...) const) const {
+    return Function(Lambda<T, R, Args...>(MOVE(f)), tag<R>(),
+                    psl::vector_of<TypeTag>(tag<Args>()...), MOVE(name));
   }
 };
 
 template <typename T, Context::TypeClass type_class>
 auto Context::type(psl::string alias) {
   types_map[psl::type_id<T>()] = alias;
-  auto& trait = types[alias] = TypeTrait(alias);
+  auto& trait = [&]() -> TypeTrait& {
+    if constexpr (psl::is_void<T>)
+      return types[alias] = TypeTrait(alias, 0);
+    else
+      return types[alias] = TypeTrait(alias, sizeof(T));
+  }();
+  if constexpr (psl::copyable<T>)
+    trait.copy_operator = (void*)+[](T x) { return x; };
   // clang-format off
   if constexpr (type_class == TypeClass::Float || type_class == TypeClass::Complex) {
     add_f("+", +[](T a, T b) { return a + b; });

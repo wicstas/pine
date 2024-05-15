@@ -7,8 +7,8 @@ namespace pine {
 
 RestirIntegrator::RestirIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                                    int max_path_length)
-    : RTIntegrator{psl::move(accel), psl::move(sampler)},
-      light_sampler{psl::move(light_sampler)},
+    : RTIntegrator{MOVE(accel), MOVE(sampler)},
+      light_sampler{MOVE(light_sampler)},
       max_path_length{max_path_length} {
   if (max_path_length <= 0)
     Fatal("`RestirIntegrator` expect `max_path_length` to be positive, get", max_path_length);
@@ -18,7 +18,7 @@ struct RestirIntegrator::Vertex {
          bool inside_subsurface = false)
       : q(q),
         length(length),
-        it(psl::move(it)),
+        it(MOVE(it)),
         pdf(pdf),
         is_delta(is_delta),
         inside_subsurface(inside_subsurface) {

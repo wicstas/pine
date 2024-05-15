@@ -14,7 +14,7 @@ extern void (*warning_stream)(psl::string_view data);
 extern void (*fatal_stream)(psl::string_view data);
 
 struct Exception : psl::Exception {
-  Exception(psl::string message) : message{psl::move(message)} {
+  Exception(psl::string message) : message{MOVE(message)} {
   }
 
   psl::string_view what() const override {

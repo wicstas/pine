@@ -15,14 +15,14 @@ struct Scene {
   psl::shared_ptr<pine::Material> add_material(psl::string name,
                                                psl::shared_ptr<Material> material);
   psl::shared_ptr<pine::Material> add_material(psl::string name, Material material) {
-    return add_material(psl::move(name), psl::make_shared<Material>(psl::move(material)));
+    return add_material(MOVE(name), psl::make_shared<Material>(MOVE(material)));
   }
   psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, psl::shared_ptr<Material> material);
   psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, Material material) {
-    return add_geometry(psl::move(shape), psl::make_shared<Material>(psl::move(material)));
+    return add_geometry(MOVE(shape), psl::make_shared<Material>(MOVE(material)));
   }
   psl::shared_ptr<pine::Geometry> add_geometry(Shape shape, psl::string material_name) {
-    return add_geometry(psl::move(shape), find_material(material_name));
+    return add_geometry(MOVE(shape), find_material(material_name));
   }
   InstancedShape& add_instancing(InstancedShape instancing);
   Light& add_light(Light light);
@@ -44,7 +44,7 @@ struct Scene {
 
 void add_box(Scene& scene, mat4 m, psl::shared_ptr<Material> material);
 inline void add_box(Scene& scene, mat4 m, Material material) {
-  add_box(scene, m, psl::make_shared<Material>(psl::move(material)));
+  add_box(scene, m, psl::make_shared<Material>(MOVE(material)));
 }
 inline void add_box(Scene& scene, mat4 m, psl::string material_name) {
   add_box(scene, m, scene.find_material(material_name));

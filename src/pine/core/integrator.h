@@ -61,7 +61,7 @@ class CustomRayIntegrator : public RayIntegrator {
 public:
   CustomRayIntegrator(Accel accel, Sampler sampler,
                       psl::function<vec3(CustomRayIntegrator&, Ray, Sampler&)> radiance_)
-      : RayIntegrator(psl::move(accel), psl::move(sampler)), radiance_(psl::move(radiance_)) {
+      : RayIntegrator(MOVE(accel), MOVE(sampler)), radiance_(MOVE(radiance_)) {
   }
 
   vec3 radiance(Scene&, Ray ray, Sampler& sampler) override {

@@ -78,8 +78,8 @@ static SpatialTree stree;
 CachedPathIntegrator::CachedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                                            int max_path_length, int max_axis_resolution,
                                            int starting_depth)
-    : RTIntegrator{psl::move(accel), psl::move(sampler)},
-      light_sampler{psl::move(light_sampler)},
+    : RTIntegrator{MOVE(accel), MOVE(sampler)},
+      light_sampler{MOVE(light_sampler)},
       max_path_length{max_path_length},
       max_axis_resolution(max_axis_resolution),
       starting_depth{starting_depth} {
@@ -95,7 +95,7 @@ struct CachedPathIntegrator::Vertex {
   Vertex(int length, Interaction it, float pdf, bool is_delta = false,
          bool inside_subsurface = false)
       : length(length),
-        it(psl::move(it)),
+        it(MOVE(it)),
         pdf(pdf),
         is_delta(is_delta),
         inside_subsurface(inside_subsurface) {

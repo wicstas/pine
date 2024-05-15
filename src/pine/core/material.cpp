@@ -32,6 +32,7 @@ void material_context(Context& ctx) {
   ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
   ctx.type<MirrorMaterial>("Mirror").ctor<Node3f>();
   ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>();
+  ctx.type<DispersionMaterial>("Dispersion").ctor<Node3f>();
   ctx.type<SubsurfaceMaterial>("Subsurface").ctor<Node3f, Nodef, vec3>();
   ctx.type<UberMaterial>("Uber")
       .ctor<Node3f, Nodef>()
@@ -39,8 +40,8 @@ void material_context(Context& ctx) {
       .ctor<Node3f, Nodef, Nodef, Nodef>()
       .ctor<Node3f, Nodef, Nodef, Nodef, Nodef>();
   ctx.type<Material>("Material")
-      .ctor_variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, GlassMaterial, UberMaterial,
-                    SubsurfaceMaterial>();
+      .ctor_variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, GlassMaterial,
+                    DispersionMaterial, UberMaterial, SubsurfaceMaterial>();
   ctx.type<psl::shared_ptr<Material>>("MaterialPtr");
 }
 

@@ -55,9 +55,18 @@ pair<T, U> make_pair(T a, U b) {
 constexpr auto first_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).first; };
 constexpr auto second_of_pair = [](auto&& pair) -> decltype(auto) { return FWD(pair).second; };
 
+#pragma pack(push, 1)
 template <typename... Ts>
 struct tuple;
 
+template <>
+struct tuple<> {
+  tuple() {
+  }
+  tuple& operator=(const tuple<>&) {
+    return *this;
+  }
+};
 template <typename T0>
 struct tuple<T0> {
   tuple(T0 v0) : v0(FWD(v0)) {
@@ -97,6 +106,127 @@ struct tuple<T0, T1, T2> {
   T1 v1;
   T2 v2;
 };
+template <typename T0, typename T1, typename T2, typename T3>
+struct tuple<T0, T1, T2, T3> {
+  tuple(T0 v0, T1 v1, T2 v2, T3 v3) : v0(FWD(v0)), v1(FWD(v1)), v2(FWD(v2)), v3(FWD(v3)) {
+  }
+  template <typename U0, typename U1, typename U2, typename U3>
+  tuple& operator=(const tuple<U0, U1, U2, U3>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    v3 = rhs.v3;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
+  T3 v3;
+};
+template <typename T0, typename T1, typename T2, typename T3, typename T4>
+struct tuple<T0, T1, T2, T3, T4> {
+  tuple(T0 v0, T1 v1, T2 v2, T3 v3, T4 v4)
+      : v0(FWD(v0)), v1(FWD(v1)), v2(FWD(v2)), v3(FWD(v3)), v4(FWD(v4)) {
+  }
+  template <typename U0, typename U1, typename U2, typename U3, typename U4>
+  tuple& operator=(const tuple<U0, U1, U2, U3, U4>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    v3 = rhs.v3;
+    v4 = rhs.v4;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
+  T3 v3;
+  T4 v4;
+};
+
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
+struct tuple<T0, T1, T2, T3, T4, T5> {
+  tuple(T0 v0, T1 v1, T2 v2, T3 v3, T4 v4, T5 v5)
+      : v0(FWD(v0)), v1(FWD(v1)), v2(FWD(v2)), v3(FWD(v3)), v4(FWD(v4)), v5(FWD(v5)) {
+  }
+  template <typename U0, typename U1, typename U2, typename U3, typename U4, typename U5>
+  tuple& operator=(const tuple<U0, U1, U2, U3, U4, U5>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    v3 = rhs.v3;
+    v4 = rhs.v4;
+    v5 = rhs.v5;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
+  T3 v3;
+  T4 v4;
+  T5 v5;
+};
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+struct tuple<T0, T1, T2, T3, T4, T5, T6> {
+  tuple(T0 v0, T1 v1, T2 v2, T3 v3, T4 v4, T5 v5, T6 v6)
+      : v0(FWD(v0)), v1(FWD(v1)), v2(FWD(v2)), v3(FWD(v3)), v4(FWD(v4)), v5(FWD(v5)), v6(FWD(v6)) {
+  }
+  template <typename U0, typename U1, typename U2, typename U3, typename U4, typename U5,
+            typename U6>
+  tuple& operator=(const tuple<U0, U1, U2, U3, U4, U5, U6>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    v3 = rhs.v3;
+    v4 = rhs.v4;
+    v5 = rhs.v5;
+    v6 = rhs.v6;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
+  T3 v3;
+  T4 v4;
+  T5 v5;
+  T6 v6;
+};
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6,
+          typename T7>
+struct tuple<T0, T1, T2, T3, T4, T5, T6, T7> {
+  tuple(T0 v0, T1 v1, T2 v2, T3 v3, T4 v4, T5 v5, T6 v6, T7 v7)
+      : v0(FWD(v0)),
+        v1(FWD(v1)),
+        v2(FWD(v2)),
+        v3(FWD(v3)),
+        v4(FWD(v4)),
+        v5(FWD(v5)),
+        v6(FWD(v6)),
+        v7(FWD(v7)) {
+  }
+  template <typename U0, typename U1, typename U2, typename U3, typename U4, typename U5,
+            typename U6, typename U7>
+  tuple& operator=(const tuple<U0, U1, U2, U3, U4, U5, U6, U7>& rhs) {
+    v0 = rhs.v0;
+    v1 = rhs.v1;
+    v2 = rhs.v2;
+    v3 = rhs.v3;
+    v4 = rhs.v4;
+    v5 = rhs.v5;
+    v6 = rhs.v6;
+    v7 = rhs.v7;
+    return *this;
+  }
+  T0 v0;
+  T1 v1;
+  T2 v2;
+  T3 v3;
+  T4 v4;
+  T5 v5;
+  T6 v6;
+  T7 v7;
+};
+#pragma pack(pop)
 
 template <typename... Ts>
 auto make_tuple(Ts... xs) {
@@ -107,20 +237,42 @@ auto tie(Ts&... xs) {
   return tuple<Ts&...>(xs...);
 }
 
-template <typename T, typename F, typename... Ts, typename... Us>
-auto apply(tuple<T, Ts...> t, F&& f, Us... args) {
-  if constexpr (sizeof...(Ts) != 0)
-    return apply(psl::move(t.rest), f, static_cast<Us&&>(args)..., psl::move(t).value);
-  else
-    return f(static_cast<Us&&>(args)..., psl::move(t).value);
+template <typename F>
+auto apply(tuple<>&, F&& f) {
+  return f();
 }
-
-template <typename T, typename F, typename... Ts, typename... Us>
-auto apply(tuple<T, Ts...>& t, F&& f, Us&... args) {
-  if constexpr (sizeof...(Ts) != 0)
-    return apply(t.rest, f, args..., t.value);
-  else
-    return f(args..., t.value);
+template <typename F, typename T0>
+auto apply(tuple<T0>& t, F&& f) {
+  return f(t.v0);
 }
-
+template <typename F, typename T0, typename T1>
+auto apply(tuple<T0, T1>& t, F&& f) {
+  return f(t.v0, t.v1);
+}
+template <typename F, typename T0, typename T1, typename T2>
+auto apply(tuple<T0, T1, T2>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2);
+}
+template <typename F, typename T0, typename T1, typename T2, typename T3>
+auto apply(tuple<T0, T1, T2, T3>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2, t.v3);
+}
+template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4>
+auto apply(tuple<T0, T1, T2, T3, T4>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2, t.v3, t.v4);
+}
+template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
+auto apply(tuple<T0, T1, T2, T3, T4, T5>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5);
+}
+template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6>
+auto apply(tuple<T0, T1, T2, T3, T4, T5, T6>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6);
+}
+template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7>
+auto apply(tuple<T0, T1, T2, T3, T4, T5, T6, T6, T7>& t, F&& f) {
+  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6, t.v7);
+}
 }  // namespace psl

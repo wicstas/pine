@@ -8,7 +8,7 @@ ThinLenCamera::ThinLenCamera(Film film_, vec3 from, vec3 to, float fov, float le
                              float focus_distance)
     : position(from),
       c2w(look_at(from, to)),
-      film_(psl::move(film_)),
+      film_(MOVE(film_)),
       fov2d(fov * film_.aspect(), fov),
       len_radius(len_radius),
       focus_distance(focus_distance) {

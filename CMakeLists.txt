@@ -29,21 +29,22 @@ target_link_libraries(psl_test psl)
 
 #Pine Core Library
 add_library(pinelib
+src/pine/core/program_context.cpp
 src/pine/core/phase_function.cpp
 src/pine/core/lowdiscrepancy.cpp
 src/pine/core/sobolmatrices.cpp
+src/pine/core/jit_compiler.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/video_writer.cpp
 src/pine/core/interaction.cpp
-src/pine/core/interpreter.cpp
 src/pine/core/integrator.cpp
 src/pine/core/blackbody.cpp
 src/pine/core/geometry.cpp
 src/pine/core/material.cpp
 src/pine/core/profiler.cpp
 src/pine/core/parallel.cpp
-src/pine/core/compiler.cpp
+#src/pine/core/compiler.cpp
 src/pine/core/context.cpp
 src/pine/core/vecmath.cpp
 src/pine/core/sampler.cpp
@@ -115,8 +116,8 @@ target_include_directories(pinelib PRIVATE src/contrib)
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
-add_subdirectory(src/contrib/embree)
-#find_package(OpenImageDenoise REQUIRED)
+#add_subdirectory(src/contrib/embree)
+find_package(OpenImageDenoise REQUIRED)
 find_package(LLVM 17 REQUIRED CONFIG)
 llvm_map_components_to_libnames(llvm_libs 
 Core
@@ -126,7 +127,7 @@ MC
 MCJIT
 Support
 nativecodegen)
-target_link_libraries(pinelib psl Threads::Threads embree)
+target_link_libraries(pinelib psl Threads::Threads OpenImageDenoise)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)

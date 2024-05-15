@@ -26,11 +26,15 @@ struct BSDFSample {
 };
 
 struct SpecularReflectionBSDF {
-  SpecularReflectionBSDF(Node3f albedo) : albedo{psl::move(albedo)} {
+  SpecularReflectionBSDF(Node3f albedo) : albedo{MOVE(albedo)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
-  vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
-  float pdf(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
+  vec3 f(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
   float roughness_amount(const BxdfEvalCtx&) const {
     return 0.0f;
   }
@@ -39,11 +43,15 @@ struct SpecularReflectionBSDF {
 };
 struct SpecularRefrectionBSDF {
   SpecularRefrectionBSDF(Node3f albedo, Nodef eta)
-      : albedo{psl::move(albedo)}, eta{psl::move(eta)} {
+      : albedo{MOVE(albedo)}, eta{MOVE(eta)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
-  vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
-  float pdf(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
+  vec3 f(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
   float roughness_amount(const BxdfEvalCtx&) const {
     return 0.0f;
   }
@@ -51,9 +59,8 @@ struct SpecularRefrectionBSDF {
   Node3f albedo;
   Nodef eta;
 };
-
 struct DiffuseBSDF {
-  DiffuseBSDF(Node3f albedo) : albedo{psl::move(albedo)} {
+  DiffuseBSDF(Node3f albedo) : albedo{MOVE(albedo)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u, const BxdfEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
@@ -64,10 +71,9 @@ struct DiffuseBSDF {
 
   Node3f albedo;
 };
-
 struct ConductorBSDF {
   ConductorBSDF(Node3f albedo, Nodef roughness)
-      : albedo{psl::move(albedo)}, roughness{psl::move(roughness)} {
+      : albedo{MOVE(albedo)}, roughness{MOVE(roughness)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
@@ -79,10 +85,9 @@ struct ConductorBSDF {
   Node3f albedo;
   Nodef roughness;
 };
-
 struct RefractiveDielectricBSDF {
   RefractiveDielectricBSDF(Node3f albedo, Nodef roughness, Nodef eta)
-      : albedo{psl::move(albedo)}, roughness{psl::move(roughness)}, eta{psl::move(eta)} {
+      : albedo{MOVE(albedo)}, roughness{MOVE(roughness)}, eta{MOVE(eta)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
@@ -95,9 +100,25 @@ struct RefractiveDielectricBSDF {
   Nodef roughness;
   Nodef eta;
 };
+struct DispersionGlassBSDF {
+  DispersionGlassBSDF(Node3f albedo) : albedo{MOVE(albedo)} {
+  }
+  psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
+  vec3 f(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
+  float pdf(vec3, vec3, const BxdfEvalCtx&) const {
+    PINE_UNREACHABLE;
+  }
+  float roughness_amount(const BxdfEvalCtx&) const {
+    return 0.0f;
+  }
+
+  Node3f albedo;
+};
 struct DiffusiveDielectricBSDF {
   DiffusiveDielectricBSDF(Node3f albedo, Nodef roughness, Nodef eta)
-      : albedo{psl::move(albedo)}, roughness{psl::move(roughness)}, eta{psl::move(eta)} {
+      : albedo{MOVE(albedo)}, roughness{MOVE(roughness)}, eta{MOVE(eta)} {
   }
   psl::optional<BSDFSample> sample(vec3 wi, float u1, vec2 u2, const BxdfEvalCtx& nc) const;
   vec3 f(vec3 wi, vec3 wo, const BxdfEvalCtx& nc) const;
@@ -111,8 +132,9 @@ struct DiffusiveDielectricBSDF {
   Nodef eta;
 };
 
-struct BSDF : psl::variant<SpecularReflectionBSDF, SpecularRefrectionBSDF, DiffuseBSDF,
-                           ConductorBSDF, RefractiveDielectricBSDF, DiffusiveDielectricBSDF> {
+struct BSDF
+    : psl::variant<SpecularReflectionBSDF, SpecularRefrectionBSDF, DispersionGlassBSDF, DiffuseBSDF,
+                   ConductorBSDF, RefractiveDielectricBSDF, DiffusiveDielectricBSDF> {
 public:
   using variant::variant;
 

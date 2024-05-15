@@ -192,9 +192,6 @@ public:
   const char* data() const {
     return str;
   }
-  const char* c_str() const {
-    return str;
-  }
 
   size_t size() const {
     return len;

@@ -133,7 +133,7 @@ float Atmosphere::pdf(const Interaction&, vec3 wo) const {
 }
 
 ImageSky::ImageSky(psl::shared_ptr<Image> image_, vec3 tint, float elevation, float rotation)
-    : image{psl::move(image_)}, tint{tint} {
+    : image{MOVE(image_)}, tint{tint} {
   CHECK(image);
   auto density = Array2d<float>{image->size()};
   for_2d(image->size(), [&](auto p) { density[p] = length((vec3)(*image)[p]); });

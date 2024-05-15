@@ -129,7 +129,6 @@ OBB::OBB(AABB aabb, mat4 m) {
 }
 bool OBB::hit(Ray ray) const {
   auto po = p - ray.o;
-#pragma unroll
   for (int i = 0; i < 3; i++) {
     auto denom = dot(ray.d, n[i]);
     if (psl::abs(denom) < 1e-6f)
@@ -149,7 +148,6 @@ bool OBB::hit(Ray ray) const {
 }
 bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   auto po = p - o;
-#pragma unroll
   for (int i = 0; i < 3; i++) {
     auto denom = dot(d, n[i]);
     if (psl::abs(denom) < 1e-6f)

@@ -18,12 +18,11 @@ psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes
 
 Context::Context() {
   auto& context = *this;
-  context.type<Any>("any");
-  context.type<Variable>("variable");
-  context.type<psl::Any>("void");
+  //   context.type<Any>("any");
+  //   context.type<psl::Any>("void");
   context.type<void>("void");
-  context.type<Function>("function");
-  context.type<psl::span<const Variable*>>("@args");
+  //   context.type<Function>("function");
+  //   context.type<psl::span<const Variable*>>("@args");
 
   context.type<psl::string>("str");
   context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
@@ -32,23 +31,16 @@ Context::Context() {
   context.type<psl::string_view>("str_view").ctor_variant<const psl::string&>();
 
   context.type<bool>("bool");
-  add_f(
-      "==", +[](bool a, bool b) -> bool { return a == b; });
-  add_f(
-      "&&", +[](bool a, bool b) -> bool { return a && b; });
-  add_f(
-      "||", +[](bool a, bool b) -> bool { return a || b; });
-  add_f(
-      "!=", +[](bool a, bool b) -> bool { return a != b; });
-  add_f(
-      "=", +[](bool& a, bool b) -> bool& { return a = b; });
+  add_f("==", +[](bool a, bool b) -> bool { return a == b; });
+  add_f("&&", +[](bool a, bool b) -> bool { return a && b; });
+  add_f("||", +[](bool a, bool b) -> bool { return a || b; });
+  add_f("!=", +[](bool a, bool b) -> bool { return a != b; });
+  add_f("=", +[](bool& a, bool b) -> bool& { return a = b; });
 
-  decltype(auto) ftype = context.type<float, Context::Float>("f32");
-  context.type<uint16_t>("u16");
-  context.type<uint32_t>("u32");
-  context.type<uint64_t>("u64");
-  context.type<int64_t>("i64");
-  context.type<int32_t, Context::Float>("i32").ctor_variant_explicit<float>();
+  context.type<float, Context::Float>("f32");
+  context.type<int, Context::Float>("i32").ctor_variant_explicit<float>();
+  context.type<float>().ctor_variant<int>();
+  context.type<size_t>("u64");
   context("^") = +[](int a, int b) { return psl::powi(a, b); };
   context("++x") = +[](int& x) -> decltype(auto) { return ++x; };
   context("--x") = +[](int& x) -> decltype(auto) { return --x; };
@@ -73,32 +65,33 @@ Context::Context() {
   context("*=") = +[](float& a, int b) -> float& { return a *= b; };
   context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  ftype.ctor_variant<int32_t>();
-  context("^") = +[](float a, float b) { return psl::pow(a, b); };
+  //   context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
-  context("=") = Function(
-      +[](psl::span<const Variable*> args) { args[0]->as<Variable&>() = *args[1]; },
-      context.tag<void>(), context.tags<Variable&, Any>());
+  //   context("=") = Function(
+  //       +[](psl::span<const Variable*> args) { args[0]->as<Variable&>() = *args[1]; },
+  //       context.tag<void>(), context.tags<Variable&, Any>());
 
-  struct Type {
-    psl::string name;
-    psl::string raw_name;
-    uint64_t id;
-  };
-  context.type<Type>("Type")
-      .member("name", &Type::name)
-      .member("raw_name", &Type::raw_name)
-      .member("id", &Type::id);
-  context("type") =
-      Function(lambda<psl::span<const Variable*>>([&context](psl::span<const Variable*> args) {
-                 if (args[0]->type_id() == psl::type_id<Function>())
-                   return Type{args[0]->as<const Function&>().signature(), args[0]->type_name(),
-                               args[0]->type_id()};
-                 else
-                   return Type{context.type_name_from_id(args[0]->type_id()), args[0]->type_name(),
-                               args[0]->type_id()};
-               }),
-               context.tag<Type>(), context.tags<Any>());
+  //   struct Type {
+  //     psl::string name;
+  //     psl::string raw_name;
+  //     uint64_t id;
+  //   };
+  //   context.type<Type>("Type")
+  //       .member("name", &Type::name)
+  //       .member("raw_name", &Type::raw_name)
+  //       .member("id", &Type::id);
+  //   context("type") =
+  //       Function(lambda<psl::span<const Variable*>>([&context](psl::span<const Variable*> args) {
+  //                  if (args[0]->type_id() == psl::type_id<Function>())
+  //                    return Type{args[0]->as<const Function&>().signature(),
+  //                    args[0]->type_name(),
+  //                                args[0]->type_id()};
+  //                  else
+  //                    return Type{context.type_name_from_id(args[0]->type_id()),
+  //                    args[0]->type_name(),
+  //                                args[0]->type_id()};
+  //                }),
+  //                context.tag<Type>(), context.tags<Any>());
 
   context.type<psl::string>().converter<bool, int, float, size_t, psl::string>([](const auto& x) {
     using psl::to_string;
@@ -258,7 +251,7 @@ Variable Context::call(psl::string_view name, psl::span<const TypeTag> atypes,
 }
 
 void Context::add_f(Function func) {
-  functions.push_back(psl::move(func));
+  functions.push_back(MOVE(func));
 }
 
 uint16_t Context::find_variable(psl::string_view name) const {

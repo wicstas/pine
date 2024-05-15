@@ -12,7 +12,7 @@ static const vec3 directions[8]{uniform_sphere({0.0f, 0.25f}), uniform_sphere({0
                                 uniform_sphere({0.5f, 0.75f}), uniform_sphere({0.75f, 0.75f})};
 
 AOIntegrator::AOIntegrator(Accel accel, Sampler sampler)
-    : RayIntegrator(psl::move(accel), psl::move(sampler)) {
+    : RayIntegrator(MOVE(accel), MOVE(sampler)) {
   spp = psl::max(spp / 8, 1);
 }
 vec3 AOIntegrator::radiance(Scene&, Ray ray, Sampler& sampler) {

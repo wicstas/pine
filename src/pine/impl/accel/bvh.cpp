@@ -503,8 +503,8 @@ void BVH::build(const Scene* scene) {
         primitives.push_back(primitive);
       }
       auto bvh = BVHImpl{};
-      bvh.build(psl::move(primitives));
-      lbvh.push_back(psl::move(bvh));
+      bvh.build(MOVE(primitives));
+      lbvh.push_back(MOVE(bvh));
       indices.push_back(int(i));
     }
   }

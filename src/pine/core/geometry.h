@@ -197,10 +197,10 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 
 struct SDF {
   SDF(vec3 center, vec3 size, psl::function<float(vec3)> sdf)
-      : aabb(center - size / 2, center + size / 2), sdf(psl::move(sdf)) {
+      : aabb(center - size / 2, center + size / 2), sdf(MOVE(sdf)) {
     threshold = min_value(aabb.diagonal()) * 1e-6f;
   }
-  SDF(AABB aabb, psl::function<float(vec3)> sdf) : aabb(aabb), sdf(psl::move(sdf)) {
+  SDF(AABB aabb, psl::function<float(vec3)> sdf) : aabb(aabb), sdf(MOVE(sdf)) {
     threshold = min_value(aabb.diagonal()) * 1e-6f;
   }
 
@@ -258,7 +258,7 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line
 
 struct Geometry {
   Geometry(Shape shape, psl::shared_ptr<Material> material)
-      : shape{psl::move(shape)}, material{psl::move(material)} {
+      : shape{MOVE(shape)}, material{MOVE(material)} {
   }
 
   bool hit(const Ray& ray) const {
@@ -288,15 +288,15 @@ struct Geometry {
 };
 
 struct InstancedShape {
-  InstancedShape(Mesh shape) : shape(psl::move(shape)) {
+  InstancedShape(Mesh shape) : shape(MOVE(shape)) {
   }
 
   InstancedShape& add(mat4 transform, Material material) {
-    instances.emplace_back(transform, psl::make_shared<Material>(psl::move(material)));
+    instances.emplace_back(transform, psl::make_shared<Material>(MOVE(material)));
     return *this;
   }
   InstancedShape& add(mat4 transform, psl::shared_ptr<Material> material) {
-    instances.emplace_back(transform, psl::move(material));
+    instances.emplace_back(transform, MOVE(material));
     return *this;
   }
 

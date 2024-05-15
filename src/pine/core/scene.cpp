@@ -9,7 +9,7 @@ psl::shared_ptr<pine::Material> Scene::add_material(psl::string name,
                                                     psl::shared_ptr<Material> material) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  return materials[psl::move(name)] = psl::move(material);
+  return materials[MOVE(name)] = MOVE(material);
 }
 psl::shared_ptr<pine::Geometry> Scene::add_geometry(Shape shape,
                                                     psl::shared_ptr<Material> material) {
@@ -19,7 +19,7 @@ psl::shared_ptr<pine::Geometry> Scene::add_geometry(Shape shape,
     auto sigma_s = material->as<SubsurfaceMaterial>().sigma_s;
     add_medium(Medium(HomogeneousMedium(shape, HgPhaseFunction(0.0f), sigma_s / 8, sigma_s)));
   }
-  geometries.push_back(psl::make_shared<Geometry>(psl::move(shape), material));
+  geometries.push_back(psl::make_shared<Geometry>(MOVE(shape), material));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
   return geometries.back();
@@ -27,26 +27,26 @@ psl::shared_ptr<pine::Geometry> Scene::add_geometry(Shape shape,
 InstancedShape& Scene::add_instancing(InstancedShape instancing) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  instancings.push_back(psl::move(instancing));
+  instancings.push_back(MOVE(instancing));
   return instancings.back();
 }
 Light& Scene::add_light(Light light) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  lights.push_back(psl::move(light));
+  lights.push_back(MOVE(light));
   return lights.back();
 }
 Medium& Scene::add_medium(Medium medium) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  mediums.push_back(psl::move(medium));
+  mediums.push_back(MOVE(medium));
   return mediums.back();
 }
 Camera& Scene::set_camera(Camera camera) {
-  return this->camera = psl::move(camera);
+  return this->camera = MOVE(camera);
 }
 EnvironmentLight& Scene::set_env_light(EnvironmentLight env_light) {
-  return *(this->env_light = psl::move(env_light));
+  return *(this->env_light = MOVE(env_light));
 }
 
 psl::shared_ptr<Material> Scene::find_material(psl::string_view name) {

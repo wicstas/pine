@@ -31,7 +31,7 @@ struct SurfaceInteraction {
 struct MediumInteraction {
   MediumInteraction() = default;
   MediumInteraction(float t, vec3 p, vec3 W, PhaseFunction pg)
-      : t(t), p(p), W(W), pg(psl::move(pg)) {
+      : t(t), p(p), W(W), pg(MOVE(pg)) {
   }
   MediumInteraction(float t, vec3 p, vec3 W, vec3 le) : t(t), p(p), W(W), le(le) {
   }

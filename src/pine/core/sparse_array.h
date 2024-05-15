@@ -33,7 +33,7 @@ struct SparseArray3d {
   }
   void insert(vec3i64 p, T value) {
     storage.insert(storage.end(),
-                   {p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1], psl::move(value)});
+                   {p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1], MOVE(value)});
   }
 
   vec3i64 size() const {

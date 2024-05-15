@@ -173,7 +173,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     bbox = OBB(aabb, transform);
     world2index = mat * inverse(transform);
     density_grid = grid;
-    density_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+    density_handle = psl::make_opaque_shared_ptr<Handle>(MOVE(handle));
   }
   if (nanovdb::io::hasGrid(filename.c_str(), "flames")) {
     auto handle = nanovdb::io::readGrid(filename.c_str(), "flames");
@@ -183,7 +183,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
       auto [aabb, mat] = get_grid_info(grid);
       world2index_flame = mat * inverse(transform);
       flame_grid = grid;
-      flame_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+      flame_handle = psl::make_opaque_shared_ptr<Handle>(MOVE(handle));
     }
   }
   if (nanovdb::io::hasGrid(filename.c_str(), "temperature")) {
@@ -194,7 +194,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
       auto [aabb, mat] = get_grid_info(grid);
       world2index_tem = mat * inverse(transform);
       temperature_grid = grid;
-      temperature_handle = psl::make_opaque_shared_ptr<Handle>(psl::move(handle));
+      temperature_handle = psl::make_opaque_shared_ptr<Handle>(MOVE(handle));
     }
   }
 }
