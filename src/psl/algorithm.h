@@ -195,6 +195,12 @@ void fill(Range auto&& output, const auto& value) {
   for (; first != last; ++first)
     *first = value;
 }
+void fill_f(Range auto&& output, const auto& generator) {
+  auto first = psl::begin(output);
+  auto last = psl::end(output);
+  for (; first != last; ++first)
+    *first = generator();
+}
 
 void fill_inplace(Range auto&& output, const auto& value) {
   auto first = psl::begin(output);

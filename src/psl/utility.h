@@ -238,41 +238,41 @@ auto tie(Ts&... xs) {
 }
 
 template <typename F>
-auto apply(tuple<>&, F&& f) {
+decltype(auto) apply(tuple<>&, F&& f) {
   return f();
 }
 template <typename F, typename T0>
-auto apply(tuple<T0>& t, F&& f) {
+decltype(auto) apply(tuple<T0>& t, F&& f) {
   return f(t.v0);
 }
 template <typename F, typename T0, typename T1>
-auto apply(tuple<T0, T1>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1>& t, F&& f) {
   return f(t.v0, t.v1);
 }
 template <typename F, typename T0, typename T1, typename T2>
-auto apply(tuple<T0, T1, T2>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2>& t, F&& f) {
   return f(t.v0, t.v1, t.v2);
 }
 template <typename F, typename T0, typename T1, typename T2, typename T3>
-auto apply(tuple<T0, T1, T2, T3>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2, T3>& t, F&& f) {
   return f(t.v0, t.v1, t.v2, t.v3);
 }
 template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4>
-auto apply(tuple<T0, T1, T2, T3, T4>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2, T3, T4>& t, F&& f) {
   return f(t.v0, t.v1, t.v2, t.v3, t.v4);
 }
 template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
-auto apply(tuple<T0, T1, T2, T3, T4, T5>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5>& t, F&& f) {
   return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5);
 }
 template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6>
-auto apply(tuple<T0, T1, T2, T3, T4, T5, T6>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5, T6>& t, F&& f) {
   return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6);
 }
 template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6, typename T7>
-auto apply(tuple<T0, T1, T2, T3, T4, T5, T6, T6, T7>& t, F&& f) {
+decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5, T6, T6, T7>& t, F&& f) {
   return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6, t.v7);
 }
 }  // namespace psl

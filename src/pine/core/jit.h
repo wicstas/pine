@@ -3,6 +3,5 @@
 
 namespace pine {
 
-void jit_interpret(Context& ctx, psl::string source);
 
 }

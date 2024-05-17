@@ -12,9 +12,11 @@ struct span {
   span(T* ptr, size_t length) : ptr(ptr), length(length) {
   }
   template <RandomAccessIterator It>
+  requires requires(T* ptr, It first) { ptr = &*first; }
   span(It first, It last) : ptr(&(*first)), length(size_t(last - first)) {
   }
   template <Range ARange>
+  requires requires(T* ptr, ARange&& range) { ptr = &*psl::begin(range); }
   span(ARange&& range) : span(psl::begin(range), psl::end(range)) {
   }
 

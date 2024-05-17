@@ -212,24 +212,4 @@ namespace pine {
 //   return main;
 // }
 
-void jit_interpret(Context& context, psl::string source) {
-  context("inc") = +[](int& x) { x++; };
-  auto shutdown_obj = llvm::llvm_shutdown_obj();
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
-
-  auto C = llvm::LLVMContext();
-  auto M = std::make_unique<llvm::Module>("pine_module", C);
-  auto main_ = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getVoidTy(C), {}, false),
-                                      llvm::Function::ExternalLinkage, "main", M.get());
-
-  jit_compile(context, MOVE(source), C, M.get(), main_);
-  main_->dump();
-
-  auto EE = psl::unique_ptr<llvm::ExecutionEngine>(llvm::EngineBuilder(MOVE(M)).create());
-  EE->setVerifyModules(true);
-  auto main = (void (*)())(void*)EE->getFunctionAddress("main");
-  main();
-}
-
 }  // namespace pine

@@ -24,7 +24,8 @@ Context::Context() {
   //   context.type<Function>("function");
   //   context.type<psl::span<const Variable*>>("@args");
 
-  context.type<psl::string>("str");
+  context.type<const char*>("cstr");
+  context.type<psl::string>("str").ctor<const char*>();
   context("=") = +[](psl::string& a, psl::string b) -> psl::string& { return a = b; };
   context("+=") = +[](psl::string& a, psl::string b) -> psl::string& { return a += b; };
   context("+") = +[](psl::string a, psl::string b) { return a + b; };
@@ -65,7 +66,7 @@ Context::Context() {
   context("*=") = +[](float& a, int b) -> float& { return a *= b; };
   context("/=") = +[](float& a, int b) -> float& { return a /= b; };
 
-  //   context("^") = +[](float a, float b) { return psl::pow(a, b); };
+  context("^") = +[](float a, float b) { return psl::pow(a, b); };
 
   //   context("=") = Function(
   //       +[](psl::span<const Variable*> args) { args[0]->as<Variable&>() = *args[1]; },
@@ -175,7 +176,8 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       for (size_t i = 0; i < atypes.size(); i++) {
         if (atypes[i].name == ptypes[i].name) {
         } else if (ptypes[i].name == "any") {
-        } else if (!ptypes[i].is_ref && is_registered_type(ptypes[i].name)) {
+        } else if ((!ptypes[i].is_ref || ptypes[i].is_const) &&
+                   is_registered_type(ptypes[i].name)) {
           if (auto ci = get_type_trait(ptypes[i].name).find_from_converter_index(atypes[i].name);
               ci != size_t(-1)) {
             converts.push_back({i, ci, ptypes[i]});

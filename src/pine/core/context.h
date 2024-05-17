@@ -68,22 +68,24 @@ private:
 
 struct TypeTag {
   TypeTag() = default;
-  TypeTag(psl::string name, bool is_ref = false) : name(MOVE(name)), is_ref(is_ref) {
+  TypeTag(psl::string name, bool is_ref = false, bool is_const = false)
+      : name(MOVE(name)), is_ref(is_ref), is_const(is_const) {
   }
 
   psl::string sig() const {
-    return name + (is_ref ? "&" : "");
+    return (is_const ? "const " : "") + name + (is_ref ? "&" : "");
   }
 
   friend bool operator==(const TypeTag& lhs, const TypeTag& rhs) {
-    return lhs.name == rhs.name && lhs.is_ref == rhs.is_ref;
+    return lhs.name == rhs.name && lhs.is_ref == rhs.is_ref && lhs.is_const == rhs.is_const;
   }
 
   psl::string name;
   bool is_ref = false;
+  bool is_const = false;
 };
 inline psl::string to_string(const TypeTag& type) {
-  return type.name + (type.is_ref ? "&" : "");
+  return type.sig();
 }
 
 template <typename F, typename R, typename... Args>
@@ -275,10 +277,7 @@ struct Function {
     static_assert(sizeof...(Args) <= 8, "Function can only have up to 8 parameters");
 
     FunctionModel(Repr f, TypeTag rtype, psl::vector<TypeTag> ptypes, psl::string name)
-        : f(MOVE(f)),
-          rtype_(MOVE(rtype)),
-          ptypes_(MOVE(ptypes)),
-          name_(MOVE(name)) {
+        : f(MOVE(f)), rtype_(MOVE(rtype)), ptypes_(MOVE(ptypes)), name_(MOVE(name)) {
     }
 
     Variable call(psl::span<const Variable*> args) override {
@@ -321,10 +320,11 @@ struct Function {
       return (void*)+[](uint8_t* ptr) {
         auto& f = *(Repr*)ptr;
         ptr += sizeof(Repr);
-        if constexpr (psl::is_void<R>)
+        using R_ = psl::RemoveReference<R>;
+        if constexpr (psl::is_void<R_>)
           psl::apply(*(psl::tuple<Args...>*)(ptr), f);
         else
-          new ((R*)ptr) R(psl::apply(*(psl::tuple<Args...>*)(ptr + sizeof(R)), f));
+          new ((R_*)ptr) R_(psl::apply(*(psl::tuple<Args...>*)(ptr + sizeof(R_)), f));
       };
     }
     void* object_ptr() const override {
@@ -346,26 +346,11 @@ struct Function {
       : model(psl::make_shared<FunctionModel<R (*)(Args...), R(Args...)>>(
             f, MOVE(rtype), MOVE(ptypes), MOVE(name))) {
   }
-  template <typename R, typename... Args>
-  Function(R& (*f)(Args...), TypeTag rtype, psl::vector<TypeTag> ptypes, psl::string name = "<>") {
-    auto lambda = [f](Args... args) { return psl::ref(f(static_cast<Args&&>(args)...)); };
-    model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
-        lambda, MOVE(rtype), MOVE(ptypes), MOVE(name));
-  }
   template <typename T, typename R, typename... Args>
   Function(Lambda<T, R, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes,
            psl::string name = "<>")
       : model(psl::make_shared<FunctionModel<T, R(Args...)>>(MOVE(f.lambda), MOVE(rtype),
                                                              MOVE(ptypes), MOVE(name))) {
-  }
-  template <typename T, typename R, typename... Args>
-  Function(Lambda<T, R&, Args...> f, TypeTag rtype, psl::vector<TypeTag> ptypes,
-           psl::string name = "<>") {
-    auto lambda = [f = MOVE(f.lambda)](Args... args) {
-      return psl::ref(f(static_cast<Args&&>(args)...));
-    };
-    model = psl::make_shared<FunctionModel<decltype(lambda), psl::Ref<R>(Args...)>>(
-        lambda, MOVE(rtype), MOVE(ptypes), MOVE(name));
   }
 
   Variable call(psl::span<const Variable*> args) const {
@@ -726,7 +711,7 @@ struct Context {
   }
   template <typename T>
   TypeTag tag() const {
-    return TypeTag(name_of<T>(), psl::is_reference<T>);
+    return TypeTag(name_of<T>(), psl::is_reference<T>, psl::is_const_ref<T> || psl::is_const<T>);
   }
   template <typename... Ts>
   psl::vector<TypeTag> tags() const {
@@ -763,8 +748,7 @@ private:
   Function wrap(psl::string name, R (T::*f)(Args...)) const {
     auto lambda = pine::tag<R, T&, Args...>(
         [f](T& x, Args... args) -> R { return (x.*f)(static_cast<Args&&>(args)...); });
-    return Function(MOVE(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...),
-                    MOVE(name));
+    return Function(MOVE(lambda), tag<R>(), psl::vector_of(tag<T&>(), tag<Args>()...), MOVE(name));
   }
   template <typename T, typename R, typename... Args>
   Function wrap(psl::string name, R (T::*f)(Args...) const) const {

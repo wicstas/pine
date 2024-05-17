@@ -60,4 +60,6 @@ private:
 void jit_compile(Context& context, psl::string source, llvm::LLVMContext& C, llvm::Module* M,
                  llvm::Function* F);
 
+void jit_interpret(Context& ctx, psl::string source);
+
 }  // namespace pine
