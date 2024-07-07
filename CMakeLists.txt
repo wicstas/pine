@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.16)
 
 project(pine LANGUAGES CXX C)
 
@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-add_compile_options(-Wall -Wextra -pedantic)
 set(BUILD_SHARED_LIBS OFF)
 
 #psl Library
@@ -20,8 +19,9 @@ src/psl/system.cpp
 src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
-target_compile_options(psl PRIVATE $<$<CONFIG:Debug>: -fsanitize=address -fno-omit-frame-pointer>)
-target_link_options(psl PRIVATE $<$<CONFIG:Debug>:-g -fsanitize=address>)
+target_compile_options(psl PRIVATE -Wall -Wextra -pedantic)
+#target_compile_options(psl PUBLIC $<$<CONFIG:Debug>: -g -fsanitize=address -fno-omit-frame-pointer>)
+#target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
 
 #psl Test
 add_executable(psl_test test/psl_test.cpp)
@@ -67,11 +67,12 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
-src/pine/impl/integrator/randomwalk.cpp
+#src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
-src/pine/impl/integrator/cachedpath.cpp
-src/pine/impl/integrator/denoiser.cpp
-src/pine/impl/integrator/restir.cpp
+#src/pine/impl/integrator/cachedpath.cpp
+#src/pine/impl/integrator/denoiser.cpp
+#src/pine/impl/integrator/restir.cpp
+src/pine/impl/integrator/mlt.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
@@ -109,32 +110,30 @@ src/contrib/bluesobol/bluenoise_256spp.cpp
 #target_include_directories(pine_gui PRIVATE src/contrib/)
 #target_link_libraries(pine_gui PRIVATE glfw)
 
+target_compile_options(pinelib PRIVATE -Wall -Wextra -pedantic)
 target_include_directories(pinelib PUBLIC src/)
 target_include_directories(pinelib PRIVATE src/contrib)
-# target_compile_options(pinelib PRIVATE )
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
-#add_subdirectory(src/contrib/embree)
-find_package(OpenImageDenoise REQUIRED)
+find_package(Embree REQUIRED)
 find_package(LLVM 17 REQUIRED CONFIG)
 llvm_map_components_to_libnames(llvm_libs 
 Core
 ExecutionEngine
-Interpreter
-MC
 MCJIT
-Support
+Passes
 nativecodegen)
-target_link_libraries(pinelib psl Threads::Threads OpenImageDenoise)
+#add_subdirectory(src/contrib/tinyusdz)
+target_link_libraries(pinelib psl Threads::Threads embree ${llvm_libs})
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
-target_link_libraries(pine pinelib ${llvm_libs})
+target_link_libraries(pine pinelib)
 
 #Gltf tool
-#add_executable(gltf-tool src/cli/gltf-tool.cpp)
-#target_link_libraries(gltf-tool pinelib)
+add_executable(gltf-tool src/cli/gltf-tool.cpp)
+target_link_libraries(gltf-tool pinelib)
 
 #Image tool
 #add_executable(image-tool src/cli/image-tool.cpp)

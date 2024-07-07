@@ -1,0 +1,170 @@
+# Foundamental types are:
+# bool: false, true
+# i32: -5, 120
+# f32: 3.14
+# str: "Hello"
+# Common operators are defined for them:
+# e.g. 12 + 23; "Hello " + "World";
+
+# Syntax for control flows are:
+for i = 0; i < 10; i++ {
+    do_something();
+}
+for i in 0..10 {
+    do_something();
+}
+for i in 0~3~10 {
+    do_something();
+}
+while(true) {
+    do_something();
+}
+if(x < 4) {
+    do_thing_a();
+} else if(x < 10) {
+    do_thing_b();
+} else {
+    do_thing_c();
+}
+
+# Pre-defined constants
+Pi = 3.1415927;
+E = 2.7182817;
+
+# Pre-defined functions & classes
+fn print(x: str);
+fn println(x: str);
+fn min(a, b);
+fn min(a, b, c);
+fn max(a, b);
+fn max(a, b, c);
+fn abs(x);
+fn clamp(x, min, max);
+fn lerp(x, min, max);
+fn sqr(x);
+fn sqrt(x);
+fn floor(x);
+fn ceil(x);
+fn fract(x);
+fn powi(base, exp);
+fn pow(base, exp);
+fn log2(x: f32): f32;
+fn log(x: f32): f32;
+fn log10(x: f32): f32;
+fn sin(x: f32): f32;
+fn cos(x: f32): f32;
+fn tan(x: f32): f32;
+fn acos(x: f32): f32;
+fn asin(x: f32): f32;
+fn atan2(y: f32, x: f32): f32;
+while(true) {
+    do_something();
+}
+if(x < 4) {
+    do_thing_a();
+} else if(x < 10) {
+    do_thing_b();
+} else {
+    do_thing_c();
+}
+
+# Pre-defined constants
+Pi = 3.1415927;
+E = 2.7182817;
+
+# Pre-defined functions & classes
+fn print(x: str);
+fn println(x: str);
+fn min(a, b);
+fn min(a, b, c);
+fn max(a, b);
+fn max(a, b, c);
+fn abs(x);
+fn clamp(x, min, max);
+fn lerp(x, min, max);
+fn sqr(x);
+fn sqrt(x);
+fn floor(x);
+fn ceil(x);
+fn fract(x);
+fn powi(base, exp);
+fn pow(base, exp);
+fn log2(x: f32): f32;
+fn log(x: f32): f32;
+fn log10(x: f32): f32;
+fn sin(x: f32): f32;
+fn cos(x: f32): f32;
+fn tan(x: f32): f32;
+fn acos(x: f32): f32;
+fn asin(x: f32): f32;
+fn atan2(y: f32, x: f32): f32;
+
+class vec2i {
+    ctor vec2i(x: i32, y: i32);
+
+    x: i32;
+    y: i32;
+}
+class vec2 {
+    ctor vec2(x: f32, y: f32);
+
+    x: f32;
+    y: f32;
+}
+class vec3i {
+    ctor vec3i(x: i32, y: i32, z: i32);
+
+    x: i32;
+    y: i32;
+    z: i32;
+}
+class vec3 {
+    ctor vec3(x: f32, y: f32, z: f32);
+
+    x: f32;
+    y: f32;
+    z: f32;
+}
+class mat3 {
+    ctor mat3(x: vec3, y: vec3, z: vec3);
+
+    x: vec3;
+    y: vec3;
+    z: vec3;
+}
+class mat4 {
+    ctor mat4(x: vec4, y: vec4, z: vec4, w: vec4);
+
+    x: vec4;
+    y: vec4;
+    z: vec4;
+    w: vec4;
+}
+# Common operators are defined for them:
+# e.g.  some_matrix * some_vector performs matrix-vector multiplication
+# while some_vector * some_vector performs per-component multiplication
+# Constructor is used to construct objects:
+# e.g. vec3(1.0, 2.0, 3.0)
+# In the case of vectors, a convenient syntax exists
+# [1.0, 2.0, 3.0]
+
+fn normalize(x);
+fn length(x);
+fn dot(x, y);
+fn cross(x, y);
+fn coordinate_system(n: vec3): mat3;
+fn rotate_x(rad: f32): mat4;
+fn rotate_y(rad: f32): mat4;
+fn rotate_z(rad: f32): mat4;
+fn rotate(v: vec3): mat4;
+fn translate(v: vec3): mat4;
+fn translate(x: f32, y: f32, z: f32): mat4;
+fn scale(v: vec3): mat4;
+fn scale(x: f32, y: f32, z: f32): mat4;
+fn lookat(from: vec3, to: vec3): mat4;
+fn identity3x3(): mat3;
+fn identity4x4(): mat4;
+fn transpose(x: mat3): mat3;
+fn transpose(x: mat4): mat4;
+fn inverse(x: mat3): mat3;
+fn inverse(x: mat4): mat4;

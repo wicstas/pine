@@ -300,7 +300,6 @@ private:
   }
   SpatialNode& child(vec3& p) {
     auto index = 0;
-#pragma unroll
     for (int i = 0; i < 3; i++) {
       if (p[i] < 0.5f) {
         p[i] = p[i] * 2;
@@ -334,7 +333,7 @@ struct SpatialTree {
     p = clamp(p, aabb.lower, aabb.upper);
     auto& chosen_leaf = traverse(p);
     chosen_leaf.n_samples += 1;
-    chosen_leaf.collector->add_sample(s.w, s.flux);
+    chosen_leaf.collector->add_sample(s.w, s.flux, true);
   }
   SpatialNode& traverse(vec3 p) {
     return root.traverse(aabb.relative_position(p));

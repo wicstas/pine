@@ -1,5 +1,5 @@
 #pragma once
-
+#include <pine/core/lightsampler.h>
 #include <pine/core/geometry.h>
 #include <pine/core/sampler.h>
 #include <pine/core/scene.h>
@@ -26,7 +26,7 @@ public:
 
 class RTIntegrator : public Integrator {
 public:
-  RTIntegrator(Accel accel, Sampler sampler);
+  RTIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler);
 
   bool hit(Ray ray) const {
     return accel.hit(ray);
@@ -35,8 +35,8 @@ public:
     return accel.hit8(rays);
   }
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
-  psl::pair<psl::optional<MediumInteraction>, psl::optional<SurfaceInteraction>> intersect_tr(
-      Ray& ray, Sampler& sampler) const;
+  psl::optional<SurfaceInteraction> intersect(Ray& ray) const;
+  psl::optional<MediumSample> sample_medium(Ray ray, Sampler& sampler) const;
   vec3 transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler,
                      int skip_medium_index = -1) const;
 
@@ -45,6 +45,7 @@ public:
 protected:
   const Scene* scene;
   Accel accel;
+  LightSampler light_sampler;
   psl::vector<Sampler> samplers;
   int spp;
 };
@@ -59,9 +60,9 @@ public:
 
 class CustomRayIntegrator : public RayIntegrator {
 public:
-  CustomRayIntegrator(Accel accel, Sampler sampler,
+  CustomRayIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                       psl::function<vec3(CustomRayIntegrator&, Ray, Sampler&)> radiance_)
-      : RayIntegrator(MOVE(accel), MOVE(sampler)), radiance_(MOVE(radiance_)) {
+      : RayIntegrator(MOVE(accel), MOVE(sampler), MOVE(light_sampler)), radiance_(MOVE(radiance_)) {
   }
 
   vec3 radiance(Scene&, Ray ray, Sampler& sampler) override {

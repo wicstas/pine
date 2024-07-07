@@ -1,0 +1,32 @@
+# From https://www.shadertoy.com/view/XXyGzh
+# By SnoopethDuckDuck
+
+image_size = [640, 640];
+
+draw(image_size, (u: vec2): vec3 {
+    u *= image_size;
+    v = vec2(image_size);
+    u = 0.2 * (2 * u - v) / v.y;    
+    w = u;
+         
+   o = [1, 2, 3.0];
+   z = o;
+   a = 0.5;
+   t = 4.2;
+    for i in 0..19 {
+        a += 0.03;
+        t += 1;
+        t2 = vec2(t);
+        v = cos(t2 - 7 * u * pow(a, i)) - 5 * u;         
+        m = mat2(cos(vec2(i + 0.02 * t) - vec2(0, 11)), cos(vec2(i + 0.02 * t) - vec2(33, 0)));
+        u = m * u;
+        u += tanh(40 * dot(u, u) * cos(100 * [u.y, u.x] + t2)) / 200
+           + 0.2 * a * u
+           + cos(4 / exp(dot(o, o) / 100) + t) / 300;
+
+        o += 0.4 * (vec3(1) + cos(z + vec3(t))) / length( (1 + i * dot(v, v)) * sin(1.5 * u / (0.5 - dot(u, u)) - 9 * [u.y, u.x] + t2) );
+    }
+        
+    w -= u;
+   return pow((25.6 / (min(o, vec3(13)) + 164 / o) - dot(w, w) / 250), 4); 
+}).save("images/storm.png");

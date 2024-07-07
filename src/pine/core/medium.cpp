@@ -9,6 +9,7 @@
 
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/IO.h>
+#include "medium.h"
 
 namespace pine {
 
@@ -24,8 +25,7 @@ HomogeneousMedium::HomogeneousMedium(Shape shape, PhaseFunction pf, vec3 sigma_a
   accel = EmbreeAccel();
   accel.build(scene.get());
 }
-psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
-                                                                 Sampler& sampler) const {
+psl::optional<MediumSample> HomogeneousMedium::sample(const Ray& ray, Sampler& sampler) const {
   auto inside = false;
   auto it = SurfaceInteraction();
   {
@@ -46,7 +46,7 @@ psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
       if (t + dt > t_sampled) {
         auto W = sigma_s * exp(-(sigma_z - vec3(sigma)) * t_sampled);
         auto t_world = r.tmin + t_sampled - t;
-        return MediumInteraction(t_world, ray(t_world), W, pf);
+        return MediumSample(ray(t_world), W, 1.0f, pf);
       }
       t += dt;
     }
@@ -57,6 +57,9 @@ psl::optional<MediumInteraction> HomogeneousMedium::intersect_tr(const Ray& ray,
     r.tmin = r.tmax * 1.001f + max_dim * 1e-4f;
     r.tmax = ray.tmax;
   }
+}
+MediumPoint HomogeneousMedium::at(vec3) const {
+  return {.sigma_s = sigma_s};
 }
 vec3 HomogeneousMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler&) const {
   auto inside = false;
@@ -198,7 +201,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     }
   }
 }
-psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler& sampler) const {
+psl::optional<MediumSample> VDBMedium::sample(const Ray& ray, Sampler& sampler) const {
   auto tmin = ray.tmin, tmax = ray.tmax;
   if (!bbox.intersect(ray.o, ray.d, tmin, tmax))
     return psl::nullopt;
@@ -231,27 +234,31 @@ psl::optional<MediumInteraction> VDBMedium::intersect_tr(const Ray& ray, Sampler
         if (u < prob_n) {  // null-scattering
           u /= prob_n;
         } else if (u < prob_n + prob_s) {  // real-scattering
-          return MediumInteraction(tmin, ray(tmin), vec3(1.0f), pf);
-        } else {  // absorption
-          auto blackbody_color = vec3(0.0f);
-          if (flame_grid) {
-            auto pc = world2index_flame * vec4(ray(tmin), 1.0f);
-            auto flame = ((nanovdb::FloatGrid*)flame_grid)->getAccessor()(pc.x, pc.y, pc.z);
-            blackbody_color = vec3(blackbody_intensity * flame);
-            if (temperature_grid) {
-              auto pc = world2index_tem * vec4(ray(tmin), 1.0f);
-              auto T = ((nanovdb::FloatGrid*)temperature_grid)->getAccessor()(pc.x, pc.y, pc.z);
-              blackbody_color *= blackbody(temperature_scale * 4000 * T);
-            }
-          }
-          return MediumInteraction(tmin, ray(tmin), vec3(1.0f), sig_a * blackbody_color);
+          return MediumSample(ray(tmin), vec3(1.0f), 1.0f, pf);
         }
+        // else {  // absorption
+        //   auto blackbody_color = vec3(0.0f);
+        //   if (flame_grid) {
+        //     auto pc = world2index_flame * vec4(ray(tmin), 1.0f);
+        //     auto flame = ((nanovdb::FloatGrid*)flame_grid)->getAccessor()(pc.x, pc.y, pc.z);
+        //     blackbody_color = vec3(blackbody_intensity * flame);
+        //     if (temperature_grid) {
+        //       auto pc = world2index_tem * vec4(ray(tmin), 1.0f);
+        //       auto T = ((nanovdb::FloatGrid*)temperature_grid)->getAccessor()(pc.x, pc.y, pc.z);
+        //       blackbody_color *= blackbody(temperature_scale * 4000 * T);
+        //     }
+        //   }
+        //   return MediumSample(ray(tmin), vec3(1.0f), sig_a * blackbody_color);
+        // }
       }
     }
     tmin = cell->tmax * (1 + 1e-7f) + 1e-7f;
   }
 
   return psl::nullopt;
+}
+MediumPoint VDBMedium::at(vec3) const {
+  return {.sigma_s = sigma_s};
 }
 vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
   auto tmin = 0.0f;
@@ -280,72 +287,71 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   return vec3(1.0f);
 }
 
-LambdaMedium::LambdaMedium(mat4 transform, psl::function<float(vec3)> density, PhaseFunction pf,
-                           vec3 sigma_a, vec3 sigma_s)
-    : density(density),
-      bbox(OBB(AABB(vec3(-1, -1, -1), vec3(1, 1, 1)), transform)),
-      pf(pf),
-      sigma_a(sigma_a),
-      sigma_s(sigma_s),
-      sigma_z(sigma_a + sigma_s) {
-  sigma_a_ = average(sigma_a);
-  sigma_s_ = average(sigma_s);
-  sigma_z_ = sigma_a_ + sigma_s_;
-  sigma_maj = sigma_z_;
-  sigma_maj_inv = 1.0f / sigma_maj;
-}
-psl::optional<MediumInteraction> LambdaMedium::intersect_tr(const Ray& ray,
-                                                            Sampler& sampler) const {
-  (void)ray;
-  (void)sampler;
-  return psl::nullopt;
-}
-vec3 LambdaMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
-  auto tmin = 0.0f;
-  if (!bbox.intersect(p, d, tmin, tmax))
-    return vec3(1.0f);
+// LambdaMedium::LambdaMedium(mat4 transform, psl::function<float(vec3)> density, PhaseFunction pf,
+//                            vec3 sigma_a, vec3 sigma_s)
+//     : density(density),
+//       bbox(OBB(AABB(vec3(-1, -1, -1), vec3(1, 1, 1)), transform)),
+//       pf(pf),
+//       sigma_a(sigma_a),
+//       sigma_s(sigma_s),
+//       sigma_z(sigma_a + sigma_s) {
+//   sigma_a_ = average(sigma_a);
+//   sigma_s_ = average(sigma_s);
+//   sigma_z_ = sigma_a_ + sigma_s_;
+//   sigma_maj = sigma_z_;
+//   sigma_maj_inv = 1.0f / sigma_maj;
+// }
+// psl::optional<MediumSample> LambdaMedium::sample(const Ray& ray, Sampler& sampler) const {
+//   (void)ray;
+//   (void)sampler;
+//   return psl::nullopt;
+// }
+// vec3 LambdaMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) const {
+//   auto tmin = 0.0f;
+//   if (!bbox.intersect(p, d, tmin, tmax))
+//     return vec3(1.0f);
 
-  auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
-  auto u0 = rng.nextd();
-  double u[]{u0, u0, u0};
-  auto tr = vec3(1.0f);
+//   auto rng = RNG(sampler.get1d() * float(psl::numeric_limits<uint32_t>::max()));
+//   auto u0 = rng.nextd();
+//   double u[]{u0, u0, u0};
+//   auto tr = vec3(1.0f);
 
-  auto n_channel_remaining = 3;
-  bool active_channels[]{true, true, true};
-  while (n_channel_remaining) {
-    tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
-    if (tmin >= tmax)
-      break;
-    auto dd = vec3(1.0f) - sigma_z * density(p + tmin * d) * sigma_maj_inv;
-    for (int channel = 0; channel < 3; channel++) {
-      if (!active_channels[channel])
-        continue;
-      if (u[channel] < dd[channel]) {
-        u[channel] /= dd[channel];
-      } else {
-        tr[channel] = 0;
-        n_channel_remaining--;
-        active_channels[channel] = false;
-      }
-    }
-  }
-  return tr;
-}
+//   auto n_channel_remaining = 3;
+//   bool active_channels[]{true, true, true};
+//   while (n_channel_remaining) {
+//     tmin += -psl::log(1 - rng.nextf()) * sigma_maj_inv;
+//     if (tmin >= tmax)
+//       break;
+//     auto dd = vec3(1.0f) - sigma_z * density(p + tmin * d) * sigma_maj_inv;
+//     for (int channel = 0; channel < 3; channel++) {
+//       if (!active_channels[channel])
+//         continue;
+//       if (u[channel] < dd[channel]) {
+//         u[channel] /= dd[channel];
+//       } else {
+//         tr[channel] = 0;
+//         n_channel_remaining--;
+//         active_channels[channel] = false;
+//       }
+//     }
+//   }
+//   return tr;
+// }
 
-void medium_context(Context& context) {
-  context.type<HgPhaseFunction>("HgPF").ctor<>().ctor<float>();
-  context.type<TwoLobeHgPhaseFunction>("Hg2PF").ctor<float, float, float>();
-  context.type<CloudPhaseFunction>("CloudPF").ctor<>().ctor<float>();
-  context.type<PhaseFunction>("PhaseFunction")
+void medium_context(Context& ctx) {
+  ctx.type<HgPhaseFunction>("HgPF").ctor<>().ctor<float>();
+  ctx.type<TwoLobeHgPhaseFunction>("Hg2PF").ctor<float, float, float>();
+  ctx.type<CloudPhaseFunction>("CloudPF").ctor<>().ctor<float>();
+  ctx.type<PhaseFunction>("PhaseFunction")
       .ctor_variant<HgPhaseFunction, TwoLobeHgPhaseFunction, CloudPhaseFunction>();
 
-  context.type<HomogeneousMedium>("HomoMedium").ctor<Shape, PhaseFunction, vec3, vec3>();
-  context.type<VDBMedium>("VDBMedium")
+  ctx.type<HomogeneousMedium>("HomoMedium").ctor<Shape, PhaseFunction, vec3, vec3>();
+  ctx.type<VDBMedium>("VDBMedium")
       .ctor<psl::string, mat4, PhaseFunction, vec3, vec3>()
       .ctor<psl::string, mat4, PhaseFunction, vec3, vec3, float, float>();
-  context.type<LambdaMedium>("LambdaMedium")
-      .ctor<mat4, psl::function<float(vec3)>, PhaseFunction, vec3, vec3>();
-  context.type<Medium>("Medium").ctor_variant<HomogeneousMedium, VDBMedium, LambdaMedium>();
+  //   ctx.type<LambdaMedium>("LambdaMedium")
+  //       .ctor<mat4, psl::function<float(vec3)>, PhaseFunction, vec3, vec3>();
+  ctx.type<Medium>("Medium").ctor_variant<HomogeneousMedium, VDBMedium>();
 }
 
 }  // namespace pine

@@ -96,21 +96,6 @@ psl::map<psl::string, Bytes> deserialize(BytesView bytes) {
   return fs;
 }
 
-// static psl::string get_directory(psl::string_view filename) {
-//   auto p0 = psl::find_last_of(filename, '/');
-//   if (auto p1 = psl::find_last_of(filename, '\\'); p1 != filename.end()) {
-//     if (p0 != filename.end())
-//       p0 = psl::max(p0, p1);
-//     else
-//       p0 = p1;
-//   }
-//   if (p0 == filename.end())
-//     p0 = filename.begin();
-//   else
-//     p0 = psl::next(p0);
-//   return psl::string(filename.begin(), p0);
-// }
-
 psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data, bool flip_y,
                                     bool apply_gamma) {
   psl::vector<uint8_t> pixels(area(size) * nchannel);
@@ -192,7 +177,33 @@ psl::vector<uint8_t> reshape(vec2i size, int source_comp, int target_comp, const
   return result;
 }
 
-void scene_from(Scene &scene, void *tiny_gltf_model, mat4 m) {
+int count(tinygltf::Model &model, const tinygltf::Node &node) {
+  auto cnt = 1;
+  for (auto &&child : node.children)
+    cnt += count(model, model.nodes[child]);
+  return cnt;
+}
+
+inline mat4 q2m(float a, float b, float c, float d) {
+  return {a * a + b * b - c * c - d * d,
+          2 * b * c - 2 * a * d,
+          2 * b * d + 2 * a * c,
+          0,
+          2 * b * c + 2 * a * d,
+          a * a - b * b + c * c - d * d,
+          2 * c * d - 2 * a * b,
+          0,
+          2 * b * d - 2 * a * c,
+          2 * c * d + 2 * a * b,
+          a * a - b * b - c * c + d * d,
+          0,
+          0,
+          0,
+          0,
+          1};
+}
+
+void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform) {
   auto &model = *(tinygltf::Model *)tiny_gltf_model;
   tinygltf::TinyGLTF gltf_ctx;
 
@@ -208,147 +219,190 @@ void scene_from(Scene &scene, void *tiny_gltf_model, mat4 m) {
           Array2d<vec4u8>({image.width, image.height}, (vec4u8 *)image.image.data())));
   }
 
-  for (const auto &node : model.nodes) {
-    if (node.mesh < 0)
-      continue;
-    Debug(node.name.c_str());
-    auto transform = mat4::identity();
-    for (size_t i = 0; i < node.matrix.size(); i++)
-      transform[i / 4][i % 4] = node.matrix[i];
-    if (auto &S = node.scale; S.size() == 3)
-      transform = scale(S[0], S[1], S[2]) * transform;
+  auto process_node = [&](auto &me, tinygltf::Node &node, mat4 transform) -> void {
+    if (auto &m = node.matrix; m.size() == 16)
+      transform = transform * transpose(mat4(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8],
+                                             m[9], m[10], m[11], m[12], m[13], m[14], m[15]));
     if (auto &T = node.translation; T.size() == 3)
-      transform = translate(T[0], T[1], T[2]) * transform;
+      transform = transform * translate(T[0], T[1], T[2]);
+    if (auto &R = node.rotation; R.size() == 4)
+      transform = transform * q2m(R[3], R[0], R[1], R[2]);
+    if (auto &S = node.scale; S.size() == 3)
+      transform = transform * scale(S[0], S[1], S[2]);
 
-    for (const auto &primitive : model.meshes[node.mesh].primitives) {
-      auto mesh_ = Mesh();
-      const auto &indicesAccessor = model.accessors[primitive.indices];
-      const auto &indicesBbufferView = model.bufferViews[indicesAccessor.bufferView];
-      const auto &indicesBuffer = model.buffers[indicesBbufferView.buffer];
-      const auto indicesPtr =
-          indicesBuffer.data.data() + indicesBbufferView.byteOffset + indicesAccessor.byteOffset;
-      const auto indexSize = indicesAccessor.ByteStride(indicesBbufferView);
-      CHECK(indexSize == 2 || indexSize == 4);
-      switch (primitive.mode) {
-        case TINYGLTF_MODE_TRIANGLE_FAN: {
-          Fatal("Fan");
-        }
-        case TINYGLTF_MODE_TRIANGLE_STRIP: {
-          Fatal("Strip");
-        }
-        case TINYGLTF_MODE_TRIANGLES: {
-          if (indexSize == 2) {
-            auto ptr = (uint16_t *)indicesPtr;
-            for (size_t i = 0; i < indicesAccessor.count; i += 3)
-              mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
-          } else {
-            auto ptr = (uint32_t *)indicesPtr;
-            for (size_t i = 0; i < indicesAccessor.count; i += 3)
-              mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+    // Debug(node.name.c_str());
+    if (node.mesh >= 0)
+      for (const auto &primitive : model.meshes[node.mesh].primitives) {
+        auto mesh_ = Mesh();
+        const auto &indicesAccessor = model.accessors[primitive.indices];
+        const auto &indicesBbufferView = model.bufferViews[indicesAccessor.bufferView];
+        const auto &indicesBuffer = model.buffers[indicesBbufferView.buffer];
+        const auto indicesPtr =
+            indicesBuffer.data.data() + indicesBbufferView.byteOffset + indicesAccessor.byteOffset;
+        const auto indexSize = indicesAccessor.ByteStride(indicesBbufferView);
+        CHECK(indexSize == 2 || indexSize == 4);
+        switch (primitive.mode) {
+          case TINYGLTF_MODE_TRIANGLE_FAN: {
+            Fatal("Fan");
           }
+          case TINYGLTF_MODE_TRIANGLE_STRIP: {
+            Fatal("Strip");
+          }
+          case TINYGLTF_MODE_TRIANGLES: {
+            CHECK(indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE ||
+                  indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT ||
+                  indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT);
+            if (indexSize == 1) {
+              auto ptr = (uint8_t *)indicesPtr;
+              for (size_t i = 0; i < indicesAccessor.count; i += 3)
+                mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+            } else if (indexSize == 2) {
+              auto ptr = (uint16_t *)indicesPtr;
+              for (size_t i = 0; i < indicesAccessor.count; i += 3)
+                mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+            } else {
+              auto ptr = (uint32_t *)indicesPtr;
+              for (size_t i = 0; i < indicesAccessor.count; i += 3)
+                mesh_.indices.push_back({ptr[i], ptr[i + 1], ptr[i + 2]});
+            }
 
-          for (const auto &attribute : primitive.attributes) {
-            const auto accessor = model.accessors[attribute.second];
-            const auto &bufferView = model.bufferViews[accessor.bufferView];
-            const auto &buffer = model.buffers[bufferView.buffer];
-            const auto data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
-            if (attribute.first == "POSITION") {
-              if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO][TinyGLFT]Expect position data to be vec3");
-              switch (accessor.componentType) {
-                case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-                  auto ptr = (vec3 *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.vertices.push_back(ptr[i]);
-                } break;
-                case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
-                  auto ptr = (vec3d *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.vertices.push_back(ptr[i]);
-                } break;
-                default: PINE_UNREACHABLE; break;
-              }
-            } else if (attribute.first == "NORMAL") {
-              if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO][TinyGLFT]Expect normal data to be vec3");
-              switch (accessor.componentType) {
-                case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-                  auto ptr = (vec3 *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.normals.push_back(ptr[i]);
-                } break;
-                case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
-                  auto ptr = (vec3d *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.normals.push_back(ptr[i]);
-                } break;
-                default: PINE_UNREACHABLE; break;
-              }
-            } else if (attribute.first == "TEXCOORD_0") {
-              if (accessor.type != TINYGLTF_TYPE_VEC2)
-                Fatal("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
-              switch (accessor.componentType) {
-                case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-                  auto ptr = (vec2 *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.texcoords.push_back(ptr[i]);
-                } break;
-                case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
-                  auto ptr = (vec2d *)data;
-                  for (size_t i = 0; i < accessor.count; i++)
-                    mesh_.texcoords.push_back(ptr[i]);
-                } break;
-                default: PINE_UNREACHABLE; break;
+            for (const auto &attribute : primitive.attributes) {
+              const auto accessor = model.accessors[attribute.second];
+              const auto &bufferView = model.bufferViews[accessor.bufferView];
+              const auto &buffer = model.buffers[bufferView.buffer];
+              const auto data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+              if (attribute.first == "POSITION") {
+                if (accessor.type != TINYGLTF_TYPE_VEC3)
+                  Fatal("[FIleIO][TinyGLTF]Expect position data to be vec3");
+                switch (accessor.componentType) {
+                  case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                    auto ptr = (vec3 *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.vertices.push_back(ptr[i]);
+                  } break;
+                  case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                    auto ptr = (vec3d *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.vertices.push_back(ptr[i]);
+                  } break;
+                  default: PINE_UNREACHABLE; break;
+                }
+              } else if (attribute.first == "NORMAL") {
+                if (accessor.type != TINYGLTF_TYPE_VEC3)
+                  Fatal("[FIleIO][TinyGLFT]Expect normal data to be vec3");
+                switch (accessor.componentType) {
+                  case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                    auto ptr = (vec3 *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.normals.push_back(ptr[i]);
+                  } break;
+                  case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                    auto ptr = (vec3d *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.normals.push_back(ptr[i]);
+                  } break;
+                  default: PINE_UNREACHABLE; break;
+                }
+              } else if (attribute.first == "TEXCOORD_0") {
+                if (accessor.type != TINYGLTF_TYPE_VEC2)
+                  Fatal("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
+                switch (accessor.componentType) {
+                  case TINYGLTF_COMPONENT_TYPE_FLOAT: {
+                    auto ptr = (vec2 *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.texcoords.push_back(ptr[i]);
+                  } break;
+                  case TINYGLTF_COMPONENT_TYPE_DOUBLE: {
+                    auto ptr = (vec2d *)data;
+                    for (size_t i = 0; i < accessor.count; i++)
+                      mesh_.texcoords.push_back(ptr[i]);
+                  } break;
+                  default: PINE_UNREACHABLE;
+                }
               }
             }
           }
+          case TINYGLTF_MODE_POINTS:
+          case TINYGLTF_MODE_LINE:
+          case TINYGLTF_MODE_LINE_LOOP: break;
+          default: PINE_UNREACHABLE;
         }
-        case TINYGLTF_MODE_POINTS:
-        case TINYGLTF_MODE_LINE:
-        case TINYGLTF_MODE_LINE_LOOP: break;
-      }
 
-      auto basecolor = Node3f(vec3(1.0f));
-      auto roughness = Nodef(1.0f);
-      auto metallic = Nodef(0.0f);
-      auto transmission = Nodef(0.0f);
-      auto ior = Nodef(1.4f);
-      if (primitive.material != -1) {
-        const auto &mat = model.materials[primitive.material];
-        if (auto it = mat.extensions.find("KHR_materials_transmission"); it != mat.extensions.end())
-          transmission = it->second.Get("transmissionFactor").GetNumberAsDouble();
-        if (auto it = mat.extensions.find("KHR_materials_ior"); it != mat.extensions.end())
-          ior = it->second.Get("ior").GetNumberAsDouble();
+        auto basecolor = Node3f(vec3(1.0f));
+        auto roughness = Nodef(1.0f);
+        auto metallic = Nodef(0.0f);
+        auto transmission = Nodef(0.0f);
+        auto emission_color = vec3(1.0f);
+        auto emission_strength = 0.0f;
+        auto ior = 1.45f;
+        if (primitive.material != -1) {
+          const auto &mat = model.materials[primitive.material];
+          if (auto it = psl::find_or_nullopt(mat.extensions, "KHR_materials_transmission"))
+            transmission = it->Get("transmissionFactor").GetNumberAsDouble();
+          if (auto it = psl::find_or_nullopt(mat.extensions, "KHR_materials_ior"))
+            ior = it->Get("ior").GetNumberAsDouble();
+          if (auto it = psl::find_or_nullopt(mat.extensions, "KHR_materials_emissive_strength"))
+            emission_strength = it->Get("emissiveStrength").GetNumberAsDouble();
 
-        for (auto &[name, param] : mat.values) {
-          Debug("\t", mat.name.c_str(), ' ', name.c_str());
-          if (name == "baseColorFactor")
-            basecolor =
-                vec3(param.ColorFactor()[0], param.ColorFactor()[1], param.ColorFactor()[2]);
-          else if (name == "roughnessFactor")
-            roughness = param.Factor();
-          else if (name == "baseColorTexture")
-            basecolor = NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]);
-          else if (name == "metallicRoughnessTexture") {
-            roughness = NodeBinary<float, '^'>(
-                NodeComponent(
-                    NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]), 1),
-                1.0f / 2.2f);
-            metallic = NodeBinary<float, '^'>(
-                NodeComponent(
-                    NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]), 2),
-                1.0f / 2.2f);
+          auto to_vec3 = [](auto v) { return vec3(v[0], v[1], v[2]); };
+
+          basecolor = to_vec3(mat.pbrMetallicRoughness.baseColorFactor);
+          metallic = mat.pbrMetallicRoughness.metallicFactor;
+          roughness = mat.pbrMetallicRoughness.roughnessFactor;
+          emission_color = to_vec3(mat.emissiveFactor);
+
+          for (auto &[name, param] : mat.values) {
+            if (name == "baseColorFactor")
+              basecolor = to_vec3(param.ColorFactor());
+            else if (name == "roughnessFactor")
+              roughness = param.Factor();
+            else if (name == "metallicFactor")
+              metallic = param.Factor();
+            else if (name == "baseColorTexture")
+              basecolor = NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]);
+            else if (name == "metallicRoughnessTexture") {
+              roughness = NodeComponent(
+                  NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]), 1);
+              metallic = NodeComponent(
+                  NodeImage(NodeUV(), images[model.textures[param.TextureIndex()].source]), 2);
+            }
           }
         }
+
+        mesh_.apply(transform);
+
+        auto emission = emission_color * emission_strength;
+        if (emission.is_zero())
+          scene.add_geometry(MOVE(mesh_),
+                             UberMaterial(basecolor, roughness, metallic, transmission, ior));
+        else
+          scene.add_geometry(MOVE(mesh_), EmissiveMaterial(emission));
       }
 
-      mesh_.apply(m * transform);
-      scene.add_geometry(MOVE(mesh_),
-                         UberMaterial(basecolor, roughness, metallic, transmission, ior));
+    for (auto node_index : node.children)
+      me(me, model.nodes[node_index], transform);
+  };
+
+  for (auto &&scene : model.scenes)
+    for (auto node_index : scene.nodes)
+      process_node(process_node, model.nodes[node_index], global_transform);
+
+  for (const auto &node : model.nodes) {
+    if (node.camera >= 0) {
+      auto &&cam = model.cameras[node.camera];
+      auto &&P = node.translation;
+      auto &&R = node.rotation;
+      CHECK(P.size() == 3);
+      CHECK(R.size() == 4);
+      auto pos = vec3(P[0], P[1], P[2]);
+      auto rot = mat3(q2m(R[3], R[0], R[1], R[2]));
+      auto at = pos + rot * vec3(0, 0, -1);
+      scene.set_camera(ThinLenCamera(Film(vec2i(640 * cam.perspective.aspectRatio, 640)), pos, at,
+                                     cam.perspective.yfov / 2));
     }
   }
 }
-Mesh mesh_from(void *tiny_gltf_model) {
+Mesh mesh_from_gltf(void *tiny_gltf_model) {
   auto mesh_ = Mesh();
   auto &model = *(tinygltf::Model *)tiny_gltf_model;
   tinygltf::TinyGLTF gltf_ctx;
@@ -459,7 +513,7 @@ Mesh mesh_from(void *tiny_gltf_model) {
   }
   return mesh_;
 }
-UberMaterial material_from(void *tiny_gltf_model) {
+UberMaterial material_from_gltf(void *tiny_gltf_model) {
   auto &model = *(tinygltf::Model *)tiny_gltf_model;
   tinygltf::TinyGLTF gltf_ctx;
 
@@ -483,7 +537,7 @@ UberMaterial material_from(void *tiny_gltf_model) {
   auto roughness = Nodef(1.0f);
   auto metallic = Nodef(0.0f);
   auto transmission = Nodef(0.0f);
-  auto ior = Nodef(1.4f);
+  auto ior = 1.45f;
   if (auto it = mat.extensions.find("KHR_materials_transmission"); it != mat.extensions.end())
     transmission = it->second.Get("transmissionFactor").GetNumberAsDouble();
   if (auto it = mat.extensions.find("KHR_materials_ior"); it != mat.extensions.end())
@@ -544,12 +598,13 @@ tinygltf::FsCallbacks create_tinygltf_fs(const psl::map<psl::string, Bytes> *fil
   fs.user_data = (void *)files;
   return fs;
 }
-void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string, Bytes> &files,
-                mat4 m) {
+void scene_from_gltf(Scene &scene, psl::string file_name, const psl::map<psl::string, Bytes> &files,
+                     mat4 m) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
 
+  gltf_ctx.SetStoreOriginalJSONForExtrasAndExtensions(true);
   gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
   auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
   if (!warn.empty())
@@ -559,15 +614,15 @@ void scene_from(Scene &scene, psl::string file_name, const psl::map<psl::string,
   if (!ret)
     Fatal("[FIleIO]Unable to create scene from GLTF file");
 
-  scene_from(scene, &model, m);
+  scene_from_gltf(scene, &model, m);
 }
-Mesh mesh_from(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
+void scene_from_gltf_binary(Scene &scene, const Bytes &data, mat4 m) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
 
-  gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
-  auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
+  gltf_ctx.SetStoreOriginalJSONForExtrasAndExtensions(true);
+  auto ret = gltf_ctx.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size());
   if (!warn.empty())
     Warning("[FileIO]", warn.c_str());
   if (!err.empty())
@@ -575,9 +630,9 @@ Mesh mesh_from(psl::string file_name, const psl::map<psl::string, Bytes> &files)
   if (!ret)
     Fatal("[FIleIO]Unable to create scene from GLTF file");
 
-  return mesh_from(&model);
+  scene_from_gltf(scene, &model, m);
 }
-UberMaterial material_from(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
+Mesh mesh_from_gltf(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
   tinygltf::Model model;
   tinygltf::TinyGLTF gltf_ctx;
   std::string err, warn;
@@ -591,67 +646,99 @@ UberMaterial material_from(psl::string file_name, const psl::map<psl::string, By
   if (!ret)
     Fatal("[FIleIO]Unable to create scene from GLTF file");
 
-  return material_from(&model);
+  return mesh_from_gltf(&model);
+}
+UberMaterial material_from_gltf(psl::string file_name, const psl::map<psl::string, Bytes> &files) {
+  tinygltf::Model model;
+  tinygltf::TinyGLTF gltf_ctx;
+  std::string err, warn;
+
+  gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
+  auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
+  if (!warn.empty())
+    Warning("[FileIO]", warn.c_str());
+  if (!err.empty())
+    Fatal("[FileIO]", err.c_str());
+  if (!ret)
+    Fatal("[FIleIO]Unable to create scene from GLTF file");
+
+  return material_from_gltf(&model);
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
   Debug("[FileIO]Loading `", filename, "`");
   auto source = read_string_file(filename);
-  //   interpret(context, source);
   jit_interpret(context, source);
 }
 
 void fileio_context(Context &ctx) {
   ctx.type<Bytes>("Bytes");
-  ctx("read_binary") = +[](psl::string_view filename) { return read_binary_file(filename); };
-  ctx("load") = [&](Scene &scene, psl::string file_path) {
-    auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
-    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
-    auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
-    scene_from(scene, scene_name, fs, mat4::identity());
+  ctx("read_binary") = [](psl::string_view filename) { return read_binary_file(filename); };
+  ctx("load") = [](Scene &scene, psl::string file_path) {
+    auto ext = from_last_of(file_path, '.');
+    if (ext == "pineb") {
+      auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
+      auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
+      auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
+      scene_from_gltf(scene, scene_name, fs, mat4::identity());
+    } else {
+      auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
+      scene_from_gltf_binary(scene, bytes, mat4::identity());
+    }
   };
-  ctx("load") = [&](Scene &scene, psl::string file_path, mat4 m) {
-    auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
-    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
-    auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
-    scene_from(scene, scene_name, fs, m);
+  ctx("load") = [](Scene &scene, psl::string file_path, mat4 m) {
+    auto ext = from_last_of(file_path, '.');
+    if (ext == "pineb") {
+      auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
+      auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
+      auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
+      scene_from_gltf(scene, scene_name, fs, m);
+    } else {
+      auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
+      scene_from_gltf_binary(scene, bytes, m);
+    }
   };
-  ctx("Mesh") = [&](psl::string file_path) {
+  ctx("Mesh") = [](psl::string file_path) {
     auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
-    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
+    auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
     auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
-    return mesh_from(scene_name, fs);
+    return mesh_from_gltf(scene_name, fs);
   };
-  ctx("load_material") = [&](psl::string file_path) {
+  ctx("load_material") = [](psl::string file_path) {
     auto scene_name = psl::until_last_of(psl::from_last_of(file_path, '/'), '.') + ".gltf";
-    auto bytes = ctx.call<Bytes>("read_binary", psl::string_view(file_path));
+    auto bytes = Context::context.call<Bytes>("read_binary", psl::string_view(file_path));
     auto fs = deserialize<psl::map<psl::string, Bytes>>(bytes);
-    return material_from(scene_name, fs);
+    return material_from_gltf(scene_name, fs);
   };
-  ctx("load_image") = [&](psl::string_view filename) {
-    auto reader = [&ctx](psl::string_view filename) {
-      return ctx.call<Bytes>("read_binary", filename);
+  ctx("load_image") = [](psl::string_view filename) {
+    auto reader = [](psl::string_view filename) {
+      return Context::context.call<Bytes>("read_binary", filename);
     };
     return load_image(filename, reader);
   };
-  ctx("save") = +[](const Image &array, psl::string filename) { save_image(filename, array); };
-  ctx("save") = +[](const Array2d3f &array, psl::string filename) { save_image(filename, array); };
-  ctx("save") = +[](const Array2d4f &array, psl::string filename) { save_image(filename, array); };
-  ctx("save") = +[](const Image &array, psl::string filename, bool should_invert_y) {
+  ctx("heightmap") = [](psl::string_view path) {
+    auto image = Context::context.call<psl::shared_ptr<Image>>("load_image", path);
+    return heightmap(image->size(),
+                     psl::function<float(vec2i)>([&](vec2i p) { return (*image)[p].x; }));
+  };
+  ctx("save") = [](const Image &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = [](const Array2d3f &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = [](const Array2d4f &array, psl::string filename) { save_image(filename, array); };
+  ctx("save") = [](const Image &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
-  ctx("save") = +[](const Array2d3f &array, psl::string filename, bool should_invert_y) {
+  ctx("save") = [](const Array2d3f &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
-  ctx("save") = +[](const Array2d4f &array, psl::string filename, bool should_invert_y) {
+  ctx("save") = [](const Array2d4f &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
 
   ctx.type<VideoWriter>("VideoWriter")
       .ctor<psl::string, vec2i, int>()
-      .method("add_frame", overloaded<const Array2d3f &>(&VideoWriter::add_frame))
-      .method("add_frame", overloaded<const Array2d4f &>(&VideoWriter::add_frame))
-      .method("done", &VideoWriter::done);
+      .method<overloaded<const Array2d3f &>(&VideoWriter::add_frame)>("add_frame")
+      .method<overloaded<const Array2d4f &>(&VideoWriter::add_frame)>("add_frame")
+      .method<&VideoWriter::done>("done");
 }
 
 }  // namespace pine

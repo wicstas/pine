@@ -1,0 +1,11 @@
+scene = Scene();
+image_size = [640, 360] * 2;
+
+scene.add(Mesh("scenes/model/backdrop/backdrop.pineb").apply(scale(10, 5, 5)), Diffuse([1, 1, 1]));
+scene.load("scenes/model/pine/pine.pineb", scale(vec3(0.04)));
+
+scene.add(Rect([0, 4, 0], [0.5, 0, 0], [0, 0, 0.5]), Emissive(200 * [1, 1, 1]));
+scene.set(ThinLenCamera(Film(image_size), [-1.2, 1.1, 4], [-1.2, 1.1, 0], 0.3));
+
+PathIntegrator(BlueSampler(256), 8).render(scene);
+scene.camera.film().save("images/pine.png");

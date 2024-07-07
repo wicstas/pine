@@ -145,54 +145,54 @@ float BlueSobolSampler::sample_dimension(int dim) const {
 void MltSampler::ensure_ready(int dim) {
   if (dim >= (int)X.size())
     X.resize(dim + 1);
-  PrimarySample& Xi = X[dim];
+  auto& Xi = X[dim];
 
-  if (Xi.lastModificationIndex < lastLargeStepIndex) {
+  if (Xi.last_modified_index < last_large_step_index) {
     Xi.value = rng.nextf();
-    Xi.lastModificationIndex = lastLargeStepIndex;
+    Xi.last_modified_index = last_large_step_index;
   }
 
   Xi.backup();
-  if (largeStep) {
+  if (large_step) {
     Xi.value = rng.nextf();
   } else {
-    int64_t nSmall = sample_index - Xi.lastModificationIndex;
-    float normalSample = psl::sqrt(2.0f) * erf_inv(2 * rng.nextf() - 1);
-    float effSigma = sigma * psl::sqrt((float)nSmall);
-    Xi.value = psl::fract(Xi.value + normalSample * effSigma);
+    auto n_small = sample_index - Xi.last_modified_index;
+    auto normal_sample = psl::Sqrt2 * erf_inv(2 * rng.nextf() - 1);
+    auto eff_sigma = sigma * psl::sqrt((float)n_small);
+    Xi.value = psl::fract(Xi.value + normal_sample * eff_sigma);
   }
-  Xi.lastModificationIndex = sample_index;
+  Xi.last_modified_index = sample_index;
 }
 
 void sampler_context(Context& ctx) {
   ctx.type<UniformSampler>("UniformSampler")
       .ctor<int>()
-      .method("spp", &UniformSampler::spp)
-      .method("start_pixel", &UniformSampler::start_pixel)
-      .method("start_next_sample", &UniformSampler::start_next_sample)
-      .method("get1d", &UniformSampler::get1d)
-      .method("get2d", &UniformSampler::get2d);
+      .method<&UniformSampler::spp>("spp")
+      .method<&UniformSampler::start_pixel>("start_pixel")
+      .method<&UniformSampler::start_next_sample>("start_next_sample")
+      .method<&UniformSampler::get1d>("get1d")
+      .method<&UniformSampler::get2d>("get2d");
   ctx.type<HaltonSampler>("HaltonSampler")
       .ctor<int>()
-      .method("spp", &HaltonSampler::spp)
-      .method("start_pixel", &HaltonSampler::start_pixel)
-      .method("start_next_sample", &HaltonSampler::start_next_sample)
-      .method("get1d", &HaltonSampler::get1d)
-      .method("get2d", &HaltonSampler::get2d);
+      .method<&HaltonSampler::spp>("spp")
+      .method<&HaltonSampler::start_pixel>("start_pixel")
+      .method<&HaltonSampler::start_next_sample>("start_next_sample")
+      .method<&HaltonSampler::get1d>("get1d")
+      .method<&HaltonSampler::get2d>("get2d");
   ctx.type<SobolSampler>("SobolSampler")
       .ctor<int>()
-      .method("spp", &SobolSampler::spp)
-      .method("start_pixel", &SobolSampler::start_pixel)
-      .method("start_next_sample", &SobolSampler::start_next_sample)
-      .method("get1d", &SobolSampler::get1d)
-      .method("get2d", &SobolSampler::get2d);
+      .method<&SobolSampler::spp>("spp")
+      .method<&SobolSampler::start_pixel>("start_pixel")
+      .method<&SobolSampler::start_next_sample>("start_next_sample")
+      .method<&SobolSampler::get1d>("get1d")
+      .method<&SobolSampler::get2d>("get2d");
   ctx.type<BlueSobolSampler>("BlueSampler")
       .ctor<int>()
-      .method("spp", &BlueSobolSampler::spp)
-      .method("start_pixel", &BlueSobolSampler::start_pixel)
-      .method("start_next_sample", &BlueSobolSampler::start_next_sample)
-      .method("get1d", &BlueSobolSampler::get1d)
-      .method("get2d", &BlueSobolSampler::get2d);
+      .method<&BlueSobolSampler::spp>("spp")
+      .method<&BlueSobolSampler::start_pixel>("start_pixel")
+      .method<&BlueSobolSampler::start_next_sample>("start_next_sample")
+      .method<&BlueSobolSampler::get1d>("get1d")
+      .method<&BlueSobolSampler::get2d>("get2d");
 
   ctx.type<Sampler>("Sampler")
       .ctor_variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler>();

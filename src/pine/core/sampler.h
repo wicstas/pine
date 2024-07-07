@@ -1,5 +1,4 @@
 #pragma once
-
 #include <pine/core/lowdiscrepancy.h>
 #include <pine/core/vecmath.h>
 #include <pine/core/primes.h>
@@ -202,23 +201,21 @@ private:
 };
 
 struct MltSampler {
-  MltSampler(float sigma, float largeStepProbability, int streamCount, int seed)
-      : rng(seed),
-        sigma(sigma),
-        largeStepProbability(largeStepProbability),
-        streamCount(streamCount) {
+  MltSampler(float sigma, float p_large, int seed) : rng(seed), sigma(sigma), p_large(p_large) {
   }
 
+  int spp() const {
+    return -1;
+  }
+  void init(vec2i) {
+  }
+  Sampler& start_pixel(vec2i, int) {
+    PINE_UNREACHABLE;
+  }
   void start_next_sample() {
     sample_index++;
-    streamIndex = 0;
     dimension = 0;
-    largeStep = rng.nextf() < largeStepProbability;
-  }
-
-  void start_stream(int index) {
-    streamIndex = index;
-    dimension = 0;
+    large_step = rng.nextf() < p_large;
   }
 
   float get1d() {
@@ -232,13 +229,13 @@ struct MltSampler {
   }
 
   void accept() {
-    if (largeStep)
-      lastLargeStepIndex = sample_index;
+    if (large_step)
+      last_large_step_index = sample_index;
   }
 
   void reject() {
     for (auto& Xi : X)
-      if (Xi.lastModificationIndex == sample_index)
+      if (Xi.last_modified_index == sample_index)
         Xi.restore();
     --sample_index;
   }
@@ -246,37 +243,37 @@ struct MltSampler {
 private:
   void ensure_ready(int dim);
   int get_next_index() {
-    return streamIndex + streamCount * dimension++;
+    return dimension++;
   }
 
-  struct PrimarySample {
+  struct PrimarySampleBackup {
+    float value = 0;
+    int64_t last_modified_index = 0;
+  };
+  struct PrimarySample : PrimarySampleBackup {
     void backup() {
-      valueBackup = value;
-      modifyBackup = lastModificationIndex;
+      backup_ = *this;
     }
     void restore() {
-      value = valueBackup;
-      lastModificationIndex = modifyBackup;
+      value = backup_.value;
+      last_modified_index = backup_.last_modified_index;
     }
 
-    float value = 0, valueBackup = 0;
-    int64_t lastModificationIndex = 0;
-    int64_t modifyBackup = 0;
+    PrimarySampleBackup backup_;
   };
 
   RNG rng;
-  const float sigma, largeStepProbability;
+  float sigma, p_large;
   psl::vector<PrimarySample> X;
   int64_t sample_index = 0;
-  int64_t streamIndex = 0, streamCount = 0;
   int64_t dimension = 0;
 
-  bool largeStep = true;
-  int64_t lastLargeStepIndex = 0;
+  bool large_step = true;
+  int64_t last_large_step_index = 0;
 };
 
 struct Sampler
-    : private psl::variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler> {
+    : psl::variant<UniformSampler, HaltonSampler, SobolSampler, BlueSobolSampler, MltSampler> {
   using variant::variant;
 
   int spp() const {

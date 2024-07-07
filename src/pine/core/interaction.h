@@ -8,19 +8,26 @@
 namespace pine {
 
 struct SurfaceInteraction {
-  Ray spawn_ray(vec3 wo, float distance = float_max) const;
+  SurfaceInteraction() = default;
+  SurfaceInteraction(vec3 p) : p(p) {
+  }
+  Ray spawn_ray(vec3 wo, float tmax = float_max) const;
 
   void compute_transformation() {
-    world_to_local = inverse(coordinate_system(n));
+    l2w = coordinate_system(n);
+    w2l = transpose(l2w);
+  }
+  vec3 to_world(vec3 w) const {
+    return l2w * w;
   }
   vec3 to_local(vec3 w) const {
-    return world_to_local * w;
+    return w2l * w;
   }
 
   vec3 p;
   vec3 n;
   vec2 uv;
-  mat3 world_to_local;
+  mat3 w2l, l2w;
 
   const Material& material() const;
 
@@ -28,29 +35,35 @@ struct SurfaceInteraction {
   const Material* _material = nullptr;
 };
 
-struct MediumInteraction {
-  MediumInteraction() = default;
-  MediumInteraction(float t, vec3 p, vec3 W, PhaseFunction pg)
-      : t(t), p(p), W(W), pg(MOVE(pg)) {
-  }
-  MediumInteraction(float t, vec3 p, vec3 W, vec3 le) : t(t), p(p), W(W), le(le) {
-  }
+// struct MediumSample {
+//   MediumSample() = default;
+//   MediumSample(vec3 p, vec3 W, float pdf, PhaseFunction pg) : p(p), W(W), pg(MOVE(pg)) {
+//   }
+//   Ray spawn_ray(vec3 wo, float tmax = float_max) const {
+//     return Ray(p, wo, 0.0f, tmax * 0.999f);
+//   }
 
-  float t;
-  vec3 p;
-  vec3 W;
-  PhaseFunction pg;
-  psl::optional<vec3> le;
-};
+//   vec3 p;
+//   vec3 W;
+//   PhaseFunction pg;
+// };
 
-struct Interaction : psl::variant<SurfaceInteraction, MediumInteraction> {
-  using variant::variant;
-  vec3 p() const {
-    return dispatch([](auto&& x) { return x.p; });
+struct Interaction : SurfaceInteraction {
+  Interaction(SurfaceInteraction x) : SurfaceInteraction(x) {
   }
-  vec3 surface_n() const {
-    return as<SurfaceInteraction>().n;
-  }
+  using SurfaceInteraction::SurfaceInteraction;
 };
+// struct Interaction : psl::variant<SurfaceInteraction, MediumSample> {
+//   using variant::variant;
+//   vec3 p() const {
+//     return dispatch([](auto&& x) { return x.p; });
+//   }
+//   vec3 surface_n() const {
+//     return as<SurfaceInteraction>().n;
+//   }
+//   Ray spawn_ray(vec3 wo, float tmax = float_max) const {
+//     return dispatch([&](auto&& x) { return x.spawn_ray(wo, tmax); });
+//   }
+// };
 
 }  // namespace pine

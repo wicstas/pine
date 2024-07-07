@@ -1,27 +1,70 @@
 #include <pine/core/jit_compiler.h>
 #include <pine/core/profiler.h>
+#include <pine/core/vecmath.h>
 #include <pine/core/atomic.h>
 
 #include <psl/algorithm.h>
+#include <psl/optional.h>
 #include <psl/variant.h>
+#include <psl/memory.h>
+#include <psl/array.h>
+#include <psl/set.h>
+
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/GenericValue.h"
+#include "llvm/ExecutionEngine/MCJIT.h"
+#include "llvm/IR/Argument.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/ConstantFolder.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/DynamicLibrary.h"
+#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/OptimizationLevel.h"
 
 namespace pine {
-struct PExpr;
-struct Expr0;
-struct Block;
-struct BlockElem;
-struct FunctionDefinition;
 
-template <typename T>
-struct ExplicitParameter {
-  explicit ExplicitParameter(T value) : value(MOVE(value)) {
+// ================================================
+// Source
+// ================================================
+struct SourceLoc {
+  SourceLoc() = default;
+  SourceLoc(size_t row, size_t column) : row(row), column(column) {
   }
-  operator T&() {
-    return value;
-  }
-  T value;
+  size_t row = size_t(-1);
+  size_t column = size_t(-1);
 };
+struct SourceLines {
+  SourceLines() = default;
+  SourceLines(psl::string_view tokens, size_t paddings);
 
+  psl::optional<psl::string_view> next_line(size_t row) const;
+
+  psl::optional<char> next(SourceLoc sl) const;
+
+  template <typename... Args>
+  [[noreturn]] void error(SourceLoc sl, const Args&... args) const {
+    error_impl(sl, psl::to_string(args...));
+  }
+
+  [[noreturn]] void error_impl(SourceLoc sl, psl::string_view message) const;
+
+private:
+  psl::vector<psl::string> lines;
+  size_t paddings = invalid;
+  static constexpr size_t invalid = size_t(-1);
+};
 static psl::vector<psl::string> split(psl::string_view input, auto pred) {
   auto parts = psl::vector<psl::string>{};
   auto start = input.begin();
@@ -36,47 +79,20 @@ static psl::vector<psl::string> split(psl::string_view input, auto pred) {
 
   return parts;
 }
-// static psl::string extract_return_type(psl::string_view type) {
-//   auto depth = 0;
-//   for (size_t i = 0; i < type.size(); i++) {
-//     if (type[i] == '(')
-//       depth++;
-//     if (type[i] == ')')
-//       depth--;
-//     if (depth == 0 && type[i] == ':')
-//       return psl::string(type.substr(i + 2));
-//   }
-//   return "";
-// }
-static TypeTag type_tag_from_string(psl::string_view name) {
-  if (name.size() && name.back() == '&')
-    return TypeTag(psl::string(name.substr(0, name.size() - 1)), true);
-  else
-    return TypeTag(psl::string(name), false);
-}
-
 SourceLines::SourceLines(psl::string_view tokens, size_t paddings)
     : lines(split(tokens, psl::equal_to_any('\n', '\r', '\f'))), paddings(paddings) {
 }
 psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
-  CHECK_LE(row, lines.size());
   if (row == lines.size())
     return psl::nullopt;
   return lines[row];
 }
 psl::optional<char> SourceLines::next(SourceLoc sl) const {
-  if (auto line = next_line(sl.row)) {
-    DCHECK_LT(sl.column, line->size());
+  if (auto line = next_line(sl.row))
     return (*line)[sl.column];
-  }
   return psl::nullopt;
 }
 [[noreturn]] void SourceLines::error_impl(SourceLoc sl, psl::string_view message) const {
-  CHECK(paddings != invalid);
-  CHECK(sl.column != size_t(-1));
-  CHECK(sl.row != size_t(-1));
-  CHECK_LE(sl.row, lines.size());
-
   auto line_at = [this](int64_t i) {
     if (i < 0 || i >= int64_t(lines.size()))
       return psl::string();
@@ -93,154 +109,541 @@ psl::optional<char> SourceLines::next(SourceLoc sl) const {
   if (vicinity.size())
     vicinity.pop_back();
 
-  ReturnControlToMain(message, "\n", vicinity);
+  Fatal(message, "\n", vicinity);
 }
 
-struct ValueResult {
-  operator bool() const {
+// ================================================
+// Module
+// ================================================
+struct Value {
+  enum ValueCategory { L, R };
+  Value() = default;
+  Value(llvm::Value* ptr, psl::string type_name, ValueCategory category = ValueCategory::R)
+      : ptr(ptr), type_name(MOVE(type_name)), category(category) {
+  }
+  explicit operator bool() const {
     return ptr;
+  }
+  bool is_l_value() const {
+    return category == ValueCategory::L;
+  }
+  bool is_r_value() const {
+    return category == ValueCategory::R;
   }
 
   llvm::Value* ptr = nullptr;
-  size_t type_idx;
+  psl::string type_name;
+  ValueCategory category;
 };
-
 struct Module {
-  struct FunctionInfo {
-    const Function* f = nullptr;
-    llvm::Function* llvm_f = nullptr;
-    llvm::Value* f_value = nullptr;
-    size_t param_byte_size = 0;
-  };
   struct TypeInfo {
-    psl::string name;
-    size_t byte_size = 0;
     llvm::Type* ptr = nullptr;
-    llvm::Function* copy_operator = nullptr;
+    llvm::Function* destructor = nullptr;
+  };
+  struct FunctionInfo {
+    llvm::Function* ptr = nullptr;
+    const Function* f = nullptr;
   };
 
-  auto find_f(psl::string_view name, psl::span<const pine::TypeTag> atypes) {
-    return context.find_f(name, atypes);
-  }
-  auto find_f(psl::string_view name, psl::span<const pine::ValueResult> args) {
-    return context.find_f(name, psl::vector<TypeTag>(psl::transform(args, [this](auto&& x) {
-                            return TypeTag(type(x.type_idx).name);
-                          })));
-  }
-  ValueResult find_variable(psl::string_view name) {
-    for (auto& map : psl::reverse_adapter(variables))
-      if (auto it = map.find(name); it != map.end())
-        return it->second;
-    return {};
-  }
+  // ================================================
+  // Module construction
+  // ================================================
   [[noreturn]] void error(SourceLoc loc, const auto&... args) const {
     source.error(loc, args...);
   }
 
-  llvm::BasicBlock* create_block() {
-    return llvm::BasicBlock::Create(C, psl::to_string("block.", block_counter).c_str(), F);
+  Context::FindUniqueFResult find_unique_f(psl::string_view name) const {
+    return context.find_unique_f(name);
   }
-  void cond_br(ValueResult cond, llvm::BasicBlock* true_block, llvm::BasicBlock* false_block) {
-    builder.CreateCondBr(
-        builder.CreateICmpNE(
-            builder.CreateLoad(builder.getInt8Ty(),
-                               builder.CreateConstGEP2_32(type(cond.type_idx).ptr, cond.ptr, 0, 0)),
-            builder.getInt8(0)),
-        true_block, false_block, (llvm::Instruction*)nullptr);
+  size_t find_unique_f(SourceLoc sl, psl::string_view name) const {
+    if (auto fr = context.find_unique_f(name))
+      return fr.fi;
+    else if (fr.error == fr.FindNone)
+      error(sl, "Unable to find function `", name, '`');
+    else
+      error(sl, "`", name, " is ambiguous");
   }
-
-  llvm::Value* alloc(llvm::Type* type) {
-    auto current = builder.GetInsertBlock();
-    builder.SetInsertPoint(&F->getEntryBlock(), --F->getEntryBlock().end());
-    auto value = builder.CreateAlloca(type);
-    builder.SetInsertPoint(current);
-    return value;
+  auto find_f(psl::string_view name, psl::span<const pine::TypeTag> atypes) const {
+    return context.find_f(name, atypes);
+  }
+  auto find_f(psl::string_view name, psl::span<const pine::Value> args) const {
+    return find_f(name, psl::transform_vector(args, [](auto&& x) { return TypeTag(x.type_name); }));
   }
 
-  void add_type(psl::string name, llvm::Type* type, size_t byte_size, void* copy_operator) {
-    if (copy_operator) {
-      auto c_name = "copy_" + name;
-      llvm::sys::DynamicLibrary::AddSymbol(c_name.c_str(), copy_operator);
-      name2type_idx[name] = types.size();
-      types.emplace_back(
-          MOVE(name), byte_size, type,
-          llvm::Function::Create(llvm::FunctionType::get(type, {type}, false),
-                                 llvm::Function::ExternalLinkage, c_name.c_str(), M));
-    } else {
-      name2type_idx[name] = types.size();
-      types.emplace_back(MOVE(name), byte_size, type, nullptr);
+  void add_type(psl::string name, llvm::Type* ptr, llvm::Function* destructor) {
+    types[name] = {ptr, destructor};
+  }
+  TypeInfo type(const TypeTag& tag) {
+    if (tag.is_ref)
+      return {llvm::PointerType::get(C, 0), nullptr};
+    else if (is_function_type(tag.name))
+      return {function_object_type(), nullptr};
+    else if (auto type_info = psl::find_or_nullopt(types, tag.name))
+      return *type_info;
+    else
+      Fatal("Type `", tag.name, "` is not registered");
+  }
+  const TypeInfo type(psl::string name) {
+    return type(TypeTag(name));
+  }
+  size_t type_size(psl::string_view name) {
+    if (is_function_type(name))
+      return sizeof(psl::pair<void*, void*>);
+    else
+      return context.get_type_trait(name)->byte_size;
+  }
+
+  struct ClassMemberInfo {
+    explicit operator bool() const {
+      return index != size_t(-1);
     }
+    psl::string type_name;
+    size_t index = size_t(-1);
+  };
+  void set_class_member_info(psl::string class_name, psl::string member_type_name, size_t index) {
+    class_member_infos.insert({class_name, ClassMemberInfo{member_type_name, index}});
   }
+  ClassMemberInfo find_class_member_info(psl::string_view name) {
+    return psl::find_or(class_member_infos, name, ClassMemberInfo());
+  }
+
   void add_function(const Function& f) {
-    auto rtype = llvm::Type::getVoidTy(C);
-    auto param_byte_size = f.byte_size() + type(f.rtype().name).byte_size +
-                           psl::sum<size_t>(psl::transform(f.ptypes(), [&](auto&& x) {
-                             return x.is_ref ? 8 : type(x.name).byte_size;
-                           }));
-    auto ptype = llvm::PointerType::getUnqual(
-        llvm::ArrayType::get(llvm::Type::getInt8Ty(C), param_byte_size));
-    auto function =
-        llvm::Function::Create(llvm::FunctionType::get(rtype, ptype, false),
-                               llvm::Function::ExternalLinkage, f.signature().c_str(), M);
-    llvm::sys::DynamicLibrary::AddSymbol(f.signature().c_str(), f.ptr());
-    functions.emplace_back(&f, function, create_function_value(f), param_byte_size);
+    auto f_ptr =
+        llvm::Function::Create(get_type_of(f.rtype(), f.ptypes()), llvm::Function::ExternalLinkage,
+                               f.unique_name().c_str(), M);
+    if (f.ptr())
+      llvm::sys::DynamicLibrary::AddSymbol(f.unique_name().c_str(), f.ptr());
+    functions.emplace_back(f_ptr, &f);
   }
-  llvm::Value* create_function_value(const Function& f) {
-    using namespace llvm;
-    auto byte_type = Type::getInt8Ty(C);
-    auto type = ArrayType::get(byte_type, f.byte_size());
-
-    auto ptr = (uint8_t*)f.object_ptr();
-    auto values = std::vector<Constant*>(f.byte_size());
-    for (uint32_t i = 0; i < f.byte_size(); i++)
-      values[i] = ConstantInt::get(byte_type, ptr[i]);
-    auto value = ConstantArray::get(type, values);
-
-    return new GlobalVariable(*M, type, true, GlobalValue::PrivateLinkage, value);
+  void add_created_function(llvm::Function* ptr, const Function* f) {
+    functions.emplace_back(ptr, f);
   }
-
   const FunctionInfo& function(size_t i) const {
     return functions[i];
   }
 
-  size_t type_idx(psl::string_view name) const {
-    if (psl::contains(name, '('))
-      return 0;
-    if (auto it = name2type_idx.find(name); it != name2type_idx.end())
-      return it->second;
-    else
-      Fatal("Type `", name, "` is not found");
+  void add_constant(psl::string name, const Variable& var) {
+    auto type_name = context.type_name_from_id(var.type_id());
+    llvm::Constant* const_ptr;
+    if (type_name == "f32")
+      const_ptr = llvm::ConstantFP::get(C, llvm::APFloat(var.as<float>()));
+    else if (type_name == "i32")
+      const_ptr = builder.getInt32(var.as<int>());
+    else if (type_name == "vec3") {
+      auto v = var.as<vec3>();
+      const_ptr = llvm::ConstantArray::get(llvm::ArrayType::get(builder.getInt32Ty(), 3),
+                                           {llvm::ConstantFP::get(C, llvm::APFloat(v.x)),
+                                            llvm::ConstantFP::get(C, llvm::APFloat(v.y)),
+                                            llvm::ConstantFP::get(C, llvm::APFloat(v.z))});
+    } else
+      Fatal("Constant `", type_name, "` is not yet supported");
+
+    constants[name] =
+        Value(new llvm::GlobalVariable(*M, const_ptr->getType(), true,
+                                       llvm::GlobalValue::PrivateLinkage, const_ptr, name.c_str()),
+              type_name, Value::L);
   }
 
-  const TypeInfo& type(psl::string_view name) const {
-    return type(type_idx(name));
-  }
-  const TypeInfo& type(size_t idx) const {
-    return types[idx];
-  }
+  llvm::FunctionType* get_type_of(const TypeTag& f_rtype, psl::span<const TypeTag> f_ptypes) {
+    llvm::Type* rtype;
+    auto ptypes = std::vector<llvm::Type*>();
 
-  ValueResult call(size_t function_index, psl::span<const ValueResult> args) {
-    auto& [f, llvm_f, f_data, param_byte_size] = function(function_index);
-    auto param_type = llvm::ArrayType::get(builder.getInt8Ty(), param_byte_size);
-    auto param = alloc(param_type);
-    builder.CreateMemCpy(param, llvm::Align(1), f_data, llvm::Align(1), f->byte_size());
-    auto offset = f->byte_size() + type(f->rtype().name).byte_size;
-    for (size_t i = 0; i < args.size(); i++) {
-      auto ptr = builder.CreateConstGEP2_32(param_type, param, 0, offset);
-      auto copy_as_is = f->ptypes()[i].is_ref || f->ptypes()[i].name == "cstr";
-      auto byte_size = copy_as_is ? 8 : type(args[i].type_idx).byte_size;
-      if (copy_as_is)
-        builder.CreateAlignedStore(args[i].ptr, builder.CreateBitCast(ptr, builder.getPtrTy()),
-                                   llvm::Align(1));
-      else
-        builder.CreateMemCpy(ptr, llvm::Align(1), args[i].ptr, llvm::Align(1), byte_size);
-      offset += byte_size;
+    if (f_rtype.is_ref) {
+      rtype = builder.getPtrTy();
+    } else {
+      rtype = builder.getVoidTy();
+      if (f_rtype.name != "void")
+        ptypes.push_back(builder.getPtrTy());
     }
-    builder.CreateCall(llvm_f, {param});
-    auto res = alloc(type(f->rtype().name).ptr);
-    auto ptr = builder.CreateConstGEP2_32(param_type, param, 0, f->byte_size());
-    builder.CreateMemCpy(res, llvm::Align(1), ptr, llvm::Align(1), type(f->rtype().name).byte_size);
-    return {res, type_idx(f->rtype().name)};
+
+    for (auto& ptype : f_ptypes)
+      ptypes.push_back(builder.getPtrTy());
+
+    return llvm::FunctionType::get(rtype, ptypes, false);
+  }
+  llvm::FunctionType* get_type_of(psl::string_view name) {
+    auto ptypes = psl::vector<TypeTag>();
+    auto depth = 0;
+    auto p = size_t(0);
+    ptypes.push_back(psl::string(name));
+    do {
+      if (name[p] == '(')
+        ++depth;
+      else if (name[p] == ')') {
+        if (depth == 1) {
+          ptypes.push_back(name.substr(1, p - 1));
+        }
+        --depth;
+      } else if (depth == 1 && name[p] == ',') {
+        ptypes.push_back(name.substr(1, p - 1));
+        name = name.subview(p + 1);
+        p = 0;
+      }
+      ++p;
+    } while (depth);
+
+    return get_type_of(name.substr(p + 2), ptypes);
+  }
+  llvm::ArrayType* function_object_type() {
+    return llvm::ArrayType::get(builder.getPtrTy(), 2);
+  }
+
+  // ================================================
+  // Compilation
+  // ================================================
+  llvm::BasicBlock* create_block() {
+    return llvm::BasicBlock::Create(C, "", F);
+  }
+  void cond_br(SourceLoc sl, Value cond, llvm::BasicBlock* true_block,
+               llvm::BasicBlock* false_block) {
+    if (cond.type_name == "bool") {
+      builder.CreateCondBr(load(cond).ptr, true_block, false_block, (llvm::Instruction*)nullptr);
+      return;
+    }
+
+    if (cond.type_name != "bool") {
+      if (auto fr = context.find_unique_f("@convert." + cond.type_name + ".bool"))
+        cond = call(fr.fi, psl::array_of(cond));
+      else
+        error(sl, "Expect a boolean value");
+    }
+
+    builder.CreateCondBr(load(cond).ptr, true_block, false_block, (llvm::Instruction*)nullptr);
+  }
+  llvm::Value* alloc(TypeInfo type) {
+    auto current = builder.GetInsertBlock();
+    builder.SetInsertPoint(entry, entry->begin());
+    auto value = builder.CreateAlloca(type.ptr);
+    builder.SetInsertPoint(current);
+
+    if (type.destructor)
+      stack.back().blocks.back().pending_destruction.emplace_back(value, type.destructor);
+
+    return value;
+  }
+  Value alloc(psl::string type_name) {
+    return {alloc(type(type_name)), type_name};
+  }
+  llvm::Value* alloc_return(TypeInfo type) {
+    auto current = builder.GetInsertBlock();
+    builder.SetInsertPoint(entry, entry->begin());
+    auto value = builder.CreateAlloca(type.ptr);
+    builder.SetInsertPoint(current);
+    return value;
+  }
+  llvm::Value* malloc(size_t bytes) {
+    auto size = alloc("u64");
+    builder.CreateStore(builder.getInt64(bytes), size.ptr);
+    auto ptr = call(SourceLoc(), "malloc", psl::vector_of(size)).ptr;
+    return builder.CreateLoad(builder.getPtrTy(), ptr);
+  }
+  Value load(const Value& x) {
+    return {builder.CreateLoad(type(x.type_name).ptr, x.ptr), x.type_name};
+  }
+
+  void push_variable(psl::string name, Value variable) {
+    stack.back().blocks.back().variables[name] = MOVE(variable);
+  }
+  void enter_function(TypeTag return_type) {
+    stack.push_back(FunctionScope());
+    return_types.push_back(return_type);
+  }
+  TypeTag exit_function() {
+    CHECK(stack.size() > 1);
+    stack.pop_back();
+    auto type = return_types.back();
+    return_types.pop_back();
+    return type;
+  }
+  void enter_scope() {
+    stack.back().blocks.push_back(BlockScope());
+  }
+  void exit_scope() {
+    CHECK(stack.back().blocks.size() > 1);
+    auto&& block = stack.back().blocks.back();
+    for (auto [object, destructor] : block.pending_destruction)
+      builder.CreateCall(destructor, object);
+    stack.back().blocks.pop_back();
+  }
+  Value find_variable(psl::string_view name) const {
+    for (auto& block : psl::reverse_adapter(stack.back().blocks))
+      if (auto it = block.variables.find(name); it != block.variables.end())
+        return it->second;
+    return psl::find_or(constants, name, Value());
+  }
+
+  Value call(size_t fi, psl::span<const Value> args, llvm::Value* res = nullptr) {
+    auto [ptr, f] = function(fi);
+    auto arg_values = std::vector<llvm::Value*>();
+    auto rtype = f->rtype();
+
+    if (args.size() == 2 && args[0].type_name == "i32" && args[1].type_name == "i32") {
+      if (f->name() == "=") {
+        builder.CreateStore(load(args[1]).ptr, args[0].ptr);
+        return {};
+      }
+      auto a = load(args[0]).ptr;
+      auto b = load(args[1]).ptr;
+      if (f->name() == "*") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateMul(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "/") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateSDiv(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "+") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateAdd(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "-") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateSub(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "%") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateSRem(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "*=") {
+        builder.CreateStore(builder.CreateMul(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "/=") {
+        builder.CreateStore(builder.CreateSDiv(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "+=") {
+        builder.CreateStore(builder.CreateAdd(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "-=") {
+        builder.CreateStore(builder.CreateSub(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "%=") {
+        builder.CreateStore(builder.CreateSRem(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "==") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpEQ(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "!=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpNE(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "<") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpSLT(a, b), res.ptr);
+        return res;
+      } else if (f->name() == ">") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpSGT(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "<=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpSLE(a, b), res.ptr);
+        return res;
+      } else if (f->name() == ">=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateICmpSGE(a, b), res.ptr);
+        return res;
+      }
+    } else if (args.size() == 2 && args[0].type_name == "f32" && args[1].type_name == "f32") {
+      if (f->name() == "=") {
+        builder.CreateStore(load(args[1]).ptr, args[0].ptr);
+        return {};
+      }
+      auto a = load(args[0]).ptr;
+      auto b = load(args[1]).ptr;
+      if (f->name() == "*") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFMul(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "/") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFDiv(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "+") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFAdd(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "-") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFSub(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "%") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFRem(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "*=") {
+        builder.CreateStore(builder.CreateFMul(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "/=") {
+        builder.CreateStore(builder.CreateFDiv(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "+=") {
+        builder.CreateStore(builder.CreateFAdd(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "-=") {
+        builder.CreateStore(builder.CreateFSub(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "%=") {
+        builder.CreateStore(builder.CreateFRem(a, b), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "==") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpOEQ(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "!=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpONE(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "<") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpOLT(a, b), res.ptr);
+        return res;
+      } else if (f->name() == ">") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpOGT(a, b), res.ptr);
+        return res;
+      } else if (f->name() == "<=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpOLE(a, b), res.ptr);
+        return res;
+      } else if (f->name() == ">=") {
+        auto res = alloc("bool");
+        builder.CreateStore(builder.CreateFCmpOGE(a, b), res.ptr);
+        return res;
+      }
+    } else if (args.size() == 1 && args[0].type_name == "i32") {
+      auto a = load(args[0]).ptr;
+      if (f->name() == "+x") {
+        return args[0];
+      } else if (f->name() == "-x") {
+        auto res = alloc("i32");
+        builder.CreateStore(builder.CreateNeg(a), res.ptr);
+        return res;
+      } else if (f->name() == "++x") {
+        builder.CreateStore(builder.CreateAdd(a, builder.getInt32(1)), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "--x") {
+        builder.CreateStore(builder.CreateSub(a, builder.getInt32(1)), args[0].ptr);
+        return args[0];
+      } else if (f->name() == "x++") {
+        auto res = alloc("i32");
+        builder.CreateStore(a, res.ptr);
+        builder.CreateStore(builder.CreateAdd(a, builder.getInt32(1)), args[0].ptr);
+        return res;
+      } else if (f->name() == "x--") {
+        auto res = alloc("i32");
+        builder.CreateStore(a, res.ptr);
+        builder.CreateStore(builder.CreateSub(a, builder.getInt32(1)), args[0].ptr);
+        return res;
+      }
+    } else if (args.size() == 1 && args[0].type_name == "f32") {
+      auto a = load(args[0]).ptr;
+      if (f->name() == "+x") {
+        return args[0];
+      } else if (f->name() == "-x") {
+        auto res = alloc("f32");
+        builder.CreateStore(builder.CreateFNeg(a), res.ptr);
+        return res;
+      }
+    }
+
+    if (!rtype.is_ref && rtype.name != "void")
+      arg_values.push_back(res ? res : alloc(type(rtype.name)));
+
+    for (auto&& arg : args)
+      arg_values.push_back(arg.ptr);
+
+    if (rtype.is_ref) {
+      return {builder.CreateCall(ptr, arg_values), rtype.name, Value::L};
+    } else {
+      builder.CreateCall(ptr, arg_values);
+      return {arg_values[0], rtype.name, Value::R};
+    }
+  }
+
+  Value call(SourceLoc sl, psl::string_view name, psl::vector<Value> args,
+             llvm::Value* res = nullptr) {
+    auto fr = find_f(name, args);
+    if (!fr)
+      error(sl, "Unable to find function `", name, "`");
+
+    for (auto cv : fr.converts)
+      args[cv.position] = call(cv.converter_index, psl::vector_of(args[cv.position]));
+
+    return call(fr.fi, args, res);
+  }
+  void return_value(SourceLoc sl, Value value) {
+    for (auto&& block : stack.back().blocks)
+      for (auto [object, destructor] : block.pending_destruction)
+        builder.CreateCall(destructor, object);
+
+    if (return_types.back().is_ref) {
+      if (value.is_r_value())
+        error(sl, "Can't return a r-value when the function expects reference");
+      else
+        builder.CreateRet(value.ptr);
+    } else {
+      if (is_function_type(value.type_name))
+        builder.CreateStore(builder.CreateLoad(function_object_type(), value.ptr), F->getArg(0));
+      else
+        call(sl, "@move", psl::vector_of(value), F->getArg(0));
+      builder.CreateRetVoid();
+    }
+  }
+  void setup_params(const TypeTag& rtype, psl::span<const TypeTag> ptypes,
+                    psl::span<psl::string> pnames) {
+    auto arg_i = 0;
+    if (rtype.is_ref)
+      arg_i++;
+
+    for (size_t i = 0; i < ptypes.size(); i++) {
+      auto&& ptype = ptypes[i];
+      if (ptype.is_ref) {
+        push_variable(pnames[i], {F->getArg(arg_i++), ptype.name});
+      } else {
+        auto arg = alloc(type(ptype.name));
+        builder.CreateStore(F->getArg(arg_i++), arg);
+        push_variable(pnames[i], {arg, ptype.name});
+      }
+    }
+  }
+
+  void finalize_function() {
+    builder.CreateBr(exit);
+
+    for (auto& block : *F) {
+      if (&block == exit)
+        continue;
+
+      for (auto it = block.begin(); it != block.end(); ++it) {
+        if (llvm::BranchInst::classof(&*it)) {
+          block.erase(std::next(it), block.end());
+          break;
+        } else if (llvm::ReturnInst::classof(&*it)) {
+          builder.SetInsertPoint(&block, it);
+          for (auto& inst : *exit)
+            builder.Insert(inst.clone());
+
+          for (auto it_ = block.begin(); it_ != block.end(); ++it_)
+            if (llvm::ReturnInst::classof(&*it_))
+              block.erase(std::next(it_), block.end());
+          break;
+        }
+      }
+    }
+
+    builder.SetInsertPoint(exit);
+    builder.CreateRetVoid();
+
+    auto blocks_without_predecessor = psl::vector<llvm::BasicBlock*>();
+    for (auto& block : *F)
+      if (&block != entry && llvm::pred_empty(&block))
+        blocks_without_predecessor.push_back(&block);
+
+    for (auto block : blocks_without_predecessor) {
+      block->removeFromParent();
+      block->deleteValue();
+    }
   }
 
   Context& context;
@@ -249,21 +652,45 @@ struct Module {
   llvm::LLVMContext& C;
   llvm::Module* M;
   llvm::Function* F;
+  llvm::BasicBlock* entry;
+  llvm::BasicBlock* exit;
   llvm::IRBuilder<> builder;
   int block_counter = 0;
 
-  psl::vector<psl::map<psl::string, ValueResult>> variables =
-      psl::vector<psl::map<psl::string, ValueResult>>(1);
+  psl::map<psl::string, Value> constants = {};
   psl::vector<FunctionInfo> functions = {};
-  psl::vector<TypeInfo> types = psl::vector_of(TypeInfo{"@function", 16, nullptr, nullptr});
-  psl::map<psl::string, size_t> name2type_idx = {};
+  psl::map<psl::string, TypeInfo> types = {};
 
   struct LoopInfo {
     llvm::BasicBlock* at_inc;
     llvm::BasicBlock* end;
   };
   psl::vector<LoopInfo> loop_stack = {};
+  psl::vector<psl::pair<psl::string, size_t>> function_to_be_compiled = {};
+
+  psl::map<psl::string, ClassMemberInfo> class_member_infos = {};
+  int lambda_counter = 0;
+
+  psl::vector<TypeTag> return_types = {};
+
+  struct BlockScope {
+    psl::map<psl::string, Value> variables;
+    psl::vector<psl::pair<llvm::Value*, llvm::Function*>> pending_destruction;
+  };
+  struct FunctionScope {
+    psl::vector<BlockScope> blocks{1};
+  };
+
+  psl::vector<FunctionScope> stack{1};
 };
+
+// ================================================
+// AST declaration
+// ================================================
+struct PExpr;
+struct Expr0;
+struct BlockElem;
+struct FunctionDefinition;
 
 struct Expr {
   enum Op {
@@ -289,6 +716,7 @@ struct Expr {
     DivE = 0000100011,
     ModE = 0000100100,
     Assi = 0000100101,
+    Init= 0000100102,
     // clang-format on
   };
 
@@ -298,7 +726,8 @@ struct Expr {
   Expr(T x);
   Expr(Expr0 x);
   Expr(Expr a, Expr b, Op op);
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   Op op;
@@ -310,14 +739,17 @@ struct Expr {
 struct Id {
   Id(SourceLoc sl, psl::string value) : sl(sl), value(MOVE(value)) {
   }
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::string value;
 };
 struct NumberLiteral {
   NumberLiteral(const psl::string& str);
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
   bool is_float = false;
@@ -327,7 +759,9 @@ struct NumberLiteral {
 struct BooleanLiteral {
   BooleanLiteral(bool value) : value(value) {
   }
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
   bool value;
@@ -335,7 +769,9 @@ struct BooleanLiteral {
 struct StringLiteral {
   StringLiteral(psl::string value) : value(MOVE(value)) {
   }
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
   psl::string value;
@@ -343,7 +779,8 @@ struct StringLiteral {
 struct Vector {
   Vector(SourceLoc sl, psl::vector<Expr> args) : sl(sl), args{MOVE(args)} {
   }
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::vector<Expr> args;
@@ -352,7 +789,8 @@ struct FunctionCall {
   FunctionCall(SourceLoc sl, psl::string name, psl::vector<Expr> args)
       : sl(sl), name{MOVE(name)}, args{MOVE(args)} {
   }
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::string name;
@@ -360,7 +798,8 @@ struct FunctionCall {
 };
 struct MemberAccess {
   MemberAccess(SourceLoc sl, PExpr pexpr, Id id);
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::Box<PExpr> pexpr;
@@ -368,57 +807,82 @@ struct MemberAccess {
 };
 struct Subscript {
   Subscript(SourceLoc sl, PExpr pexpr, Expr index);
-  ValueResult emit(Module& m) const;
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::Box<PExpr> pexpr;
   Expr index;
 };
 struct LambdaExpr {
-  LambdaExpr(SourceLoc sl, psl::vector<Id> captures, FunctionDefinition body);
-  ValueResult emit(Module& m) const;
+  LambdaExpr(SourceLoc sl, FunctionDefinition body);
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
-  psl::vector<Id> captures;
   psl::Box<FunctionDefinition> body;
 };
+struct TypeInitExpr {
+  TypeInitExpr(SourceLoc sl, psl::string type_name) : sl(sl), type_name(MOVE(type_name)) {
+  }
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
+  SourceLoc sl;
+  psl::string type_name;
+};
 struct PExpr : psl::variant<Id, NumberLiteral, BooleanLiteral, StringLiteral, Vector, FunctionCall,
-                            MemberAccess, Subscript, Expr, LambdaExpr> {
+                            MemberAccess, Subscript, Expr, LambdaExpr, TypeInitExpr> {
   using variant::variant;
-  ValueResult emit(Module& m) const {
+  Value emit(Module& m) const {
     return dispatch([&](auto&& x) { return x.emit(m); });
+  }
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+    return dispatch([&](auto&& x) { return x.get_undeclared_variable(m, vars); });
   }
 };
 
 struct Expr0 {
   enum Op { None, PreInc, PreDec, PostInc, PostDec, Positive, Negate, Invert };
-  Expr0(SourceLoc sl, PExpr x, Op op = None) : sl(sl), x{MOVE(x)}, op{op} {};
-  ValueResult emit(Module& m) const;
+  template <typename T>
+  Expr0(T x) : sl(x.sl), x{MOVE(x)}, op{None} {
+  }
+  Expr0(SourceLoc sl, PExpr x, Op op = None) : sl(sl), x{MOVE(x)}, op{op} {
+  }
+  Value emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   PExpr x;
   Op op;
 };
 struct Declaration {
-  Declaration(SourceLoc sl, psl::string name, Expr expr, bool as_ref = false)
-      : sl(sl), name{MOVE(name)}, expr{MOVE(expr)}, as_ref(as_ref) {
+  enum Flag { None = 0, AsRef = 1, AssignIfExist = 2 };
+  Declaration(SourceLoc sl, psl::string name, Expr expr, Flag flag = Flag::None)
+      : sl(sl), name{MOVE(name)}, expr{MOVE(expr)}, flag(flag) {
   }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::string name;
   Expr expr;
-  bool as_ref;
+  Flag flag;
 };
 struct Semicolon {
   void emit(Module&) const {
+  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
   }
 };
 struct BreakStmt {
   BreakStmt(SourceLoc sl) : sl(sl) {
   }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
 };
@@ -426,6 +890,8 @@ struct ContinueStmt {
   ContinueStmt(SourceLoc sl) : sl(sl) {
   }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
   SourceLoc sl;
 };
@@ -433,6 +899,7 @@ struct ReturnStmt {
   ReturnStmt(SourceLoc sl, psl::optional<Expr> expr) : sl(sl), expr(MOVE(expr)) {
   }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
 private:
   SourceLoc sl;
@@ -440,26 +907,39 @@ private:
 };
 struct Stmt : psl::variant<Semicolon, Expr, Declaration, BreakStmt, ContinueStmt, ReturnStmt> {
   using variant::variant;
-  void emit(Module& m) const;
+  void emit(Module& m) const {
+    dispatch([&](auto&& x) { x.emit(m); });
+  }
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+    dispatch([&](auto&& x) { x.get_undeclared_variable(m, vars); });
+  }
 };
 struct Block {
-  Block(psl::vector<BlockElem> elems);
-  void emit(Module& m, bool noop = false) const;
+  Block(psl::vector<BlockElem> elems) : elems{MOVE(elems)} {
+  }
+  void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::vector<BlockElem> elems;
 };
 struct While {
-  While(SourceLoc sl, Expr condition, Block body);
+  While(SourceLoc sl, Expr condition, Block body)
+      : sl(sl), condition(MOVE(condition)), body(MOVE(body)) {
+  }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   Expr condition;
   Block body;
 };
 struct For {
-  For(SourceLoc sl, Stmt init, Expr condition, Expr inc, Block body);
+  For(SourceLoc sl, Stmt init, Expr condition, Expr inc, Block body)
+      : sl(sl), init{MOVE(init)}, condition{MOVE(condition)}, inc{MOVE(inc)}, body{MOVE(body)} {
+  }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   Stmt init;
@@ -468,15 +948,16 @@ struct For {
   Block body;
 };
 struct If {
-  If(SourceLoc sl, Expr condition, Block body);
-
+  If(SourceLoc sl, Expr condition, Block body)
+      : sl(sl), condition{MOVE(condition)}, body{MOVE(body)} {
+  }
   SourceLoc sl;
   Expr condition;
   Block body;
 };
 struct Else {
-  Else(SourceLoc sl, Block body);
-
+  Else(SourceLoc sl, Block body) : sl(sl), body{MOVE(body)} {
+  }
   SourceLoc sl;
   Block body;
 };
@@ -484,6 +965,7 @@ struct IfElseChain {
   IfElseChain(psl::vector<If> ifs, psl::optional<Else> else_) : ifs{MOVE(ifs)}, else_{MOVE(else_)} {
   }
   void emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   psl::vector<If> ifs;
   psl::optional<Else> else_;
@@ -504,7 +986,8 @@ struct FunctionDefinition {
         body(MOVE(body)) {
   }
 
-  void emit(Module& m) const;
+  llvm::Function* emit(Module& m) const;
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
   SourceLoc sl;
   psl::string name;
@@ -519,9 +1002,6 @@ struct MemberDefinition {
   Id name;
   Id type;
 };
-struct InternalClass {
-  psl::vector<Variable> members;
-};
 struct ClassDefinition {
   ClassDefinition(SourceLoc sl, psl::string name, psl::vector<FunctionDefinition> ctors,
                   psl::vector<FunctionDefinition> methods, psl::vector<MemberDefinition> members)
@@ -533,6 +1013,8 @@ struct ClassDefinition {
   }
 
   void emit(Module& m) const;
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
+  }
 
 private:
   SourceLoc sl;
@@ -547,138 +1029,223 @@ struct BlockElem
   void emit(Module& m) const {
     return dispatch([&](auto&& x) { x.emit(m); });
   }
+  void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+    return dispatch([&](auto&& x) { x.get_undeclared_variable(m, vars); });
+  }
 };
 
 // ================================================
+// AST definitions
 // ================================================
-// ================================================
-ValueResult Id::emit(Module& m) const {
-  if (auto x = m.find_variable(value))
+Value Id::emit(Module& m) const {
+  if (auto x = m.find_variable(value)) {
+    x.category = x.L;
     return x;
-  else
+  } else if (auto fr = m.find_unique_f(value)) {
+    return {m.function(fr.fi).ptr, m.function(fr.fi).f->signature()};
+  } else {
     m.error(sl, "Variable `", value, "` is not found");
+  }
+}
+void Id::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  if (auto x = m.find_variable(value))
+    ;
+  else if (auto fr = m.find_unique_f(value))
+    ;
+  else
+    vars.insert(value);
 }
 NumberLiteral::NumberLiteral(const psl::string& str) {
-  if ((is_float = psl::find(str, '.') != str.end()))
+  if ((is_float = psl::contains(str, '.')))
     valuef = psl::stof(str);
   else
     valuei = psl::stoi(str);
 }
-ValueResult NumberLiteral::emit(Module& m) const {
-  auto value = m.alloc(is_float ? llvm::Type::getFloatTy(m.C) : llvm::Type::getInt32Ty(m.C));
+Value NumberLiteral::emit(Module& m) const {
+  auto value = m.alloc(m.type(is_float ? "f32" : "i32"));
   if (is_float)
     m.builder.CreateStore(llvm::ConstantFP::get(m.C, llvm::APFloat(valuef)), value);
   else
     m.builder.CreateStore(m.builder.getInt32(valuei), value);
-  return {value, m.type_idx(is_float ? "f32" : "i32")};
+  return {value, is_float ? "f32" : "i32"};
 }
-ValueResult BooleanLiteral::emit(Module& m) const {
-  auto value = m.alloc(llvm::Type::getInt8Ty(m.C));
+Value BooleanLiteral::emit(Module& m) const {
+  auto value = m.alloc(m.type("bool"));
   m.builder.CreateStore(m.builder.getInt8(this->value), value);
-  return {value, m.type_idx("bool")};
+  return {value, "bool"};
 }
-ValueResult StringLiteral::emit(Module& m) const {
-  auto cstr = ValueResult(m.builder.CreateGlobalString(value.c_str()), m.type_idx("cstr"));
-  return m.call(m.find_f("str", psl::array_of(TypeTag("cstr"))).function_index,
-                psl::vector_of(cstr));
+Value StringLiteral::emit(Module& m) const {
+  auto str_constant = m.builder.CreateGlobalString(value.c_str());
+  auto cstr = Value(m.alloc(m.type("cstr")), "cstr");
+  m.builder.CreateStore(str_constant, cstr.ptr);
+  return m.call(sl, "str", psl::vector_of(cstr));
 }
-ValueResult Vector::emit(Module& m) const {
-  if (args.size() < 2 || args.size() > 3)
+Value Vector::emit(Module& m) const {
+  if (args.size() < 2 || args.size() > 4)
     m.error(sl, "Only 2, 3, or 4 items can exist inside []");
 
-  auto arg_values =
-      psl::vector<ValueResult>(psl::transform(args, [&](auto&& x) { return x.emit(m); }));
-  auto is_float = false;
-  for (size_t i = 0; i < args.size(); i++)
-    if (m.type(arg_values[i].type_idx).name == "f32")
-      is_float = true;
+  auto arg_values = psl::transform_vector(args, [&](auto&& x) { return x.emit(m); });
 
-  auto fr = Context::FindFResult();
-  if (is_float) {
-    if (args.size() == 2)
-      fr = m.find_f("vec2", arg_values);
-    else if (args.size() == 3)
-      fr = m.find_f("vec3", arg_values);
-    else if (args.size() == 4)
-      fr = m.find_f("vec4", arg_values);
-  } else {
-    if (args.size() == 2)
-      fr = m.find_f("vec2i", arg_values);
-    else if (args.size() == 3)
-      fr = m.find_f("vec3i", arg_values);
-    else if (args.size() == 4)
-      fr = m.find_f("vec4i", arg_values);
-  }
-
-  for (auto cv : fr.converts)
-    arg_values[cv.position] = m.call(cv.converter_index, psl::vector_of(arg_values[cv.position]));
-
-  return m.call(fr.function_index, arg_values);
+  if (psl::any(arg_values, [](auto&& x) { return x.type_name == "f32"; }))
+    return m.call(sl, "vec" + psl::to_string(args.size()), arg_values);
+  else
+    return m.call(sl, "vec" + psl::to_string(args.size()) + "i", arg_values);
 }
-ValueResult FunctionCall::emit(Module& m) const {
-  auto arg_values =
-      psl::vector<ValueResult>(psl::transform(args, [&](auto&& x) { return x.emit(m); }));
-  auto fr = m.find_f(name, arg_values);
-  for (auto cv : fr.converts) {
-    arg_values[cv.position] = m.call(cv.converter_index, psl::vector_of(arg_values[cv.position]));
+void Vector::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  for (auto& arg : args)
+    arg.get_undeclared_variable(m, vars);
+}
+static psl::string get_rtype(psl::string_view sig) {
+  auto depth = 0;
+  auto p = size_t(0);
+  do {
+    if (sig[p] == '(')
+      ++depth;
+    else if (sig[p] == ')')
+      --depth;
+    ++p;
+  } while (depth);
+  return sig.substr(p + 2);
+}
+Value FunctionCall::emit(Module& m) const {
+  if (auto res = m.find_variable(name)) {
+    auto ptr_ty = m.builder.getPtrTy();
+    auto obj = m.builder.CreateLoad(
+        ptr_ty, m.builder.CreateConstGEP2_32(m.function_object_type(), res.ptr, 0, 0));
+    auto f = m.builder.CreateLoad(
+        ptr_ty, m.builder.CreateConstGEP2_32(m.function_object_type(), res.ptr, 0, 1));
+    auto arg_values = std::vector<llvm::Value*>();
+    arg_values.push_back(obj);
+    for (auto&& arg : args)
+      arg_values.push_back(arg.emit(m).ptr);
+    auto r = m.alloc(get_rtype(res.type_name));
+    arg_values.insert(arg_values.begin(), r.ptr);
+    m.builder.CreateCall(m.get_type_of(res.type_name), f, arg_values);
+    return r;
+  } else {
+    auto arg_values = psl::transform_vector(args, [&](auto&& x) { return x.emit(m); });
+    return m.call(sl, name, arg_values);
   }
-
-  return m.call(fr.function_index, arg_values);
+}
+void FunctionCall::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  if (m.find_unique_f(name).error == Context::FindUniqueFResult::FindNone && !m.find_variable(name))
+    vars.insert(name);
+  for (auto& arg : args)
+    arg.get_undeclared_variable(m, vars);
 }
 MemberAccess::MemberAccess(SourceLoc sl, PExpr pexpr, Id id)
     : sl(sl), pexpr(MOVE(pexpr)), id(MOVE(id)) {
 }
-ValueResult MemberAccess::emit(Module& m) const {
+Value MemberAccess::emit(Module& m) const {
   auto x = pexpr->emit(m);
-  auto fi = m.context.get_type_trait(m.type(x.type_idx).name).find_member_accessor_index(id.value);
-  if (fi == size_t(-1))
-    m.error(id.sl, "Can't find member `", id.value, "` in type `", m.type(x.type_idx).name, '`');
-  return m.call(fi, psl::vector_of(x));
+  if (auto info = m.find_class_member_info("@member." + x.type_name + "." + id.value))
+    return {m.builder.CreateStructGEP(m.type(x.type_name).ptr, x.ptr, info.index), info.type_name,
+            Value::L};
+
+  if (auto fr = m.find_unique_f("@ma." + x.type_name + "." + id.value))
+    return m.call(fr.fi, psl::vector_of(x));
+  else
+    m.error(id.sl, "Can't find member `", id.value, "` in type `", x.type_name, '`');
+}
+void MemberAccess::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  pexpr->get_undeclared_variable(m, vars);
 }
 Subscript::Subscript(SourceLoc sl, PExpr pexpr, Expr index)
     : sl(sl), pexpr(MOVE(pexpr)), index(MOVE(index)) {
 }
-ValueResult Subscript::emit(Module& m) const {
-  auto x = pexpr->emit(m);
-  auto i = index.emit(m);
-  auto fr = m.find_f("[]", psl::array_of(x, i));
-  for (auto cv : fr.converts) {
-    if (cv.position == 0)
-      x = m.call(cv.converter_index, psl::array_of(x));
-    if (cv.position == 1)
-      i = m.call(cv.converter_index, psl::array_of(i));
-  }
-  return m.call(fr.function_index, psl::vector_of(x));
+Value Subscript::emit(Module& m) const {
+  auto args = psl::vector_of(pexpr->emit(m), index.emit(m));
+  return m.call(sl, "[]", args);
 }
-LambdaExpr::LambdaExpr(SourceLoc sl, psl::vector<Id> captures, FunctionDefinition body)
-    : sl(sl), captures(MOVE(captures)), body(MOVE(body)) {
+void Subscript::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  pexpr->get_undeclared_variable(m, vars);
 }
-ValueResult LambdaExpr::emit(Module& m) const {
-  (void)m;
-  return {};
+LambdaExpr::LambdaExpr(SourceLoc sl, FunctionDefinition body_) : sl(sl), body(MOVE(body_)) {
 }
-ValueResult Expr0::emit(Module& m) const {
-  if (op == None)
-    return x.emit(m);
+Value LambdaExpr::emit(Module& m) const {
+  auto class_name = psl::to_string("@lambda.", m.lambda_counter++);
 
-  auto x_value = x.emit(m);
-  auto fr = Context::FindFResult();
-  auto ptypes = psl::array_of(TypeTag(m.type(x_value.type_idx).name));
+  // Setup the members of the lambda
+  auto vars = psl::set<psl::string>();
+  body->get_undeclared_variable(m, vars);
+  for (auto&& param : body->params)
+    vars.erase(param.name.value);
+
+  //   if (vars.size() == 0) {
+  //     auto body = this->body;
+  //     body->name = class_name;
+  //     body->emit(m);
+
+  //     auto fr = m.find_unique_f(class_name);
+  //     return {m.function(fr.fi).ptr, m.function(fr.fi).f->signature()};
+  //   }
+
+  auto member_args = psl::transform_vector(
+      vars, [&](auto&& var) { return psl::make_pair(Id(sl, var).emit(m), var); });
+  auto member_types = std::vector<llvm::Type*>();
+
+  auto index = size_t(0);
+  auto byte_size = size_t(0);
+  for (auto& [value, name] : member_args) {
+    byte_size += m.type_size(value.type_name);
+    member_types.push_back(m.type(value.type_name).ptr);
+    m.set_class_member_info("@member." + class_name + "." + name, value.type_name, index++);
+  }
+
+  auto type = llvm::StructType::create(m.C, member_types, class_name.c_str());
+  m.add_type(class_name, type, nullptr);
+  m.context.create_type_trait(class_name, byte_size);
+
+  auto body = this->body;
+  body->name = class_name;
+  body->params.push_front(ParameterDeclaration(Id(sl, "self"), Id(sl, class_name)));
+  for (const auto& member : member_args) {
+    body->body.elems.push_front(
+        Stmt(Declaration(sl, member.second, MemberAccess(sl, Id(sl, "self"), Id(sl, member.second)),
+                         Declaration::AsRef)));
+  }
+
+  auto lambda_function = body->emit(m);
+
+  auto lambda_object = m.malloc(byte_size);
+  for (size_t i = 0; i < member_args.size(); i++) {
+    if (is_function_type(member_args[i].first.type_name))
+      m.builder.CreateStore(m.load(member_args[i].first).ptr,
+                            m.builder.CreateStructGEP(type, lambda_object, i));
+    else
+      m.builder.CreateStore(m.load(m.call(sl, "@copy", psl::vector_of(member_args[i].first))).ptr,
+                            m.builder.CreateStructGEP(type, lambda_object, i));
+  }
+
+  auto atype = m.function_object_type();
+  auto res = m.builder.CreateAlloca(atype);
+  m.builder.CreateStore(lambda_object, m.builder.CreateConstGEP2_32(atype, res, 0, 0));
+  m.builder.CreateStore(lambda_function, m.builder.CreateConstGEP2_32(atype, res, 0, 1));
+
+  return {res, signature_from(TypeTag(this->body->return_type.value),
+                              psl::transform_vector(this->body->params, [](auto&& x) {
+                                return TypeTag(x.type.value);
+                              }))};
+}
+Value TypeInitExpr::emit(Module& m) const {
+  return {m.alloc(m.type(type_name)), type_name};
+}
+Value Expr0::emit(Module& m) const {
+  auto args = psl::vector_of(x.emit(m));
   switch (op) {
-    case None: break;
-    case PreInc: fr = m.find_f("++x", ptypes); break;
-    case PreDec: fr = m.find_f("--x", ptypes); break;
-    case PostInc: fr = m.find_f("x++", ptypes); break;
-    case PostDec: fr = m.find_f("x--", ptypes); break;
-    case Positive: fr = m.find_f("+x", ptypes); break;
-    case Negate: fr = m.find_f("-x", ptypes); break;
-    case Invert: fr = m.find_f("!x", ptypes); break;
+    case None: return args[0];
+    case PreInc: return m.call(sl, "++x", args);
+    case PreDec: return m.call(sl, "--x", args);
+    case PostInc: return m.call(sl, "x++", args);
+    case PostDec: return m.call(sl, "x--", args);
+    case Positive: return m.call(sl, "+x", args);
+    case Negate: return m.call(sl, "-x", args);
+    case Invert: return m.call(sl, "!x", args);
+    default: PINE_UNREACHABLE;
   }
-  CHECK(fr.function_index != size_t(-1));
-  for (auto cv : fr.converts) {
-    x_value = m.call(cv.converter_index, psl::vector_of(x_value));
-  }
-  return m.call(fr.function_index, psl::vector_of(x_value));
+}
+void Expr0::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  x.get_undeclared_variable(m, vars);
 }
 template <typename T>
 requires requires(T x) { x.sl; }
@@ -688,60 +1255,96 @@ Expr::Expr(Expr0 x) : sl(x.sl), op{None}, x{MOVE(x)} {
 }
 Expr::Expr(Expr a, Expr b, Op op) : sl(a.sl), op{op}, a{MOVE(a)}, b{MOVE(b)} {
 }
-ValueResult Expr::emit(Module& m) const {
+Value Expr::emit(Module& m) const {
   if (op == None)
     return x->emit(m);
 
-  try {
-    auto a_value = a->emit(m);
-    auto b_value = b->emit(m);
-    auto ptypes = psl::array_of(TypeTag(m.type(a_value.type_idx).name),
-                                TypeTag(m.type(b_value.type_idx).name));
-    auto fr = Context::FindFResult();
-    switch (op) {
-      case None: CHECK(false); break;
-      case Mul: fr = m.find_f("*", ptypes); break;
-      case Div: fr = m.find_f("/", ptypes); break;
-      case Mod: fr = m.find_f("%", ptypes); break;
-      case Pow: fr = m.find_f("^", ptypes); break;
-      case Add: fr = m.find_f("+", ptypes); break;
-      case Sub: fr = m.find_f("-", ptypes); break;
-      case Lt: fr = m.find_f("<", ptypes); break;
-      case Gt: fr = m.find_f(">", ptypes); break;
-      case Le: fr = m.find_f("<=", ptypes); break;
-      case Ge: fr = m.find_f(">=", ptypes); break;
-      case Eq: fr = m.find_f("==", ptypes); break;
-      case Ne: fr = m.find_f("!=", ptypes); break;
-      case And: fr = m.find_f("&&", ptypes); break;
-      case Or: fr = m.find_f("||", ptypes); break;
-      case AddE: fr = m.find_f("+=", ptypes); break;
-      case SubE: fr = m.find_f("-=", ptypes); break;
-      case MulE: fr = m.find_f("*=", ptypes); break;
-      case DivE: fr = m.find_f("/=", ptypes); break;
-      case ModE: fr = m.find_f("%=", ptypes); break;
-      case Assi: fr = m.find_f("=", ptypes); break;
-    }
-    CHECK(fr.function_index != size_t(-1));
-    for (auto cv : fr.converts) {
-      if (cv.position == 0)
-        a_value = m.call(cv.converter_index, psl::vector_of(a_value));
-      if (cv.position == 1)
-        b_value = m.call(cv.converter_index, psl::vector_of(b_value));
-    }
+  auto args = psl::vector_of(a->emit(m), b->emit(m));
 
-    return m.call(fr.function_index, psl::vector_of(a_value, b_value));
-  } catch (const Exception& e) {
-    m.error(sl, e.what());
+  if (op == Init) {
+    m.builder.CreateStore(m.load(args[1]).ptr, args[0].ptr);
+    return {};
+  }
+
+  switch (op) {
+    case None: PINE_UNREACHABLE;
+    case Mul: return m.call(sl, "*", args);
+    case Div: return m.call(sl, "/", args);
+    case Mod: return m.call(sl, "%", args);
+    case Pow: return m.call(sl, "^", args);
+    case Add: return m.call(sl, "+", args);
+    case Sub: return m.call(sl, "-", args);
+    case Lt: return m.call(sl, "<", args);
+    case Gt: return m.call(sl, ">", args);
+    case Le: return m.call(sl, "<=", args);
+    case Ge: return m.call(sl, ">=", args);
+    case Eq: return m.call(sl, "==", args);
+    case Ne: return m.call(sl, "!=", args);
+    case And: return m.call(sl, "&&", args);
+    case Or: return m.call(sl, "||", args);
+    case AddE: return m.call(sl, "+=", args);
+    case SubE: return m.call(sl, "-=", args);
+    case MulE: return m.call(sl, "*=", args);
+    case DivE: return m.call(sl, "/=", args);
+    case ModE: return m.call(sl, "%=", args);
+    case Assi: return m.call(sl, "=", args);
+    case Init: PINE_UNREACHABLE;
+    default: PINE_UNREACHABLE;
+  }
+}
+void Expr::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  if (op == None) {
+    x->get_undeclared_variable(m, vars);
+  } else {
+    a->get_undeclared_variable(m, vars);
+    b->get_undeclared_variable(m, vars);
   }
 }
 void Declaration::emit(Module& m) const {
-  m.variables.back()[name] = expr.emit(m);
+  if (flag & AssignIfExist)
+    if (auto x = m.find_variable(name)) {
+      m.call(sl, "=", psl::vector_of(x, expr.emit(m)));
+      return;
+    }
+
+  auto x = expr.emit(m);
+  if (flag & AsRef || x.is_r_value())
+    m.push_variable(name, x);
+  else
+    m.push_variable(name, m.call(sl, "@copy", psl::vector_of(x)));
+}
+void Declaration::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  expr.get_undeclared_variable(m, vars);
+  m.push_variable(name, Value((llvm::Value*)1, "@placeholder"));
 }
 void ReturnStmt::emit(Module& m) const {
+  if (m.return_types.size() == 0)
+    m.error(sl, "`return` can only be used inside a function");
+  auto return_type = m.return_types.back();
+  if (expr) {
+    if (return_type.name == "void")
+      m.error(sl, "Can only return void");
+
+    auto x = expr->emit(m);
+    if (x.type_name != return_type.name) {
+      if (auto fr = m.find_unique_f("@convert." + x.type_name + "." + return_type.name))
+        m.return_value(sl, m.call(fr.fi, psl::vector_of(x)));
+      else
+        m.error(sl, "Returned `", x.type_name, "` is incompatible with function return type `",
+                return_type.name, "`");
+    } else {
+      m.return_value(sl, x);
+    }
+  } else {
+    if (return_type.name == "void")
+      m.builder.CreateRetVoid();
+    else
+      m.error(sl, "Can't return void");
+  }
+}
+void ReturnStmt::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
   if (expr)
-    m.builder.CreateRet(expr->emit(m).ptr);
-  else
-    m.builder.CreateRetVoid();
+    expr->get_undeclared_variable(m, vars);
 }
 void BreakStmt::emit(Module& m) const {
   if (m.loop_stack.size() == 0)
@@ -753,22 +1356,15 @@ void ContinueStmt::emit(Module& m) const {
     m.error(sl, "Can only be used in a loop");
   m.builder.CreateBr(m.loop_stack.back().at_inc);
 }
-void Stmt::emit(Module& m) const {
-  dispatch([&](auto&& x) { x.emit(m); });
-}
-Block::Block(psl::vector<BlockElem> elems) : elems{MOVE(elems)} {
-}
-void Block::emit(Module& m, bool noop) const {
+void Block::emit(Module& m) const {
+  m.enter_scope();
   for (const auto& block_elem : elems)
     block_elem.emit(m);
-  if (!noop) {
-    auto block = m.create_block();
-    m.builder.CreateBr(block);
-    m.builder.SetInsertPoint(block);
-  }
+  m.exit_scope();
 }
-While::While(SourceLoc sl, Expr condition, Block body)
-    : sl(sl), condition(MOVE(condition)), body(MOVE(body)) {
+void Block::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  for (const auto& block_elem : elems)
+    block_elem.get_undeclared_variable(m, vars);
 }
 void While::emit(Module& m) const {
   auto cond_block = m.create_block();
@@ -776,19 +1372,20 @@ void While::emit(Module& m) const {
   auto seq = m.create_block();
 
   m.builder.CreateBr(cond_block);
+  m.builder.SetInsertPoint(cond_block);
+  m.cond_br(condition.sl, condition.emit(m), body_block, seq);
+
   m.builder.SetInsertPoint(body_block);
   m.loop_stack.emplace_back(cond_block, seq);
-  body.emit(m, true);
+  body.emit(m);
   m.loop_stack.pop_back();
   m.builder.CreateBr(cond_block);
 
-  m.builder.SetInsertPoint(cond_block);
-  m.cond_br(condition.emit(m), body_block, seq);
-
   m.builder.SetInsertPoint(seq);
 }
-For::For(SourceLoc sl, Stmt init, Expr condition, Expr inc, Block body)
-    : sl(sl), init{MOVE(init)}, condition{MOVE(condition)}, inc{MOVE(inc)}, body{MOVE(body)} {
+void While::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  condition.get_undeclared_variable(m, vars);
+  body.get_undeclared_variable(m, vars);
 }
 void For::emit(Module& m) const {
   init.emit(m);
@@ -800,7 +1397,7 @@ void For::emit(Module& m) const {
   m.builder.CreateBr(cond_block);
   m.builder.SetInsertPoint(body_block);
   m.loop_stack.emplace_back(inc_block, seq);
-  body.emit(m, true);
+  body.emit(m);
   m.loop_stack.pop_back();
   m.builder.CreateBr(inc_block);
   m.builder.SetInsertPoint(inc_block);
@@ -808,14 +1405,15 @@ void For::emit(Module& m) const {
   m.builder.CreateBr(cond_block);
 
   m.builder.SetInsertPoint(cond_block);
-  m.cond_br(condition.emit(m), body_block, seq);
+  m.cond_br(condition.sl, condition.emit(m), body_block, seq);
 
   m.builder.SetInsertPoint(seq);
 }
-If::If(SourceLoc sl, Expr condition, Block body)
-    : sl(sl), condition{MOVE(condition)}, body{MOVE(body)} {
-}
-Else::Else(SourceLoc sl, Block body) : sl(sl), body{MOVE(body)} {
+void For::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  init.get_undeclared_variable(m, vars);
+  condition.get_undeclared_variable(m, vars);
+  body.get_undeclared_variable(m, vars);
+  inc.get_undeclared_variable(m, vars);
 }
 void IfElseChain::emit(Module& m) const {
   auto cond_blocks = psl::vector<llvm::BasicBlock*>(ifs.size());
@@ -829,64 +1427,116 @@ void IfElseChain::emit(Module& m) const {
 
   for (size_t i = 0; i < ifs.size(); i++) {
     m.builder.SetInsertPoint(cond_blocks[i]);
+    llvm::BasicBlock* false_block;
     if (i + 1 < ifs.size())
-      m.cond_br(ifs[i].condition.emit(m), body_blocks[i], cond_blocks[i + 1]);
+      false_block = cond_blocks[i + 1];
     else if (else_)
-      m.cond_br(ifs[i].condition.emit(m), body_blocks[i], else_block);
+      false_block = else_block;
     else
-      m.cond_br(ifs[i].condition.emit(m), body_blocks[i], seq);
+      false_block = seq;
+    m.cond_br(ifs[i].condition.sl, ifs[i].condition.emit(m), body_blocks[i], false_block);
 
     m.builder.SetInsertPoint(body_blocks[i]);
-    ifs[i].body.emit(m, true);
+    ifs[i].body.emit(m);
     m.builder.CreateBr(seq);
   }
   if (else_) {
     m.builder.SetInsertPoint(else_block);
-    else_->body.emit(m, true);
+    else_->body.emit(m);
     m.builder.CreateBr(seq);
   }
 
   m.builder.SetInsertPoint(seq);
 }
-void FunctionDefinition::emit(Module& m) const {
-  auto ptypes = psl::vector<TypeTag>();
-  for (auto& param : params)
-    ptypes.push_back(type_tag_from_string(param.type.value));
-  auto signature = name + signature_from(type_tag_from_string(return_type.value), ptypes);
+void IfElseChain::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  for (auto& if_ : ifs) {
+    if_.condition.get_undeclared_variable(m, vars);
+    if_.body.get_undeclared_variable(m, vars);
+  }
+  if (else_)
+    else_->body.get_undeclared_variable(m, vars);
+}
 
-m.C;
-  auto M = std::make_unique<llvm::Module>((signature + "_module").c_str(), m.C);
+llvm::Function* FunctionDefinition::emit(Module& m) const {
+  auto rtype = TypeTag(return_type.value);
+  auto rtype_public = rtype;
+  auto ptypes = psl::transform_vector(params, [](auto&& x) { return TypeTag(x.type.value); });
+  auto ptypes_public = ptypes;
+  auto pnames = psl::transform_vector(params, [](auto&& x) { return x.name.value; });
+  auto unique_name = name + signature_from(rtype, ptypes);
 
-  auto F = llvm::Function::Create(
-      llvm::FunctionType::get(m.builder.getVoidTy(), m.builder.getPtrTy(), false),
-      llvm::Function::ExternalLinkage, signature.c_str(), M.get());
-
-  auto backup_M = psl::exchange(m.M, M.get());
-  auto backup_block = m.builder.GetInsertBlock();
+  if (!rtype.is_ref && rtype.name != "void") {
+    rtype.is_ref = true;
+    pnames.push_front("@res");
+    ptypes.push_front(psl::exchange(rtype, TypeTag("void")));
+  }
+  for (auto& ptype : ptypes)
+    ptype.is_ref = true;
+  auto F = llvm::Function::Create(m.get_type_of(rtype, ptypes), llvm::Function::ExternalLinkage,
+                                  unique_name.c_str(), m.M);
 
   auto entry = llvm::BasicBlock::Create(m.C, "entry", F);
+  auto exit = llvm::BasicBlock::Create(m.C, "exit", F);
+
+  auto backup_F = psl::exchange(m.F, F);
+  auto backup_entry = psl::exchange(m.entry, entry);
+  auto backup_exit = psl::exchange(m.exit, exit);
+  auto backup_block = m.builder.GetInsertBlock();
   m.builder.SetInsertPoint(entry);
+
+  m.enter_function(rtype_public);
+  m.setup_params(rtype, ptypes, pnames);
   body.emit(m);
+  m.finalize_function();
+  rtype_public = m.exit_function();
 
-  m.M = backup_M;
+  //   F->dump();
+  m.context.add_f(name.c_str(), Function(unique_name, rtype_public, ptypes_public, nullptr));
+  m.add_created_function(F, &m.context.functions.back());
+  m.function_to_be_compiled.push_back({unique_name, m.context.functions.size() - 1});
+
   m.builder.SetInsertPoint(backup_block);
+  m.exit = backup_exit;
+  m.entry = backup_entry;
+  m.F = backup_F;
 
-  for (auto& block : *F)
-    for (auto it = block.begin(); it != block.end(); ++it)
-      if (llvm::ReturnInst::classof(&*it))
-        it = block.erase(it, std::next(it));
-
-  F->dump();
-
-  auto EE = psl::unique_ptr<llvm::ExecutionEngine>(llvm::EngineBuilder(MOVE(M)).create());
-  EE->setVerifyModules(true);
-  m.context(name) = (void (*)(void*))(void*)EE->getFunctionAddress(signature.c_str());
+  return F;
+}
+void FunctionDefinition::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
+  m.enter_function(TypeTag(return_type.value));
+  body.get_undeclared_variable(m, vars);
+  m.exit_function();
 }
 void ClassDefinition::emit(Module& m) const {
-  (void)m;
+  auto member_types = std::vector<llvm::Type*>();
+  auto index = size_t(0);
+  auto byte_size = size_t(0);
+  for (auto& member : members) {
+    byte_size += m.type_size(member.type.value);
+    member_types.push_back(m.type(member.type.value).ptr);
+    m.set_class_member_info("@member." + name + "." + member.name.value, member.type.value,
+                            index++);
+  }
+  m.add_type(name, llvm::StructType::create(m.C, member_types, name.c_str()), nullptr);
+  m.context.create_type_trait(name, byte_size);
+
+  for (auto ctor : ctors)
+    ctor.emit(m);
+  for (auto method : methods)
+    method.emit(m);
 }
 
 struct Parser {
+  template <typename T>
+  struct ExplicitParameter {
+    explicit ExplicitParameter(T value) : value(MOVE(value)) {
+    }
+    operator T&() {
+      return value;
+    }
+    T value;
+  };
+
   Parser(psl::string_view tokens) : sl(tokens, row_padding) {
     to_valid_pos();
   }
@@ -926,46 +1576,48 @@ struct Parser {
     else
       return BlockElem{stmt()};
   }
-  Block block_or_single_line() {
-    auto elem = block_elem();
-    if (elem.is<Block>())
-      return elem.as<Block>();
-    else
-      return Block(psl::vector_of(MOVE(elem)));
-  }
   While while_() {
     consume("while");
-    consume("(", "to begin condition");
     auto loc = source_loc();
     auto cond = expr();
-    consume(")", "to end condition");
-    auto body = block_or_single_line();
+    auto body = block();
     return While{loc, MOVE(cond), MOVE(body)};
   }
   For for_() {
     consume("for");
 
-    if (accept("(")) {
+    backup();
+    auto id_ = id();
+    if (accept("in")) {
+      commit();
+      auto range_begin = expr();
+      if (accept("..")) {
+        auto range_end = expr();
+        auto init = Stmt(Declaration(id_.sl, id_.value, range_begin));
+        auto cond = Expr(Expr0(range_end.sl, id_), range_end, Expr::Lt);
+        auto body = block();
+        return For{range_begin.sl, MOVE(init), MOVE(cond),
+                   Expr(Expr0(range_begin.sl, id_, Expr0::PreInc)), MOVE(body)};
+      } else {
+        consume("~", "or .. to specify range");
+        auto range_inc = expr();
+        consume("~", "to specify range end");
+        auto range_end = expr();
+        auto init = Stmt(Declaration(id_.sl, id_.value, range_begin));
+        auto cond = Expr(Expr0(range_end.sl, id_), range_end, Expr::Le);
+        auto body = block();
+        return For{range_begin.sl, MOVE(init), MOVE(cond),
+                   Expr(Expr0(range_begin.sl, id_), range_inc, Expr::AddE), MOVE(body)};
+      }
+    } else {
+      undo();
       auto init = stmt();
       auto loc = source_loc();
       auto cond = expr();
       consume(";");
       auto inc = expr();
-      consume(")");
-      auto body = block_or_single_line();
+      auto body = block();
       return For{loc, MOVE(init), MOVE(cond), MOVE(inc), MOVE(body)};
-    } else {
-      auto loc = source_loc();
-      auto id_ = id();
-      consume("in");
-      auto range_a = expr();
-      consume("..", "to specify end point");
-      auto range_b = expr();
-      auto init = Stmt(Declaration(id_.sl, id_.value, range_a));
-      auto cond = Expr(Expr(Expr0(loc, PExpr(id_), Expr0::None)), range_b, Expr::Lt);
-      auto body = block_or_single_line();
-      return For{loc, MOVE(init), MOVE(cond), Expr(Expr0(loc, PExpr(id_), Expr0::PreInc)),
-                 MOVE(body)};
     }
   }
   IfElseChain if_else_chain() {
@@ -993,27 +1645,23 @@ struct Parser {
   }
   If if_() {
     consume("if");
-    consume("(", "to begin condition");
     auto loc = source_loc();
     auto cond = expr();
-    consume(")", "to end condition");
-    auto body = block_or_single_line();
+    auto body = block();
     return If{loc, MOVE(cond), MOVE(body)};
   }
   If else_if_() {
     consume("else");
     consume("if");
-    consume("(", "to begin condition");
     auto loc = source_loc();
     auto cond = expr();
-    consume(")", "to end condition");
-    auto body = block_or_single_line();
+    auto body = block();
     return If{loc, MOVE(cond), MOVE(body)};
   }
   Else else_() {
     consume("else");
     auto loc = source_loc();
-    return Else{loc, block_or_single_line()};
+    return Else{loc, block()};
   }
   ClassDefinition class_definition() {
     auto loc = source_loc();
@@ -1047,15 +1695,16 @@ struct Parser {
         CHECK_GE(ctor.body.elems.size(), 1);
         auto it = psl::next(ctor.body.elems.begin(), init_size);
         it = ctor.body.elems.insert(
-            it, Stmt(Declaration(member.name.sl, member.name.value,
-                                 MemberAccess(loc, Id(loc, "self"), member.name), true)));
+            it,
+            Stmt(Declaration(member.name.sl, member.name.value,
+                             MemberAccess(loc, Id(loc, "self"), member.name), Declaration::AsRef)));
       }
     for (auto& method : methods)
       for (const auto& member : members) {
         auto loc = method.sl;
         method.body.elems.push_front(
             Stmt(Declaration(member.name.sl, member.name.value,
-                             MemberAccess(loc, Id(loc, "self"), member.name), true)));
+                             MemberAccess(loc, Id(loc, "self"), member.name), Declaration::AsRef)));
       }
     return ClassDefinition(loc, MOVE(name), MOVE(ctors), MOVE(methods), MOVE(members));
   }
@@ -1079,8 +1728,8 @@ struct Parser {
         auto loc = source_loc();
         auto name = id().value;
         auto expr_ = expr();
-        init_stmts.push_back(Expr(Expr(MemberAccess(loc, Id(loc, "self"), Id(loc, "__" + name))),
-                                  expr_, Expr::Assi));
+        init_stmts.push_back(
+            Expr(Expr(MemberAccess(loc, Id(loc, "self"), Id(loc, name))), expr_, Expr::Init));
         if (!accept(",")) {
           if (!expect("{")) {
             error("Expect either `,` to continue or '{' to begin function definition");
@@ -1089,10 +1738,11 @@ struct Parser {
       }
     }
     auto block_ = block();
-    // Create `self` and add the initializer of its members
-    auto it = psl::next(block_.elems.insert(
-        block_.elems.begin(),
-        Stmt(Declaration(loc, "self", FunctionCall(loc, "__" + class_name, {})))));
+    // Create `self`
+    auto it = block_.elems.begin();
+    it = psl::next(block_.elems.insert(
+        it, Stmt(Declaration(loc, "self", Expr0(TypeInitExpr(loc, class_name))))));
+    // Add the initializer of its members
     for (const auto& init_stmt : init_stmts)
       it = psl::next(block_.elems.insert(it, init_stmt));
     // Return `self` in the ctor
@@ -1106,7 +1756,7 @@ struct Parser {
     auto name = id().value;
     consume("(", "to begin parameter definition");
     auto params = param_list();
-    params.push_front(ParameterDeclaration(Id(loc, "self"), Id(loc, class_name)));
+    params.push_front(ParameterDeclaration(Id(loc, "self"), Id(loc, class_name + "&")));
     consume(")", "to end parameter definition");
     consume(":", "to specify return type");
     auto type = id();
@@ -1144,10 +1794,14 @@ struct Parser {
       if (auto n = next(); psl::isalpha(*n) || *n == '_') {
         backup();
         auto id_ = id();
-        if (accept(":=")) {
-          stmt = Stmt(declaration(id_, false));
+        auto loc = source_loc();
+
+        if (accept("=")) {
+          stmt = Declaration{loc, MOVE(id_.value), expr(), Declaration::AssignIfExist};
+        } else if (accept(":=")) {
+          stmt = Declaration{loc, MOVE(id_.value), expr()};
         } else if (accept("&=")) {
-          stmt = Stmt(declaration(id_, true));
+          stmt = Declaration{loc, MOVE(id_.value), expr(), Declaration::AsRef};
         } else {
           undo();
           stmt = Stmt(expr());
@@ -1160,17 +1814,29 @@ struct Parser {
     return stmt;
   }
 
-  Declaration declaration(Id id_, bool create_ref) {
-    auto loc = source_loc();
-    auto expr_ = expr();
-    return Declaration{loc, MOVE(id_.value), MOVE(expr_), create_ref};
-  }
   Expr expr() {
     auto exprs = psl::vector<Expr>{};
     auto ops = psl::vector<int>{};
-    if (accept("(")) {
-      exprs.push_back(expr());
-      accept(")");
+    if (expect("(")) {
+      auto is_lambda = false;
+      backup();
+      consume("(");
+      if (accept(")")) {
+        undo();
+        return lambda();
+      } else if (maybe_id()) {
+        if (expect(":")) {
+          undo();
+          return lambda();
+        }
+      }
+
+      if (!is_lambda) {
+        undo();
+        consume("(");
+        exprs.push_back(expr());
+        consume(")", "to balance the parenthesis");
+      }
     } else {
       exprs.push_back(Expr{expr0()});
     }
@@ -1195,7 +1861,7 @@ struct Parser {
       else if (accept("%"))  ops.push_back(1000000010);
       else if (accept("/"))  ops.push_back(1000000001);
       else if (accept("*"))  ops.push_back(1000000000);
-      else if (accept("="))  ops.push_back(0000100101);
+    //   else if (accept("="))  ops.push_back(0000100101);
       else break;
       // clang-format on
       if (accept("(")) {
@@ -1300,22 +1966,8 @@ struct Parser {
     if (expect("\"") || expect("'"))
       return PExpr{string_literal()};
     else if (expect("[")) {
-      backup();
-      accept("[");
-      auto expect_lambda = expect("&");
-      undo();
-      if (expect_lambda)
-        return PExpr(lambda());
-
-      backup();
-      auto vector_ = vector();
-      if (expect("(")) {
-        undo();
-        return PExpr(lambda());
-      } else {
-        return PExpr(MOVE(vector_));
-      }
-    } else if (accept("(")) {
+      return PExpr(vector());
+    } else if (expect("(")) {
       auto pexpr = PExpr{expr()};
       consume(")", "to balance the parenthesis");
       return pexpr;
@@ -1329,23 +1981,13 @@ struct Parser {
   }
   LambdaExpr lambda() {
     auto loc = source_loc();
-    consume("[", "to specify capture list");
-    auto captures = psl::vector<Id>();
-    while (!accept("]")) {
-      auto is_ref = accept("&");
-      auto id_ = id();
-      if (is_ref)
-        id_.value = "&" + id_.value;
-      captures.push_back(MOVE(id_));
-      accept(",");
-    }
     consume("(", "to start parameter defintion");
     auto params = param_list();
     consume(")", "to end parameter defintion");
     consume(":", "to specify return type");
     auto return_type = type_name();
     auto body = block();
-    return LambdaExpr(loc, captures, FunctionDefinition(loc, "()", return_type, params, body));
+    return LambdaExpr(loc, FunctionDefinition(loc, "<>", return_type, params, body));
   }
   Vector vector() {
     auto loc = source_loc();
@@ -1416,6 +2058,22 @@ struct Parser {
     auto pred = [](char c) { return psl::isalpha(c) || c == '_'; };
     if (!expect(pred, 0))
       error("Expect a letter or `_` to start an identifier");
+    auto str = psl::string{};
+    while (true) {
+      str.push_back(*next());
+      proceed();
+      auto n = next();
+      if (!n || (!pred(*n) && !psl::isdigit(*n)))
+        break;
+    }
+    consume_spaces();
+    return Id{loc, MOVE(str)};
+  }
+  psl::optional<Id> maybe_id() {
+    auto loc = source_loc();
+    auto pred = [](char c) { return psl::isalpha(c) || c == '_'; };
+    if (!expect(pred, 0))
+      return psl::nullopt;
     auto str = psl::string{};
     while (true) {
       str.push_back(*next());
@@ -1643,66 +2301,142 @@ private:
   static constexpr size_t invalid = size_t(-1);
 };
 
-psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
+static psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
   auto parser = Parser{source};
   return {parser.block(true), MOVE(parser.sl)};
 }
-
-void jit_compile(Context& context, psl::string source, llvm::LLVMContext& C, llvm::Module* M,
-                 llvm::Function* F) {
+void jit_interpret(Context& context, psl::string source) {
   using namespace llvm;
+
+  struct MyObj {
+    void call() {
+      Log(f());
+    }
+    psl::function<float()> f;
+  };
+  context.type<MyObj>("MyObj").ctor<psl::function<float()>>().method<&MyObj::call>("call");
+
+  auto shutdown_obj = llvm_shutdown_obj();
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
+
+  auto C = LLVMContext();
+  auto M = std::make_unique<llvm::Module>("@module.pine", C);
+  auto F = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getVoidTy(C), {}, false),
+                                  llvm::Function::ExternalLinkage, "main", M.get());
+
   auto [block, sl] = parse_as_block(MOVE(source));
 
   auto entry = BasicBlock::Create(C, "entry", F);
+  auto exit = BasicBlock::Create(C, "exit", F);
 
   auto m = Module{.context = context,
                   .source = MOVE(sl),
                   .C = C,
-                  .M = M,
+                  .M = M.get(),
                   .F = F,
+                  .entry = entry,
+                  .exit = exit,
                   .builder = IRBuilder<>(entry)};
 
-  for (const auto& [name, type] : context.types) {
-    if (name == "i32")
-      m.add_type(name, Type::getInt32Ty(C), type.byte_size(), type.copy_operator);
-    else if (name == "f32")
-      m.add_type(name, Type::getFloatTy(C), type.byte_size(), type.copy_operator);
-    else
-      m.add_type(name, ArrayType::get(Type::getInt8Ty(C), type.byte_size()), type.byte_size(),
-                 type.copy_operator);
+  {
+    Profiler _("Parsing");
+
+    auto type_map = psl::map<psl::string, llvm::Type*>();
+    auto add_type = [&](auto& add_type, const pine::TypeTrait* trait) -> llvm::Type* {
+      llvm::Type*& ptr = type_map[trait->name];
+      if (ptr)
+        return ptr;
+      if (trait->is_fundamental()) {
+        if (trait->name == "void")
+          ptr = Type::getVoidTy(C);
+        else if (trait->name == "bool")
+          ptr = Type::getInt1Ty(C);
+        else if (trait->name == "f32")
+          ptr = Type::getFloatTy(C);
+        else {
+          switch (trait->byte_size) {
+            case 1: ptr = Type::getInt8Ty(C); break;
+            case 2: ptr = Type::getInt16Ty(C); break;
+            case 4: ptr = Type::getInt32Ty(C); break;
+            case 8: ptr = Type::getInt64Ty(C); break;
+            case 16: ptr = Type::getInt128Ty(C); break;
+            default:
+              if (trait->byte_size % 8 == 0)
+                ptr = ArrayType::get(Type::getInt64Ty(C), trait->byte_size / 8);
+              else if (trait->byte_size % 4 == 0)
+                ptr = ArrayType::get(Type::getInt32Ty(C), trait->byte_size / 4);
+              else if (trait->byte_size % 2 == 0)
+                ptr = ArrayType::get(Type::getInt16Ty(C), trait->byte_size / 2);
+              else
+                ptr = ArrayType::get(Type::getInt8Ty(C), trait->byte_size);
+              break;
+              // Fatal("Did you forget to set the layout of `", trait->name, "`?");
+          }
+        }
+      } else {
+        auto members = std::vector<llvm::Type*>();
+        for (auto&& member : trait->members)
+          members.push_back(add_type(add_type, member));
+        ptr = llvm::StructType::create(C, members, trait->name.c_str());
+      }
+
+      llvm::Function* destructor = nullptr;
+      if (trait->destructor) {
+        auto name = "@dtor." + trait->name;
+        destructor = llvm::Function::Create(
+            llvm::FunctionType::get(llvm::Type::getVoidTy(C), {m.builder.getPtrTy()}, false),
+            llvm::Function::ExternalLinkage, name.c_str(), M.get());
+        llvm::sys::DynamicLibrary::AddSymbol(name.c_str(), trait->destructor);
+      }
+
+      m.add_type(trait->name, ptr, destructor);
+      return ptr;
+    };
+    for (const auto& [name, type] : context.types)
+      add_type(add_type, type.get());
+
+    for (const auto& f : context.functions)
+      m.add_function(f);
+
+    for (const auto& [name, var] : context.constants)
+      m.add_constant(name, var);
+
+    block.emit(m);
+
+    m.finalize_function();
+    // F->dump();
+
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    PassBuilder PB;
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    MPM.run(*M, MAM);
   }
-
-  for (const auto& f : context.functions)
-    m.add_function(f);
-
-  block.emit(m, true);
-
-  m.builder.CreateRetVoid();
-
-  for (auto& block : *m.F)
-    for (auto it = block.begin(); it != block.end(); ++it)
-      if (BranchInst::classof(&*it) || ReturnInst::classof(&*it))
-        block.erase(std::next(it), block.end());
-}
-
-void jit_interpret(Context& context, psl::string source) {
-  auto shutdown_obj = llvm::llvm_shutdown_obj();
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
-
-  auto C = llvm::LLVMContext();
-  auto M = std::make_unique<llvm::Module>("pine_module", C);
-  auto main_ = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getVoidTy(C), {}, false),
-                                      llvm::Function::ExternalLinkage, "main", M.get());
-
-  jit_compile(context, MOVE(source), C, M.get(), main_);
-
-  main_->dump();
 
   auto EE = psl::unique_ptr<llvm::ExecutionEngine>(llvm::EngineBuilder(MOVE(M)).create());
   EE->setVerifyModules(true);
+  for (auto& [name, fi] : m.function_to_be_compiled) {
+    Debug("Compiling: ", name);
+    context.functions[fi].set_ptr((void*)EE->getFunctionAddress(name.c_str()));
+  }
+  Debug("Compiling: main");
   auto main = (void (*)())(void*)EE->getFunctionAddress("main");
-  main();
+
+  {
+    Profiler _("Execution");
+    main();
+  }
 }
 
 }  // namespace pine

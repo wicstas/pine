@@ -11,7 +11,7 @@
 #define PINE_ALWAYS_INLINE __attribute__((always_inline))
 #define PINE_UNREACHABLE                                              \
   {                                                                   \
-    Fatal("Should never be_ reached[", __FILE__, ":", __LINE__, "]"); \
+    Fatal("Should never be reached[", __FILE__, ":", __LINE__, "]"); \
     __builtin_unreachable();                                          \
   }
 #else
@@ -22,13 +22,15 @@
 #define PINE_UNREACHABLE Fatal("Should never be_ reached");
 #endif
 
+#define COMMA ,
+
 namespace pine {
 
 struct SurfaceInteraction;
-struct MediumInteraction;
 struct PhaseFunction;
-struct Mesh;
+struct MediumSample;
 struct Interaction;
+struct ShapeAccel;
 struct Function;
 struct Material;
 struct Geometry;
@@ -39,6 +41,7 @@ struct Scene;
 struct Light;
 struct Image;
 struct Shape;
+struct Mesh;
 struct AABB;
 struct Ray;
 struct RNG;

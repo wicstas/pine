@@ -2,8 +2,37 @@
 #include <pine/core/parallel.h>
 #include <pine/core/context.h>
 #include <pine/core/fileio.h>
+#include <pine/core/accel.h>
+
+#include <mutex>
 
 namespace pine {
+
+bool hit_quadratic(float a, float b, float c, float tmin, float tmax) {
+  float d = b * b - 4 * a * c;
+  if (d <= 0.0f)
+    return false;
+  d = psl::sqrt(d);
+  float t = (-b - d) / (2 * a);
+  if (t < tmin)
+    t += d / a;
+  if (t < tmin || t > tmax)
+    return false;
+  return true;
+}
+bool intersect_quadratic(float a, float b, float c, float tmin, float& tmax) {
+  float d = b * b - 4 * a * c;
+  if (d <= 0.0f)
+    return false;
+  d = psl::sqrt(d);
+  float t = (-b - d) / (2 * a);
+  if (t < tmin)
+    t += d / a;
+  if (t < tmin || t > tmax)
+    return false;
+  tmax = t;
+  return true;
+}
 
 Plane::Plane(vec3 position, vec3 normal) : position(position), n(normalize(normal)) {
   if (length(n) == 0)
@@ -49,7 +78,7 @@ psl::optional<ShapeSample> Plane::sample(vec3 p, vec2 u2) const {
   ss.pdf = 1.0f / (2 * Pi);
   return ss;
 }
-float Plane::pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+float Plane::pdf(const Ray&, vec3, vec3) const {
   return 1.0f / (2 * Pi);
 }
 
@@ -100,8 +129,8 @@ psl::optional<ShapeSample> Sphere::sample(vec3 p, vec2 u) const {
   ss.uv = cartesian_to_spherical(ss.n);
   return ss;
 }
-float Sphere::pdf(const Interaction& it, const SurfaceInteraction&, const Ray&) const {
-  auto l = length(c - it.p());
+float Sphere::pdf(const Ray& ray, vec3, vec3) const {
+  auto l = length(c - ray.o);
   auto cos_theta = psl::sqrt(1 - psl::sqr(r / l));
   auto S = 2 * Pi * (1 - cos_theta);
   return 1.0f / S;
@@ -162,8 +191,8 @@ psl::optional<ShapeSample> Disk::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / psl::max(absdot(ss.w, ss.n) * area(), epsilon);
   return ss;
 }
-float Disk::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
+float Disk::pdf(const Ray& ray, vec3, vec3 ns) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(ns, ray.d));
 }
 AABB Disk::get_aabb() const {
   return {position - vec3(r, 0.0f, r), position + vec3(r, 0.0f, r)};
@@ -234,8 +263,8 @@ psl::optional<ShapeSample> Line::sample(vec3 p, vec2 u2) const {
   ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 }
-float Line::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
+float Line::pdf(const Ray& ray, vec3, vec3 ns) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(ns, ray.d));
 }
 AABB Line::get_aabb() const {
   AABB aabb;
@@ -338,87 +367,86 @@ psl::optional<ShapeSample> Rect::sample(vec3 o, vec2 u) const {
   ss.n = n;
   ss.uv = u;
   ss.w = normalize(ss.p - o, ss.distance);
-  ss.pdf =
-      psl::max(psl::sqr(ss.distance), epsilon) / (psl::max(absdot(ss.w, ss.n), epsilon) * area());
+  ss.pdf = psl::sqr(ss.distance) / (absdot(ss.w, ss.n) * area());
   return ss;
 
-  auto p = position - ex * lx / 2 - ey * ly / 2;
-  auto ez = cross(ex, ey);
-  auto dr = p - o;
-  auto z0 = dot(dr, ez);
-  if (z0 > 0) {
-    ez = -ez;
-    z0 = -z0;
-  }
-  auto x0 = dot(dr, ex);
-  auto y0 = dot(dr, ey);
-  auto x1 = x0 + lx;
-  auto y1 = y0 + ly;
-  auto v00 = vec3{x0, y0, z0};
-  auto v01 = vec3{x0, y1, z0};
-  auto v10 = vec3{x1, y0, z0};
-  auto v11 = vec3{x1, y1, z0};
-  auto n0 = normalize(cross(v00, v10));
-  auto n1 = normalize(cross(v10, v11));
-  auto n2 = normalize(cross(v11, v01));
-  auto n3 = normalize(cross(v01, v00));
-  auto g0 = psl::acos(-dot(n0, n1));
-  auto g1 = psl::acos(-dot(n1, n2));
-  auto g2 = psl::acos(-dot(n2, n3));
-  auto g3 = psl::acos(-dot(n3, n0));
-  auto b0 = n0.z;
-  auto b1 = n2.z;
-  auto k = 2 * Pi - g2 - g3;
-  auto S = g0 + g1 - k;
-  auto au = u[0] * S + k;
-  auto fu = (psl::cos(au) * b0 - b1) / psl::sin(au);
-  auto cu = 1 / psl::sqrt(fu * fu + b0 * b0) * psl::sign(fu);
-  cu = psl::clamp(cu, -1.0f, 1.0f);
-  auto xu = -(cu * z0) / psl::sqrt(1 - cu * cu);
-  xu = psl::clamp(xu, x0, x1);
-  auto d = psl::sqrt(xu * xu + z0 * z0);
-  auto h0 = y0 / psl::sqrt(d * d + y0 * y0);
-  auto h1 = y1 / psl::sqrt(d * d + y1 * y1);
-  auto hv = h0 + u[1] * (h1 - h0), hv2 = hv * hv;
-  auto yv = (hv2 < 1 - epsilon) ? (hv * d) / psl::sqrt(1 - hv2) : y1;
-  ss.p = o + xu * ex + yv * ey + z0 * ez;
-  ss.n = n;
-  ss.uv = u;
-  ss.w = normalize(ss.p - o, ss.distance);
-  ss.pdf = 1.0f / S;
-  return ss;
+  //   auto p = position - ex * lx / 2 - ey * ly / 2;
+  //   auto ez = cross(ex, ey);
+  //   auto dr = p - o;
+  //   auto z0 = dot(dr, ez);
+  //   if (z0 > 0) {
+  //     ez = -ez;
+  //     z0 = -z0;
+  //   }
+  //   auto x0 = dot(dr, ex);
+  //   auto y0 = dot(dr, ey);
+  //   auto x1 = x0 + lx;
+  //   auto y1 = y0 + ly;
+  //   auto v00 = vec3{x0, y0, z0};
+  //   auto v01 = vec3{x0, y1, z0};
+  //   auto v10 = vec3{x1, y0, z0};
+  //   auto v11 = vec3{x1, y1, z0};
+  //   auto n0 = normalize(cross(v00, v10));
+  //   auto n1 = normalize(cross(v10, v11));
+  //   auto n2 = normalize(cross(v11, v01));
+  //   auto n3 = normalize(cross(v01, v00));
+  //   auto g0 = psl::acos(-dot(n0, n1));
+  //   auto g1 = psl::acos(-dot(n1, n2));
+  //   auto g2 = psl::acos(-dot(n2, n3));
+  //   auto g3 = psl::acos(-dot(n3, n0));
+  //   auto b0 = n0.z;
+  //   auto b1 = n2.z;
+  //   auto k = 2 * Pi - g2 - g3;
+  //   auto S = g0 + g1 - k;
+  //   auto au = u[0] * S + k;
+  //   auto fu = (psl::cos(au) * b0 - b1) / psl::sin(au);
+  //   auto cu = 1 / psl::sqrt(fu * fu + b0 * b0) * psl::sign(fu);
+  //   cu = psl::clamp(cu, -1.0f, 1.0f);
+  //   auto xu = -(cu * z0) / psl::sqrt(1 - cu * cu);
+  //   xu = psl::clamp(xu, x0, x1);
+  //   auto d = psl::sqrt(xu * xu + z0 * z0);
+  //   auto h0 = y0 / psl::sqrt(d * d + y0 * y0);
+  //   auto h1 = y1 / psl::sqrt(d * d + y1 * y1);
+  //   auto hv = h0 + u[1] * (h1 - h0), hv2 = hv * hv;
+  //   auto yv = (hv2 < 1 - epsilon) ? (hv * d) / psl::sqrt(1 - hv2) : y1;
+  //   ss.p = o + xu * ex + yv * ey + z0 * ez;
+  //   ss.n = n;
+  //   ss.uv = u;
+  //   ss.w = normalize(ss.p - o, ss.distance);
+  //   ss.pdf = 1.0f / S;
+  //   return ss;
 }
-float Rect::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
-  return psl::max(psl::sqr(ray.tmax), epsilon) / psl::max(area() * absdot(git.n, -ray.d), epsilon);
+float Rect::pdf(const Ray& ray, vec3, vec3 ns) const {
+  return psl::sqr(ray.tmax) / area() * absdot(ns, ray.d);
 
-  auto p = position - ex * lx / 2 - ey * ly / 2;
-  auto ez = cross(ex, ey);
-  auto dr = p - ray.o;
-  auto z0 = dot(dr, ez);
-  if (z0 > 0) {
-    ez = -ez;
-    z0 = -z0;
-  }
-  auto x0 = dot(dr, ex);
-  auto y0 = dot(dr, ey);
-  auto x1 = x0 + lx;
-  auto y1 = y0 + ly;
-  auto v00 = vec3{x0, y0, z0};
-  auto v01 = vec3{x0, y1, z0};
-  auto v10 = vec3{x1, y0, z0};
-  auto v11 = vec3{x1, y1, z0};
-  auto n0 = normalize(cross(v00, v10));
-  auto n1 = normalize(cross(v10, v11));
-  auto n2 = normalize(cross(v11, v01));
-  auto n3 = normalize(cross(v01, v00));
-  auto g0 = psl::acos(-dot(n0, n1));
-  auto g1 = psl::acos(-dot(n1, n2));
-  auto g2 = psl::acos(-dot(n2, n3));
-  auto g3 = psl::acos(-dot(n3, n0));
-  auto k = 2 * Pi - g2 - g3;
-  auto S = g0 + g1 - k;
-  S = psl::max(S, epsilon);
-  return 1.0f / S;
+  //   auto p = position - ex * lx / 2 - ey * ly / 2;
+  //   auto ez = cross(ex, ey);
+  //   auto dr = p - ray.o;
+  //   auto z0 = dot(dr, ez);
+  //   if (z0 > 0) {
+  //     ez = -ez;
+  //     z0 = -z0;
+  //   }
+  //   auto x0 = dot(dr, ex);
+  //   auto y0 = dot(dr, ey);
+  //   auto x1 = x0 + lx;
+  //   auto y1 = y0 + ly;
+  //   auto v00 = vec3{x0, y0, z0};
+  //   auto v01 = vec3{x0, y1, z0};
+  //   auto v10 = vec3{x1, y0, z0};
+  //   auto v11 = vec3{x1, y1, z0};
+  //   auto n0 = normalize(cross(v00, v10));
+  //   auto n1 = normalize(cross(v10, v11));
+  //   auto n2 = normalize(cross(v11, v01));
+  //   auto n3 = normalize(cross(v01, v00));
+  //   auto g0 = psl::acos(-dot(n0, n1));
+  //   auto g1 = psl::acos(-dot(n1, n2));
+  //   auto g2 = psl::acos(-dot(n2, n3));
+  //   auto g3 = psl::acos(-dot(n3, n0));
+  //   auto k = 2 * Pi - g2 - g3;
+  //   auto S = g0 + g1 - k;
+  //   S = psl::max(S, epsilon);
+  //   return 1.0f / S;
 }
 AABB Rect::get_aabb() const {
   AABB aabb;
@@ -428,6 +456,50 @@ AABB Rect::get_aabb() const {
   aabb.extend(position + ex * lx / 2 - ey * ly / 2);
   aabb.extend(position + ex * lx / 2 + ey * ly / 2);
   return aabb;
+}
+
+bool Cone::hit(const Ray& ray) const {
+  auto o = ray.o - p;
+  const auto& d = ray.d;
+  auto a = -A2 * sqr(dot(d, n)) + dot(d, d);
+  auto b = 2 * (-A2 * dot(o, n) * dot(d, n) + dot(o, d));
+  auto c = -A2 * sqr(dot(o, n)) + dot(o, o);
+  auto tmax = ray.tmax;
+  if (!intersect_quadratic(a, b, c, ray.tmin, tmax))
+    return false;
+  if (dot(o + tmax * d, n) > 0)
+    return false;
+  return true;
+}
+bool Cone::intersect(Ray& ray) const {
+  auto o = ray.o - p;
+  const auto& d = ray.d;
+  auto a = -A2 * sqr(dot(d, n)) + dot(d, d);
+  auto b = 2 * (-A2 * dot(o, n) * dot(d, n) + dot(o, d));
+  auto c = -A2 * sqr(dot(o, n)) + dot(o, o);
+  auto tmax = ray.tmax;
+  if (!intersect_quadratic(a, b, c, ray.tmin, tmax))
+    return false;
+  if (dot(o + tmax * d, n) > 0)
+    return false;
+  ray.tmax = tmax;
+  return true;
+}
+void Cone::compute_surface_info(SurfaceInteraction& it) const {
+  auto l = length(it.p - p) * A;
+  auto x = p - n * l;
+  it.n = normalize(it.p - x);
+  it.p = x + it.n * l * S;
+}
+
+AABB Cone::get_aabb() const {
+  return bottom.get_aabb().extend(p);
+}
+psl::optional<ShapeSample> Cone::sample(vec3, vec2) const {
+  return {};
+}
+float Cone::pdf(const Ray& ray, vec3, vec3 ns) const {
+  return psl::sqr(ray.tmax) / area() * absdot(ns, ray.d);
 }
 
 Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n) : v0(v0), v1(v1), v2(v2), n{normalize(n)} {
@@ -506,8 +578,8 @@ psl::optional<ShapeSample> Triangle::sample(vec3 p, vec2 u) const {
   ss.pdf = psl::sqr(ss.distance) / psl::max(absdot(ss.w, ss.n) * area(), epsilon);
   return ss;
 }
-float Triangle::pdf(const Interaction&, const SurfaceInteraction& git, const Ray& ray) const {
-  return psl::sqr(ray.tmax) / (area() * absdot(git.n, -ray.d));
+float Triangle::pdf(const Ray& ray, vec3, vec3 ns) const {
+  return psl::sqr(ray.tmax) / (area() * absdot(ns, ray.d));
 }
 AABB Triangle::get_aabb() const {
   AABB aabb;
@@ -528,6 +600,18 @@ Mesh::Mesh(psl::vector<vec3> vertices_, psl::vector<vec3u32> indices_, psl::vect
   if (texcoords.size() != 0)
     CHECK_EQ(vertices.size(), texcoords.size());
 };
+bool Mesh::intersect(Ray& ray, SurfaceInteraction& it) const {
+  static std::once_flag flag;
+  std::call_once(flag, [&]() {
+    auto bvh = new ShapeAccel(ShapeBVH());
+    bvh->build(this);
+    accel = bvh;
+  });
+  while (!accel)
+    ;
+
+  return accel->intersect(ray, it);
+}
 bool Mesh::hit(const Ray& ray, int index) const {
   DCHECK_LT(size_t(index), indices.size());
   auto face = indices[index];
@@ -565,6 +649,15 @@ AABB Mesh::get_aabb() const {
   for (size_t i = 0; i < num_triangles(); i++)
     aabb.extend(get_aabb(i));
   return aabb;
+}
+Mesh& Mesh::apply(mat4 m) {
+  for (auto& v : vertices)
+    v = vec3(m * vec4(v, 1.0f));
+
+  auto m3 = transpose(inverse(mat3(m)));
+  for (auto& n : normals)
+    n = normalize(m3 * n);
+  return *this;
 }
 
 Mesh heightmap(const Array2d<float>& height_map) {
@@ -611,9 +704,9 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function) {
 }
 bool SDF::hit(const Ray& ray) const {
   auto t = ray.tmin;
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 128; i++) {
     auto d = sdf(ray(t));
-    if (d < threshold)
+    if (d < 1e-5f)
       return true;
     if (t >= ray.tmax)
       return false;
@@ -624,9 +717,9 @@ bool SDF::hit(const Ray& ray) const {
 }
 bool SDF::intersect(Ray& ray) const {
   auto t = ray.tmin;
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 128; i++) {
     auto d = sdf(ray(t));
-    if (d < threshold * 200) {
+    if (d < 1e-5f) {
       ray.tmax = t;
       return true;
     }
@@ -638,138 +731,63 @@ bool SDF::intersect(Ray& ray) const {
   return false;
 }
 void SDF::compute_surface_info(SurfaceInteraction& it) const {
-  const auto ops = threshold * 5;
+  const auto ops = 1e-6f;
   auto dtdx = sdf(it.p + vec3(ops, 0.0f, 0.0f)) - sdf(it.p + vec3(-ops, 0.0f, 0.0f));
   auto dtdy = sdf(it.p + vec3(0.0f, ops, 0.0f)) - sdf(it.p + vec3(0.0f, -ops, 0.0f));
   auto dtdz = sdf(it.p + vec3(0.0f, 0.0f, ops)) - sdf(it.p + vec3(0.0f, 0.0f, -ops));
   it.n = normalize(vec3(dtdx, dtdy, dtdz));
 }
 
+bool Shape::intersect(Ray& ray, SurfaceInteraction& it) const {
+  return dispatch([&]<typename T>(const T& x) {
+    if constexpr (psl::same_as<T, Mesh>) {
+      return x.intersect(ray, it);
+    } else {
+      if (x.intersect(ray)) {
+        it.p = ray();
+        x.compute_surface_info(it);
+        return true;
+      } else {
+        return false;
+      }
+    }
+  });
+}
+
 void geometry_context(Context& ctx) {
   ctx.type<Ray>("Ray")
       .ctor<>()
-      .member("o", &Ray::o)
-      .member("d", &Ray::d)
-      .member("tmin", &Ray::tmin)
-      .member("tmax", &Ray::tmax);
+      .member<&Ray::o>("o")
+      .member<&Ray::d>("d")
+      .member<&Ray::tmin>("tmin")
+      .member<&Ray::tmax>("tmax");
   ctx.type<SurfaceInteraction>("SurfaceInteraction")
       .ctor<>()
-      .member("n", &SurfaceInteraction::n)
-      .member("p", &SurfaceInteraction::p)
-      .member("uv", &SurfaceInteraction::uv);
+      .member<&SurfaceInteraction::n>("n")
+      .member<&SurfaceInteraction::p>("p")
+      .member<&SurfaceInteraction::uv>("uv");
   ctx.type<psl::shared_ptr<Geometry>>("GeometryPtr");
-  ctx.type<AABB>("AABB")
-      .ctor<vec3, vec3>()
-      .member("lower", &AABB::lower)
-      .member("upper", &AABB::upper);
-  ctx.type<OBB>("OBB").ctor<AABB, mat4>();
+  ctx.type<AABB>("AABB").ctor<vec3, vec3>().member<&AABB::lower>("lower").member<&AABB::upper>(
+      "upper");
+  ctx.type<OBB>("OBB").ctor<AABB, mat4>().ctor<AABB, mat4>("Box");
   ctx.type<Sphere>("Sphere").ctor<vec3, float>();
   ctx.type<Plane>("Plane").ctor<vec3, vec3>();
   ctx.type<Disk>("Disk").ctor<vec3, vec3, float>();
   ctx.type<Line>("Line").ctor<vec3, vec3, float>();
   ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>().ctor<vec3, vec3, vec3, bool>();
+  ctx.type<Cone>("Cone").ctor<vec3, vec3, float, float>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<SDF>("SDF")
       .ctor<vec3, vec3, psl::function<float(vec3)>>()
       .ctor<AABB, psl::function<float(vec3)>>();
-  ctx.type<Mesh>("Mesh").method("apply", &Mesh::apply);
+  ctx.type<Mesh>("Mesh").method<&Mesh::apply>("apply");
   ctx.type<Shape>("Shape")
-      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Triangle, Rect, Mesh, SDF>();
+      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Cone, Triangle, Rect, Mesh, SDF>();
   ctx.type<InstancedShape>("Instancing")
       .ctor<Mesh>()
-      .method("add", overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add))
-      .method("add", overloaded<mat4, Material>(&InstancedShape::add));
-  ctx("heightmap") = [&](psl::string_view path) {
-    auto image = ctx.call<psl::shared_ptr<Image>>("load_image", path);
-    return heightmap(image->size(),
-                     psl::function<float(vec2i)>([&](vec2i p) { return (*image)[p].x; }));
-  };
-  ctx("heightmap") = overloaded<vec2i, psl::function<float(vec2)>>(heightmap);
-
-  ctx("torus_sdf") = +[](vec3 pos, float rad, float thickness) {
-    return SDF(pos, vec3(2 * (rad + thickness)), [=](vec3 p) {
-      p -= pos;
-      auto q = vec2(length(vec2(p.x, p.z)) - rad, p.y);
-      return length(q) - thickness;
-    });
-  };
-
-  auto sort = [](auto& x, auto& y) {
-    if (x < y)
-      psl::swap(x, y);
-  };
-
-  ctx("sdf1") = [sort]() {
-    return SDF(vec3(0), vec3(40), [sort](vec3 p) {
-      auto rot2d = [](vec2 q, float a) {
-        auto sa = psl::sin(a);
-        auto cs = vec2(psl::sin(a + 0.5f * Pi), sa);
-        return vec2(dot(q, vec2(cs.x, -cs.y)), dot({q.y, q.x}, cs));
-      };
-      auto PrBoxDf = [](vec3 p, vec3 b) {
-        auto d = abs(p) - b;
-        return psl::min(max_value(d), 0.0f) + length(max(d, vec3(0)));
-      };
-      const float nIt = 5.0f, sclFac = 2.4f;
-      auto b = (sclFac - 1.0f) * vec3(1.0f, 1.125f, 0.625f);
-      auto r = length(vec2(p.x, p.z));
-      auto a = (r > 0.) ? psl::atan2(p.z, -p.x) / (2. * Pi) : 0.0f;
-      p.x = psl::fract((16.0f * a + 1.0f) / 2) * 2 - 1.0f;
-      p.z = r - 32.0f / (2.0f * Pi);
-      auto res = rot2d({p.y, p.z}, Pi * a);
-      p.y = res.x;
-      p.z = res.y;
-      for (float n = 0.; n < nIt; n++) {
-        p = abs(p);
-        sort(p.x, p.y);
-        sort(p.x, p.z);
-        sort(p.y, p.z);
-        p = sclFac * p - b;
-        p.z += b.z * (-0.5 * b.z >= p.z ? 1.0f : 0.0f);
-      }
-      return 0.8 * PrBoxDf(p, vec3(1.)) / psl::pow(sclFac, nIt);
-    });
-  };
-
-  ctx("sdf2") = [sort]() {
-    return SDF(vec3(0), vec3(40), [sort](vec3 p) {
-      vec3 k = vec3(5, 2, 1);
-      p.y += 5.4f;
-      for (int j = 0; j < 8; ++j) {
-        p.x = psl::abs(p.x);
-        p.z = psl::abs(p.z);
-        sort(p.x, p.z);
-        p.z = 1.0f - psl::abs(p.z - 0.9f);
-        sort(p.x, p.y);
-        p.x -= 2.0f;
-        sort(p.x, p.y);
-        p.y += 1.0f;
-        p = k + (p - k) * 3.0f;
-      }
-      return length(p) / 1e4f;
-    });
-  };
-
-  ctx("sdf3") = [sort]() {
-    return SDF(vec3(0), vec3(20), [sort](vec3 p) {
-      auto s = 2.0f;
-      for (int j = 0; j < 7; j++) {
-        p.x = psl::abs(p.x) - 2.3f;
-        p.z = psl::abs(p.z) - 2.3f;
-        sort(p.x, p.z);
-        p.z = 1.5f - psl::abs(p.z - 1.3f + sin(p.z) * 0.2f);
-        sort(p.x, p.y);
-        p.x = 3.0f - psl::abs(p.x - 5.0f + sin(p.x * 3.0f) * 0.2f);
-        sort(p.x, p.y);
-        p.y = 0.9f - psl::abs(p.y - 0.4f);
-        auto e = 12.0f * psl::clamp(0.3f / psl::min(dot(p, p), 1.0f), 0.0f, 1.0f) +
-                 2.0f * psl::clamp(0.1f / psl::min(dot(p, p), 1.0f), 0.0f, 1.0f);
-        p = e * p - vec3(7, 1, 1);
-        s *= e;
-      }
-      return length(p) / s;
-    });
-  };
+      .method<overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add)>("add")
+      .method<overloaded<mat4, Material>(&InstancedShape::add)>("add");
+  ctx("heightmap") = led<overloaded<vec2i, psl::function<float(vec2)>>(heightmap)>;
 }
 
 }  // namespace pine

@@ -1,5 +1,4 @@
 #pragma once
-#include <pine/core/lightsampler.h>
 #include <pine/core/integrator.h>
 
 namespace pine {
@@ -17,7 +16,6 @@ struct PathIntegrator : public RTIntegrator {
   RadianceResult radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex pv);
 
 private:
-  LightSampler light_sampler;
   int max_path_length;
 };
 

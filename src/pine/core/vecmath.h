@@ -157,8 +157,11 @@ struct Vector2 {
   bool has_inf() const {
     return psl::isinf(x) || psl::isinf(y);
   }
+  bool is_zero() const {
+    return x == 0 && y == 0;
+  }
   bool is_black() const {
-    return *this == Vector2{};
+    return is_zero();
   }
 
   Vector2 operator-() const {
@@ -307,8 +310,11 @@ struct Vector3 {
   bool has_inf() const {
     return psl::isinf(x) || psl::isinf(y) || psl::isinf(z);
   }
+  bool is_zero() const {
+    return x == 0 && y == 0 && z == 0;
+  }
   bool is_black() const {
-    return *this == Vector3{};
+    return is_zero();
   }
 
   Vector3 operator-() const {
@@ -470,8 +476,11 @@ struct Vector4 {
   bool has_inf() const {
     return psl::isinf(x) || psl::isinf(y) || psl::isinf(z) || psl::isinf(w);
   }
+  bool is_zero() const {
+    return x == 0 && y == 0 && z == 0 && w == 0;
+  }
   bool is_black() const {
-    return *this == Vector4{};
+    return is_zero();
   }
 
   Vector4 operator-() const {
@@ -890,6 +899,19 @@ template <typename T>
 T dot(Vector4<T> lhs, Vector4<T> rhs) {
   return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
+// template <typename T>
+// T operator^(Vector2<T> lhs, Vector2<T> rhs) {
+//   return dot(lhs, rhs);
+// }
+// template <typename T>
+// T operator^(Vector3<T> lhs, Vector3<T> rhs) {
+//   return dot(lhs, rhs);
+// }
+// template <typename T>
+// T operator^(Vector4<T> lhs, Vector4<T> rhs) {
+//   return dot(lhs, rhs);
+// }
+
 template <typename T>
 auto absdot(T lhs, T rhs) {
   return psl::abs(dot(lhs, rhs));
@@ -1278,6 +1300,20 @@ inline mat4 rotate_y(float rad) {
 }
 inline mat4 rotate(vec3 r) {
   return rotate_x(r[0]) * rotate_y(r[1]) * rotate_z(r[2]);
+}
+inline mat4 rotate_around(vec3 u, float rad) {
+  auto c = psl::cos(rad), c1 = 1 - c;
+  auto s = psl::sin(rad);
+  return mat4(c + u.x * u.x * c1, u.x * u.y * c1 - u.z * s, u.x * u.z * c1 + u.y * s, 0.0f,
+              u.y * u.x * c1 + u.z * s, c + u.y * u.y * c1, u.y * u.z * c1 - u.x * s, 0,
+              u.z * u.x * c1 - u.y * s, u.z * u.y * c1 + u.x * s, c + u.z * u.z * c1, 0, 0, 0, 0,
+              1);
+}
+inline mat4 quaternion_to_matrix(float q0, float q1, float q2, float q3) {
+  return mat4(2 * (q0 * q0 + q1 * q1) - 1, 2 * (q1 * q2 - q0 * q3), 2 * (q1 * q3 + q0 * q2), 0,
+              2 * (q1 * q2 + q0 * q3), 2 * (q0 * q0 + q2 * q2) - 1, 2 * (q2 * q3 - q0 * q1), 0,
+              2 * (q1 * q3 - q0 * q2), 2 * (q2 * q3 + q0 * q1), 2 * (q0 * q0 + q3 * q3) - 1, 0, 0,
+              0, 0, 1);
 }
 
 inline mat4 look_at(vec3 from, vec3 at, vec3 up = vec3(0, 1, 0)) {

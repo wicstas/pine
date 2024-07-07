@@ -48,9 +48,9 @@ struct AABB {
   vec3 absolute_position(vec3 p) const;
   float relative_position(float p, int dim) const;
   float surface_area() const;
-  void extend(vec3 p);
-  void extend(const AABB& aabb);
-  void extend_by(float amount);
+  AABB& extend(vec3 p);
+  AABB& extend(const AABB& aabb);
+  AABB& extend_by(float amount);
   psl::pair<AABB, AABB> split_half(int axis) const;
 
   friend AABB union_(AABB l, AABB r) {
@@ -89,12 +89,12 @@ struct AABB {
   bool intersect(Ray& ray) const;
   void compute_surface_info(SurfaceInteraction&) const;
   AABB get_aabb() const {
-    return *this;
+    return AABB(*this).extend_by(epsilon);
   }
   psl::optional<ShapeSample> sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
-  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+  float pdf(const Ray&, vec3, vec3) const {
     PINE_UNREACHABLE;
   }
   float area() const {
@@ -111,25 +111,22 @@ struct OBB {
   bool hit(Ray ray) const;
   bool intersect(vec3 o, vec3 d, float& tmin, float& tmax) const;
   bool intersect(Ray& ray) const;
-  void compute_surface_info(SurfaceInteraction&) const {
-    PINE_UNREACHABLE;
-  }
+  void compute_surface_info(SurfaceInteraction&) const;
   AABB get_aabb() const {
     return AABB(*this);
   }
   psl::optional<ShapeSample> sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
-  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+  float pdf(const Ray&, vec3, vec3) const {
     PINE_UNREACHABLE;
   }
   float area() const {
     PINE_UNREACHABLE;
   }
 
-  vec3 p;
-  vec3 dim;
-  mat3 n;
+  AABB base;
+  mat4 m, m_inv;
 };
 
 }  // namespace pine

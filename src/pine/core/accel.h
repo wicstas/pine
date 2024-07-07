@@ -24,4 +24,18 @@ struct Accel : psl::variant<EmbreeAccel, BVH> {
   }
 };
 
+struct ShapeAccel : psl::variant<ShapeBVH> {
+  using variant::variant;
+
+  void build(const Mesh* mesh) {
+    return dispatch([&](auto&& x) { return x.build(mesh); });
+  }
+  bool hit(Ray ray) const {
+    return dispatch([&](auto&& x) { return x.hit(ray); });
+  }
+  bool intersect(Ray& ray, SurfaceInteraction& it) const {
+    return dispatch([&](auto&& x) { return x.intersect(ray, it); });
+  }
+};
+
 }  // namespace pine

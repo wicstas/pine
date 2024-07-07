@@ -149,8 +149,15 @@ public:
   }
   string_view(Range auto&& range) : string_view(psl::begin(range), psl::end(range)) {
   }
-  string_view substr(size_t pos, iterator end) const;
-  string_view substr(size_t pos, size_t len = -1) const;
+  string_view subview(size_t pos, iterator end) const;
+  string_view subview(size_t pos, size_t len = -1) const;
+
+  string substr(size_t pos, iterator end) const {
+    return string(subview(pos, end));
+  }
+  string substr(size_t pos, size_t len = -1) const{
+    return string(subview(pos, len));
+  }
 
   friend string operator+(string_view lhs, const string& rhs) {
     return string(lhs) + rhs;
@@ -349,7 +356,6 @@ string space_by(string input, string spacer);
 
 string from_last_of(const string& str, char c);
 string until_last_of(const string& str, char c);
-
 
 struct MessagedException : Exception {
   MessagedException(auto&&... args) : message(psl::to_string(args...)) {

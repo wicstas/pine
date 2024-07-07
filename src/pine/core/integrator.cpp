@@ -2,6 +2,7 @@
 #include <pine/core/sampling.h>
 #include <pine/core/parallel.h>
 #include <pine/core/profiler.h>
+#include <pine/core/sampler.h>
 #include <pine/core/scene.h>
 #include <pine/core/color.h>
 
@@ -17,7 +18,8 @@ float get_progress() {
   return g_progress;
 }
 
-RTIntegrator::RTIntegrator(Accel accel, Sampler sampler) : accel{MOVE(accel)} {
+RTIntegrator::RTIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler)
+    : accel{MOVE(accel)}, light_sampler{MOVE(light_sampler)} {
   spp = sampler.spp();
   samplers.push_back(MOVE(sampler));
 }
@@ -28,6 +30,7 @@ void RTIntegrator::render(Scene& scene) {
   for (int i = 0; i < n_threads(); i++)
     samplers.push_back(sampler);
   accel.build(&scene);
+  light_sampler.build(&scene);
   set_progress(0);
 }
 bool RTIntegrator::intersect(Ray& ray, SurfaceInteraction& it) const {
@@ -36,21 +39,38 @@ bool RTIntegrator::intersect(Ray& ray, SurfaceInteraction& it) const {
     it.compute_transformation();
   return is_hit;
 }
-psl::pair<psl::optional<MediumInteraction>, psl::optional<SurfaceInteraction>>
-RTIntegrator::intersect_tr(Ray& ray, Sampler& sampler) const {
+psl::optional<SurfaceInteraction> RTIntegrator::intersect(Ray& ray) const {
   auto it = SurfaceInteraction();
-  auto hit_surface = intersect(ray, it);
+  if (intersect(ray, it))
+    return MOVE(it);
+  else
+    return psl::nullopt;
+}
+psl::optional<MediumSample> RTIntegrator::sample_medium(Ray ray, Sampler& sampler) const {
+  auto N = scene->mediums.size();
+  if (N) {
+    auto t = -psl::log(1 - sampler.get1d());
+    if (auto ls = light_sampler.sample(ray(t), sampler)) {
+      auto ps = ray(t) + ls->distance * ls->wo;
+      auto a = dot(ps - ray.o, ray.d);
+      auto b = ray.tmax - a;
+      auto D = length(ps - ray(a));
+      auto theta_a = -psl::atan(a / D);
+      auto theta_b = psl::atan(b / D);
+      auto dt = D * psl::tan(lerp(sampler.get1d(), theta_b, theta_a));
+      auto ts = a + dt;
 
-  auto mit = psl::optional<MediumInteraction>();
-  for (size_t i = 0; i < scene->mediums.size(); i++) {
-    if (mit.accept(scene->mediums[i].intersect_tr(ray, sampler)))
-      ray.tmax = mit->t;
+      auto pdf = D / ((theta_b - theta_a) * psl::sqrt(D * D + dt * dt));
+
+      auto index = int(N * sampler.get1d());
+      return MediumSample(
+          ray(ts),
+          scene->mediums[index].at(ray(ts)).sigma_s * transmittance(ray.o, ray.d, ts, sampler),
+          pdf / N, scene->mediums[index].get_pf());
+    }
   }
 
-  if (hit_surface)
-    return {MOVE(mit), MOVE(it)};
-  else
-    return {MOVE(mit), psl::nullopt};
+  return psl::nullopt;
 }
 vec3 RTIntegrator::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler, int) const {
   auto tr = vec3(1.0f);

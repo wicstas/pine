@@ -9,13 +9,13 @@ void UniformLightSampler::build(const Scene* scene) {
     scene->env_light->dispatch([&](auto&& x) { lights.push_back(x); });
 }
 
-psl::optional<LightSample> UniformLightSampler::sample(const Interaction& it, float u1,
-                                                       vec2 u2) const {
-  auto N = lights.size();
+psl::optional<LightSample> UniformLightSampler::sample(vec3 p, float u1, vec2 u2) const {
+  auto N = int(lights.size());
   if (N == 0)
     return psl::nullopt;
-  auto index = psl::min(size_t(u1 * N), N - 1);
-  if (auto s = lights[index].sample(it, u2)) {
+  u1 *= N;
+  auto index = int(u1);
+  if (auto s = lights[index].sample(p, u2, u1 - index)) {
     s->light = &lights[index];
     s->pdf = s->pdf / N;
     s->is_delta = s->light->is_delta();
@@ -24,9 +24,8 @@ psl::optional<LightSample> UniformLightSampler::sample(const Interaction& it, fl
     return psl::nullopt;
   }
 }
-float UniformLightSampler::pdf(const Interaction& it, const SurfaceInteraction& git,
-                               const Ray& ray) const {
-  return git.shape->pdf(it, git, ray) / lights.size();
+float UniformLightSampler::pdf(vec3, const SurfaceInteraction& git, const Ray& ray) const {
+  return git.shape->pdf(ray, git.p, git.n) / lights.size();
 }
 
 }  // namespace pine

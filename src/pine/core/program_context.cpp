@@ -1,5 +1,4 @@
 #include <pine/core/program_context.h>
-#include <pine/core/compiler.h>
 #include <pine/core/parallel.h>
 #include <pine/core/fileio.h>
 #include <pine/core/scene.h>
@@ -12,14 +11,15 @@
 #include <pine/impl/integrator/restir.h>
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
+#include <pine/impl/integrator/mlt.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
 #include <pine/impl/accel/bvh.h>
 
 namespace pine {
 
-Context get_program_context() {
-  auto ctx = Context{};
+void setup_program_context() {
+  auto &ctx = Context::context;
   math_context(ctx);
   vecmath_context(ctx);
   array2d_context(ctx);
@@ -36,64 +36,89 @@ Context get_program_context() {
   sampler_context(ctx);
   fileio_context(ctx);
   parallel_context(ctx);
-  ctx("print") = +[](const psl::string &x) { Logr(x); };
-  ctx("println") = +[](const psl::string &x) { Log(x); };
+  ctx("print") = [](const psl::string &x) { Logr(x); };
+  ctx("println") = [](const psl::string &x) { Log(x); };
+  ctx("call") = [](psl::function<int()> f) { Log(f()); };
+  ctx("call") = [](psl::function<vec3(vec2)> f) { Log(f({})); };
+  ctx("call") = [](psl::function<mat4()> f) { Log(f()); };
+
   ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();
+
   ctx.type<UniformLightSampler>("UniformLightSampler").ctor<>();
   ctx.type<LightSampler>("LightSampler").ctor_variant<UniformLightSampler>();
-  ctx.type<RayIntegrator>("RayIntegrator")
-      .method("intersect", &RayIntegrator::intersect)
-      .method("hit", &RayIntegrator::hit);
-  ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
-      .ctor(+[](Sampler sampler, psl::function<vec3(RayIntegrator &, Ray, Sampler &)> f) {
-        return CustomRayIntegrator(EmbreeAccel(), sampler, MOVE(f));
-      })
-      .method("render", &CustomRayIntegrator::render);
+
+  //   ctx.type<CustomRayIntegrator>("CustomRayIntegrator")
+  //       .method<&CustomRayIntegrator::render>("render");
+  //   ctx("CustomRayIntegrator") = [](Sampler sampler,
+  //                                   psl::function<vec3(RayIntegrator &, Ray, Sampler &)> f) {
+  //     return CustomRayIntegrator(EmbreeAccel(), sampler, MOVE(f));
+  //   };
+
   ctx.type<AOIntegrator>("AOIntegrator")
       .ctor<Accel, Sampler>()
-      .ctor(+[](Sampler sampler) { return AOIntegrator(EmbreeAccel(), sampler); })
-      .method("render", &AOIntegrator::render);
-  ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
-      .ctor<Accel, Sampler, int>()
-      .ctor(+[](Sampler sampler, int max_path_length) {
-        return RandomWalkIntegrator(EmbreeAccel(), sampler, max_path_length);
-      })
-      .method("render", &RandomWalkIntegrator::render);
+      .method<&AOIntegrator::render>("render");
+  ctx("AOIntegrator") = [](Sampler sampler) { return AOIntegrator(EmbreeAccel(), sampler); };
+
+  //   ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
+  //       .ctor<Accel, Sampler, int>()
+  //       .method<&RandomWalkIntegrator::render>("render");
+  //   ctx("RandomWalkIntegrator") = [](Sampler sampler, int max_path_length) {
+  //     return RandomWalkIntegrator(EmbreeAccel(), sampler, max_path_length);
+  //   };
+
   ctx.type<PathIntegrator>("PathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](Sampler sampler, int max_path_length) {
-        return PathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
-      })
-      .method("render", &PathIntegrator::render);
-  ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
-      .ctor<Accel, Sampler, LightSampler, int, int, int>()
-      .ctor(+[](Sampler sampler, int max_path_length, int max_axis_resolution) {
-        return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
-                                    max_axis_resolution, 1);
-      })
-      .ctor(+[](Sampler sampler, int max_path_length) {
-        return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
-                                    128, 1);
-      })
-      .method("render", &CachedPathIntegrator::render);
+      .method<&PathIntegrator::render>("render");
+  ctx("PathIntegrator") = [](Sampler sampler, int max_path_length) {
+    return PathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
+  };
+
+  //   ctx.type<CachedPathIntegrator>("CachedPathIntegrator")
+  //       .ctor<Accel, Sampler, LightSampler, int, int, int>()
+  //       .method<&CachedPathIntegrator::render>("render");
+  //   ctx("CachedPathIntegrator") = [](Sampler sampler, int max_path_length, int
+  //   max_axis_resolution) {
+  //     return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
+  //                                 max_axis_resolution, 1);
+  //   };
+  //   ctx("CachedPathIntegrator") = [](Sampler sampler, int max_path_length) {
+  //     return CachedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length,
+  //     128,
+  //                                 1);
+  //   };
+
   ctx.type<GuidedPathIntegrator>("GuidedPathIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](Sampler sampler, int max_path_length) {
-        return GuidedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
-      })
-      .method("render", &GuidedPathIntegrator::render);
-  ctx.type<RestirIntegrator>("RestirIntegrator")
-      .ctor<Accel, Sampler, LightSampler, int>()
-      .ctor(+[](Sampler sampler, int max_path_length) {
-        return RestirIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
-      })
-      .method("render", &RestirIntegrator::render);
-  ctx("denoise") =
-      +[](Scene &scene) { DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene); };
+      .method<&GuidedPathIntegrator::render>("render");
+  ctx("GuidedPathIntegrator") = [](Sampler sampler, int max_path_length) {
+    return GuidedPathIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
+  };
 
-  return ctx;
+  ctx.type<MltIntegrator>("MltIntegrator")
+      .ctor<Accel, int, LightSampler, int>()
+      .method<&MltIntegrator::render>("render");
+  ctx("MltIntegrator") = [](int spp, int max_path_length) {
+    return MltIntegrator(EmbreeAccel(), spp, UniformLightSampler(), max_path_length);
+  };
+
+  //   ctx.type<RestirIntegrator>("RestirIntegrator")
+  //       .ctor<Accel, Sampler, LightSampler, int>()
+  //       .method<&RestirIntegrator::render>("render");
+  //   ctx("RestirIntegrator") = [](Sampler sampler, int max_path_length) {
+  //     return RestirIntegrator(EmbreeAccel(), sampler, UniformLightSampler(), max_path_length);
+  //   };
+
+  //   ctx("denoise") = [](Scene &scene) {
+  //     DenoiseIntegrator(EmbreeAccel(), SobolSampler(1)).render(scene);
+  //   };
+
+  ctx("quick_render") = [](Scene &scene, vec3 from, vec3 to, psl::string filename) {
+    scene.set_camera(ThinLenCamera(Film(vec2i(640, 480)), from, to, 0.5f));
+    PathIntegrator(EmbreeAccel(), BlueSobolSampler(4), UniformLightSampler(), 5).render(scene);
+    save_film_as_image(filename, scene.camera.film());
+  };
 }
 
 }  // namespace pine

@@ -10,26 +10,26 @@ template <typename R, typename... Args>
 class function<R(Args...)> {
   struct FunctionConcept {
     virtual ~FunctionConcept() = default;
-    virtual R call(Args... args) = 0;
+    virtual R call(Args... args) const = 0;
   };
   template <typename F>
   struct FunctionModel : FunctionConcept {
     FunctionModel(F f) : f(psl::move(f)) {
     }
 
-    R call(Args... args) override {
+    R call(Args... args) const override {
       return f(static_cast<Args>(args)...);
     }
     F f;
   };
-  shared_ptr<FunctionConcept> model;
+  shared_ptr<const FunctionConcept> model;
 
 public:
   using ReturnType = R;
   function() = default;
   template <typename F>
   requires requires(F f, Args... args) { f(args...); }
-  function(F f) : model(psl::make_shared<FunctionModel<F>>(f)) {
+  function(F f) : model(psl::make_shared<FunctionModel<F>>(MOVE(f))) {
   }
   R operator()(Args... args) const {
     return model->call(static_cast<Args>(args)...);

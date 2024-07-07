@@ -45,6 +45,10 @@ template <typename T, size_t N>
 auto end(T (&x)[N]) {
   return x + N;
 }
+template <size_t N>
+auto end(const char (&x)[N]) {
+  return x + N - 1;
+}
 
 template <typename T>
 requires requires(T&& x) { x.size(); }
@@ -364,6 +368,27 @@ auto find(Range auto&& range, const auto& value) {
 
 bool contains(Range auto&& range, const auto& value) {
   return psl::find(range, value) != psl::end(range);
+}
+
+bool start_with(Range auto&& range, Range auto&& subrange) {
+  auto first = psl::begin(range), last = psl::end(range);
+  auto f = psl::begin(subrange), l = psl::end(subrange);
+  while (f != l) {
+    if (first == last)
+      return false;
+    if (*first != *f)
+      return false;
+    ++first;
+    ++f;
+  }
+  return true;
+}
+
+auto find_or(auto&& map, auto&& key, auto fallback) {
+  if (auto it = map.find(key); it != map.end())
+    return it->second;
+  else
+    return static_cast<decltype(it->second)>(fallback);
 }
 
 void replace(Range auto&& range, const auto& old, const auto& new_) {

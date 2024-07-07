@@ -15,10 +15,6 @@ psl::shared_ptr<pine::Geometry> Scene::add_geometry(Shape shape,
                                                     psl::shared_ptr<Material> material) {
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock{mutex};
-  if (material->is<SubsurfaceMaterial>()) {
-    auto sigma_s = material->as<SubsurfaceMaterial>().sigma_s;
-    add_medium(Medium(HomogeneousMedium(shape, HgPhaseFunction(0.0f), sigma_s / 8, sigma_s)));
-  }
   geometries.push_back(psl::make_shared<Geometry>(MOVE(shape), material));
   if (geometries.back()->material->is<EmissiveMaterial>())
     add_light(AreaLight(geometries.back()));
@@ -65,32 +61,21 @@ AABB Scene::get_aabb() const {
   return aabb;
 }
 
-void add_box(Scene& scene, mat4 m, psl::shared_ptr<Material> material) {
-  scene.add_geometry(Rect::from_vertex({0, 0, 0}, {1, 0, 0}, {0, 1, 0}).apply(m), material);
-  scene.add_geometry(Rect::from_vertex({0, 0, 1}, {1, 0, 1}, {0, 1, 1}).apply(m), material);
-  scene.add_geometry(Rect::from_vertex({0, 0, 0}, {0, 1, 0}, {0, 0, 1}).apply(m), material);
-  scene.add_geometry(Rect::from_vertex({1, 0, 0}, {1, 1, 0}, {1, 0, 1}).apply(m), material);
-  scene.add_geometry(Rect::from_vertex({0, 0, 0}, {0, 0, 1}, {1, 0, 0}).apply(m), material);
-  scene.add_geometry(Rect::from_vertex({0, 1, 0}, {0, 1, 1}, {1, 1, 0}).apply(m), material);
-}
-
 void scene_context(Context& ctx) {
   ctx.type<Scene>("Scene")
       .ctor<>()
-      .member("camera", &Scene::camera)
-      .method("add", overloaded<psl::string, psl::shared_ptr<Material>>(&Scene::add_material))
-      .method("add", overloaded<psl::string, Material>(&Scene::add_material))
-      .method("add", overloaded<Shape, psl::shared_ptr<Material>>(&Scene::add_geometry))
-      .method("add", overloaded<Shape, Material>(&Scene::add_geometry))
-      .method("add", overloaded<Shape, psl::string>(&Scene::add_geometry))
-      .method("add", &Scene::add_instancing)
-      .method("add", &Scene::add_light)
-      .method("add", &Scene::add_medium)
-      .method("set", &Scene::set_camera)
-      .method("set", &Scene::set_env_light)
-      .method("get_aabb", &Scene::get_aabb);
-  ctx("add_box") = overloaded<Scene&, mat4, Material>(add_box);
-  ctx("add_box") = overloaded<Scene&, mat4, psl::string>(add_box);
+      .member<&Scene::camera>("camera")
+      .method<overloaded<psl::string, psl::shared_ptr<Material>>(&Scene::add_material)>("add")
+      .method<overloaded<psl::string, Material>(&Scene::add_material)>("add")
+      .method<overloaded<Shape, psl::shared_ptr<Material>>(&Scene::add_geometry)>("add")
+      .method<overloaded<Shape, Material>(&Scene::add_geometry)>("add")
+      .method<overloaded<Shape, psl::string>(&Scene::add_geometry)>("add")
+      .method<&Scene::add_instancing>("add")
+      .method<&Scene::add_light>("add")
+      .method<&Scene::add_medium>("add")
+      .method<&Scene::set_camera>("set")
+      .method<&Scene::set_env_light>("set")
+      .method<&Scene::get_aabb>("get_aabb");
 }
 
 }  // namespace pine

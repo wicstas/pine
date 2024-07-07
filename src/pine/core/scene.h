@@ -42,14 +42,6 @@ struct Scene {
   Camera camera;
 };
 
-void add_box(Scene& scene, mat4 m, psl::shared_ptr<Material> material);
-inline void add_box(Scene& scene, mat4 m, Material material) {
-  add_box(scene, m, psl::make_shared<Material>(MOVE(material)));
-}
-inline void add_box(Scene& scene, mat4 m, psl::string material_name) {
-  add_box(scene, m, scene.find_material(material_name));
-}
-
 void scene_context(Context& context);
 
 }  // namespace pine

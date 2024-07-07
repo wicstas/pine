@@ -78,4 +78,16 @@ private:
   const Scene* scene;
 };
 
+class ShapeBVH {
+public:
+  ShapeBVH() = default;
+  void build(const Mesh* mesh);
+  bool hit(Ray ray) const;
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+
+private:
+  BVHImpl bvh;
+  const Mesh* mesh;
+};
+
 }  // namespace pine

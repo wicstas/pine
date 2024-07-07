@@ -45,29 +45,26 @@ float rmse(const Image& ref, const Image& b) {
 }
 
 void image_context(Context& ctx) {
-  ctx.type<Image>("Image").ctor_variant<Array2d<vec3u8>, Array2d<vec3>, Array2d<vec4>>();
+  ctx.type<Image>("Image").ctor_variant<Array2d3u8, Array2d3f, Array2d4f>();
   ctx.type<psl::shared_ptr<Image>>("ImagePtr")
-      .converter<psl::string>([&ctx](psl::string_view filename) {
-        auto data = ctx.call<Bytes>("read_binary", filename);
+      .ctor<psl::string>([](psl::string_view filename) {
+        auto data = read_binary_file(filename);
         auto image = image_from(data.data(), data.size());
         if (!image)
           Fatal("Unable to load `", filename, '`');
         return psl::make_shared<Image>(*image);
       })
-      .converter<vec3, vec3i>(+[](vec3 color) {
+      .ctor<vec3>([](vec3 color) {
         auto pixels = Array2d<vec3>({1, 1});
         pixels[{0, 0}] = color;
         return psl::make_shared<Image>(pixels);
-      })
-      .method(
-          "size", +[](const psl::shared_ptr<Image>& image) { return image->size(); })
-      .method(
-          "[]", +[](const psl::shared_ptr<Image>& image, vec2i p) { return (*image)[p]; });
-  ctx("mse") = mse;
-  ctx("mse") = +[](psl::shared_ptr<Image> a, psl::shared_ptr<Image> b) { return mse(*a, *b); };
-  ctx("rmse") = rmse;
-  ctx("rmse") =
-      +[](psl::shared_ptr<Image> ref, psl::shared_ptr<Image> b) { return rmse(*ref, *b); };
+      });
+  ctx("size") = [](const psl::shared_ptr<Image>& image) { return image->size(); };
+  ctx("[]") = [](const psl::shared_ptr<Image>& image, vec2i p) { return (*image)[p]; };
+  ctx("mse") = led<mse>;
+  ctx("mse") = [](psl::shared_ptr<Image> a, psl::shared_ptr<Image> b) { return mse(*a, *b); };
+  ctx("rmse") = led<rmse>;
+  ctx("rmse") = [](psl::shared_ptr<Image> ref, psl::shared_ptr<Image> b) { return rmse(*ref, *b); };
 }
 
 }  // namespace pine

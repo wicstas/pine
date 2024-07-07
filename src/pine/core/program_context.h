@@ -3,6 +3,6 @@
 
 namespace pine {
 
-Context get_program_context();
+void setup_program_context();
 
 }  // namespace pine

@@ -15,7 +15,6 @@ public:
   vec3 radiance(Scene& scene, Ray ray, Sampler& sampler, Vertex prev_vertex);
 
 private:
-  LightSampler light_sampler;
   int max_path_length;
   bool collect_radiance_sample;
   float use_learned_ratio;

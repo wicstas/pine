@@ -1,5 +1,4 @@
 #pragma once
-
 #include <psl/utility.h>
 #include <psl/memory.h>
 #include <psl/check.h>
@@ -113,7 +112,25 @@ private:
   alignas(T) unsigned char storage[sizeof(T)];
   bool valid = false;
 };
+
 template <typename T>
-optional(T) -> optional<T>;
+auto make_optional(T x) {
+  return optional<T>(FWD(x));
+}
+
+template <typename Map>
+auto find_or_nullopt(Map&& map, auto&& key) {
+  if (auto it = map.find(key); it != map.end())
+    return psl::make_optional(it->second);
+  else
+    return decltype(psl::make_optional(it->second))(psl::nullopt);
+}
+
+template <typename T>
+psl::optional<T> fmap(psl::optional<T> x, auto f) {
+  if (x)
+    f(*x);
+  return x;
+}
 
 }  // namespace psl

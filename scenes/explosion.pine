@@ -1,0 +1,27 @@
+scene := Scene();
+image_size := [1920, 1080];
+#image_size := [360, 360];
+
+scene.add("floor", Diffuse([0.9, 0.9, 0.9]));
+
+scene.add(Rect([0, 0, 0], [20, 0, 0], [0, 0, 20]), "floor");
+scene.add(Rect([0, 0, 5], [20, 0, 0], [0, 20, 0]), "floor");
+ 
+#scene.set(ImageSky("scenes/hdr/rural.hdr", [1, 1, 1] / 2.0, 1.0, -0.1));
+scene.add(PointLight([-4, 6, -2], 100.0));
+
+scene.add(VDBMedium("scenes/vdb/explosion1.nvdb", translate(0, 2, 1) * rotate_x(-Pi/2) * scale(vec3(0.01)), 
+  60 * [1, 1, 1], 
+  100 * [1, 1, 1],
+  1,
+  1));
+#scene.add(VDBMedium("scenes/vdb/aerial0.nvdb", translate(0, 2, 1) * rotate_x(-Pi/2) * scale(vec3(0.005)), 
+#  10 * [1, 1, 1], 
+#  200 * [1, 1, 1],
+#  4,
+#  0.00008));
+
+scene.set(ThinLenCamera(Film(image_size), [0, 2, -8], [0, 1.5, 0], 0.25));
+
+PathIntegrator(HaltonSampler(1), 5).render(scene);
+scene.camera.film().save("images/explosion.png");

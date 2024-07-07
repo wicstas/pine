@@ -32,6 +32,7 @@ struct Profiler {
   Timer timer;
 
   static inline psl::unique_ptr<Profiler> main;
+  bool destructed = false;
 };
 
 }  // namespace pine

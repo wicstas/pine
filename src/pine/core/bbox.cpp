@@ -6,11 +6,14 @@ namespace pine {
 
 AABB::AABB(OBB obb) {
   for (int i = 0; i < 8; i++) {
-    auto dim = obb.dim / 2;
-    dim[0] *= (i % 2 < 1) ? 1 : -1;
-    dim[1] *= (i % 4 < 2) ? 1 : -1;
-    dim[2] *= (i % 8 < 4) ? 1 : -1;
-    extend(obb.p + obb.n * dim);
+    auto p = obb.base.lower;
+    if (i % 2 >= 1)
+      p[0] = obb.base.upper[0];
+    if (i % 4 >= 2)
+      p[1] = obb.base.upper[1];
+    if (i % 8 >= 4)
+      p[2] = obb.base.upper[2];
+    extend(vec3(obb.m * vec4(p, 1.0f)));
   }
 }
 AABB AABB::extend_to_max_axis() const {
@@ -40,17 +43,20 @@ float AABB::surface_area() const {
   vec3 d = diagonal();
   return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
 }
-void AABB::extend(vec3 p) {
+AABB& AABB::extend(vec3 p) {
   lower = min(lower, p);
   upper = max(upper, p);
+  return *this;
 }
-void AABB::extend(const AABB& aabb) {
+AABB& AABB::extend(const AABB& aabb) {
   lower = min(lower, aabb.lower);
   upper = max(upper, aabb.upper);
+  return *this;
 }
-void AABB::extend_by(float amount) {
+AABB& AABB::extend_by(float amount) {
   lower -= vec3(amount);
   upper += vec3(amount);
+  return *this;
 }
 psl::pair<AABB, AABB> AABB::split_half(int axis) const {
   CHECK_RANGE(axis, 0, 2);
@@ -70,12 +76,16 @@ bool AABB::hit(const Ray& ray) const {
   if (tmin > tmax)
     return false;
   for (int i = 0; i < 3; i++) {
-    if (psl::abs(ray.d[i]) < 1e-6f)
-      continue;
+    if (psl::abs(ray.d[i]) < 1e-6f) {
+      if (ray.o[i] < lower[i] || ray.o[i] > upper[i])
+        return false;
+      else
+        continue;
+    }
     float inv_d = 1.0f / ray.d[i];
     float t_near = (lower[i] - ray.o[i]) * inv_d;
     float t_far = (upper[i] - ray.o[i]) * inv_d;
-    if (ray.d[i] < 0.0f)
+    if (inv_d < 0.0f)
       psl::swap(t_far, t_near);
     tmin = psl::max(t_near, tmin);
     tmax = psl::min(t_far, tmax);
@@ -86,12 +96,16 @@ bool AABB::hit(const Ray& ray) const {
 }
 bool AABB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   for (int i = 0; i < 3; i++) {
-    if (psl::abs(d[i]) < 1e-6f)
-      continue;
+    if (psl::abs(d[i]) < 1e-6f) {
+      if (o[i] < lower[i] || o[i] > upper[i])
+        return false;
+      else
+        continue;
+    }
     float inv_d = 1.0f / d[i];
     float t_near = (lower[i] - o[i]) * inv_d;
     float t_far = (upper[i] - o[i]) * inv_d;
-    if (d[i] < 0.0f)
+    if (inv_d < 0.0f)
       psl::swap(t_far, t_near);
     tmin = psl::max(t_near, tmin);
     tmax = psl::min(t_far, tmax);
@@ -117,56 +131,42 @@ void AABB::compute_surface_info(SurfaceInteraction& it) const {
   it.n[axis] = pu[axis] > 0 ? 1 : -1;
 }
 
-OBB::OBB(AABB aabb, mat4 m) {
-  auto c = aabb.centroid();
-  p = vec3(m * vec4(c, 1.0f));
-  dim[0] = length(vec3(m[0])) * aabb.diagonal(0);
-  dim[1] = length(vec3(m[1])) * aabb.diagonal(1);
-  dim[2] = length(vec3(m[2])) * aabb.diagonal(2);
-  n[0] = normalize(cross(vec3(m[1]), vec3(m[2])));
-  n[1] = normalize(cross(vec3(m[2]), vec3(m[0])));
-  n[2] = normalize(cross(vec3(m[0]), vec3(m[1])));
+OBB::OBB(AABB aabb, mat4 m) : base(aabb), m(m), m_inv(inverse(m)) {
 }
 bool OBB::hit(Ray ray) const {
-  auto po = p - ray.o;
-  for (int i = 0; i < 3; i++) {
-    auto denom = dot(ray.d, n[i]);
-    if (psl::abs(denom) < 1e-6f)
-      continue;
-    denom = 1.0f / denom;
-    auto tnear = (dot(po, n[i]) - dim[i] / 2) * denom;
-    auto tfar = tnear + dim[i] * denom;
-    if (denom < 0)
-      psl::swap(tnear, tfar);
-    ray.tmin = psl::max(ray.tmin, tnear);
-    ray.tmax = psl::min(ray.tmax, tfar);
-    if (ray.tmin >= ray.tmax)
-      return false;
-  }
-
-  return true;
+  ray.o = vec3(m_inv * vec4(ray.o, 1.0f));
+  ray.d = normalize(mat3(m_inv) * ray.d);
+  return base.hit(ray);
 }
 bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
-  auto po = p - o;
-  for (int i = 0; i < 3; i++) {
-    auto denom = dot(d, n[i]);
-    if (psl::abs(denom) < 1e-6f)
-      continue;
-    denom = 1.0f / denom;
-    auto tnear = (dot(po, n[i]) - dim[i] / 2) * denom;
-    auto tfar = tnear + dim[i] * denom;
-    if (denom < 0)
-      psl::swap(tnear, tfar);
-    tmin = psl::max(tmin, tnear);
-    tmax = psl::min(tmax, tfar);
-    if (tmin >= tmax)
-      return false;
+  auto org = o;
+  o = vec3(m_inv * vec4(o, 1.0f));
+  d = normalize(mat3(m_inv) * d);
+  if (base.intersect(o, d, tmin, tmax)) {
+    auto ps = o + tmin * d;
+    auto pe = o + tmax * d;
+    tmin = distance(vec3(m * vec4(ps, 1.0f)), org);
+    tmax = distance(vec3(m * vec4(pe, 1.0f)), org);
+    return true;
+  } else {
+    return false;
   }
-
-  return true;
 }
-bool OBB::intersect(Ray&) const {
-  return false;
+bool OBB::intersect(Ray& ray) const {
+  auto tmin = ray.tmin, tmax = ray.tmax;
+  if (intersect(ray.o, ray.d, tmin, tmax)) {
+    ray.tmax = tmin > ray.tmin ? tmin : tmax;
+    return true;
+  } else {
+    return false;
+  }
+}
+void OBB::compute_surface_info(SurfaceInteraction& it) const {
+  auto p = it.p;
+  it.p = vec3(m_inv * vec4(it.p, 1.0f));
+  base.compute_surface_info(it);
+  it.p = p;
+  it.n = normalize(transpose(mat3(m_inv)) * it.n);
 }
 
 }  // namespace pine

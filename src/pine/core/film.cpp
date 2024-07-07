@@ -5,6 +5,14 @@
 
 namespace pine {
 
+vec3 Uncharted2ToneMapper::operator()(vec3 v) const {
+  return uncharted2_filmic(v);
+}
+
+vec3 ACESToneMapper::operator()(vec3 v) const {
+  return ACES(v);
+}
+
 void save_film_as_image(psl::string_view filename, Film film) {
   film.finalize();
   save_image(psl::string(filename), film.pixels, true);
@@ -21,6 +29,19 @@ void Film::finalize(float scale) {
     pixel.w = 1;
   }
   apply_tone_mapping();
+}
+void Film::scale(float factor) {
+  for (auto& pixel : pixels)
+    pixel *= factor;
+}
+void Film::add_radiance(vec2 p, vec3 radiance) {
+  auto p_film = vec2i(p * size());
+  DCHECK_RANGE(p_film.x, 0, size().x - 1);
+  DCHECK_RANGE(p_film.y, 0, size().y - 1);
+  auto& pixel = pixels[p_film];
+  spin_lock.lock();
+  pixel = vec4(vec3(pixel) + radiance, pixel.z);
+  spin_lock.unlock();
 }
 void Film::add_sample(vec2i p_film, vec3 color, float weight) {
   if (weight == 0.0f)
@@ -42,7 +63,7 @@ void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
 }
 void Film::apply_tone_mapping() {
   for (auto& pixel : pixels)
-    pixel = vec4{uncharted2_filmic(vec3(pixel)), pixel.w};
+    pixel = vec4(tone_mapper(vec3(pixel)), pixel.w);
 }
 
 Film combine(Film a, const Film& b, float weight_a, float weight_b) {
@@ -75,25 +96,27 @@ void visualize(Film& film) {
 }
 
 void film_context(Context& ctx) {
-  ctx.type<Film>("Film").ctor<vec2i>().member("pixels", &Film::pixels);
-  ctx("=") = +[](Film& film, const Array2d3f& color) {
+  ctx.type<Uncharted2ToneMapper>("Uncharted2").ctor<>();
+  ctx.type<ACESToneMapper>("ACES").ctor<>();
+  ctx.type<ToneMapper>("ToneMapper").ctor_variant<Uncharted2ToneMapper, ACESToneMapper>();
+  ctx.type<Film>("Film").ctor<vec2i>().ctor<vec2i, ToneMapper>().member<&Film::pixels>("pixels");
+  ctx("=") = [](Film& film, const Array2d3f& color) {
     CHECK_EQ(film.size(), color.size());
     for_2d(film.size(), [&](vec2i p) { film[p] = vec4(color[p]); });
   };
-  ctx("=") = +[](Film& film, const Array2d4f& color) {
+  ctx("=") = [](Film& film, const Array2d4f& color) {
     CHECK_EQ(film.size(), color.size());
     for_2d(film.size(), [&](vec2i p) { film[p] = color[p]; });
   };
-  ctx("=") = +[](Film& film, const Image& color) {
+  ctx("=") = [](Film& film, const Image& color) {
     CHECK_EQ(film.size(), color.size());
     for_2d(film.size(), [&](vec2i p) { film[p] = vec4(color[p]); });
   };
-  ctx("=") = +[](Film& film, const psl::shared_ptr<Image>& color) {
+  ctx("=") = [](Film& film, const psl::shared_ptr<Image>& color) {
     CHECK_EQ(film.size(), color->size());
     for_2d(film.size(), [&](vec2i p) { film[p] = vec4((*color)[p]); });
   };
-  ctx("save") = tag<void, Film&, psl::string_view>(
-      [](Film& film, psl::string_view filename) { save_film_as_image(filename, film); });
+  ctx("save") = [](Film& film, psl::string_view filename) { save_film_as_image(filename, film); };
 }
 
 }  // namespace pine

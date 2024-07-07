@@ -1,0 +1,18 @@
+scene = Scene();
+image_size = [640, 480];
+
+scene.set(ImageSky("scenes/hdr/cloudy.hdr", [1, 1, 1] / 4.0, 0.0, 0.0));
+
+scene.add("ground", Diffuse(vec3(0.0)));
+
+#scene.add(heightmap([800, 800], (p: vec2): f32 { 
+#    return fbm([p.x+1000, 0, p.y] / 4, 8) * 4 - 1;
+#}).apply(translate(0, -200, 0) * scale(1000, 1000, 1000)), "ground");
+
+scene.add(VDBMedium("scenes/vdb/cumulus.nvdb", scale(1, 1, 1), HgPF(0.8), 0.0001, [1, 1, 1] / 4.0));
+#scene.add(VDBMedium("scenes/vdb/cloud0.half.nvdb", translate(1000, 0, 0) * scale(1, 1, 1), HgPF(), 0.0, [1, 1, 1] / 4.0));
+
+scene.set(ThinLenCamera(Film(image_size, ACES()), [-100, 0, 0], [0, 0, 0], 0.4));
+
+PathIntegrator(BlueSampler(256 / 4), 512).render(scene);
+scene.camera.film().save("images/culumus.png");

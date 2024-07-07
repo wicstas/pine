@@ -17,7 +17,7 @@ struct Plane {
   void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3 p, vec2 u) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return float_max;
   }
@@ -36,7 +36,7 @@ struct Sphere {
   void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return 4 * Pi * r * r;
   }
@@ -53,7 +53,7 @@ struct Disk {
   void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3, vec2) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return Pi * r * r;
   }
@@ -73,7 +73,7 @@ struct Line {
   void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3, vec2) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return thickness * 2 * Pi * len;
   }
@@ -95,7 +95,7 @@ struct Rect {
   void compute_surface_info(SurfaceInteraction& it) const;
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return lx * ly;
   }
@@ -119,7 +119,7 @@ struct Triangle {
 
   AABB get_aabb() const;
   psl::optional<ShapeSample> sample(vec3, vec2 u) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const {
     return length(cross(v1 - v0, v2 - v0)) / 2;
   }
@@ -127,6 +127,33 @@ struct Triangle {
 private:
   vec3 v0, v1, v2;
   vec3 n;
+};
+
+struct Cone {
+  Cone(vec3 p, vec3 n, float r, float h) : bottom(p, n, r), p(p + n * h), n(n), r(r), h(h) {
+    A2 = sqr(r / h) + 1;
+    A = psl::sqrt(A2);
+    S = r / psl::sqrt(r * r + h * h);
+  }
+
+  bool hit(const Ray& ray) const;
+  bool intersect(Ray& ray) const;
+  void compute_surface_info(SurfaceInteraction& it) const;
+
+  AABB get_aabb() const;
+  psl::optional<ShapeSample> sample(vec3, vec2 u) const;
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
+  float area() const {
+    return psl::sqrt(r * r + h * h) * Pi * r + bottom.area();
+  }
+
+private:
+  Disk bottom;
+  vec3 p;
+  vec3 n;
+  float r;
+  float h;
+  float A, A2, S;
 };
 
 struct Mesh {
@@ -143,15 +170,22 @@ struct Mesh {
   void compute_surface_info(SurfaceInteraction&) const {
     PINE_UNREACHABLE;
   }
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
   float area() const {
-    PINE_UNREACHABLE;
+    return get_triangle(0).area() * num_triangles();
   }
-  psl::optional<ShapeSample> sample(vec3, vec2) const {
-    PINE_UNREACHABLE;
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u, float u1) const {
+    if (num_triangles() == 0)
+      return psl::nullopt;
+
+    auto ss = get_triangle(num_triangles() * u1).sample(p, u);
+    ss->pdf /= num_triangles();
+
+    return ss;
   }
-  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
-    PINE_UNREACHABLE;
+  float pdf(const Ray& ray, vec3, vec3 ns) const {
+    return psl::sqr(ray.tmax) / (area() * absdot(ns, ray.d));
   }
 
   bool hit(const Ray& ray, int index) const;
@@ -162,12 +196,12 @@ struct Mesh {
   size_t num_triangles() const {
     return indices.size();
   }
-
-  Mesh& apply(mat4 m) {
-    for (auto& v : vertices)
-      v = vec3(m * vec4(v, 1.0f));
-    return *this;
+  Triangle get_triangle(int index) const {
+    auto face = indices[index];
+    return Triangle(vertices[face[0]], vertices[face[1]], vertices[face[2]]);
   }
+
+  Mesh& apply(mat4 m);
 
   vec3 position_of(vec3u32 face, vec2 uv) const {
     return lerp(uv[0], uv[1], vertices[face[0]], vertices[face[1]], vertices[face[2]]);
@@ -189,6 +223,7 @@ struct Mesh {
   psl::vector<vec3> normals;
   psl::vector<vec2> texcoords;
   psl::vector<vec3u32> indices;
+  mutable ShapeAccel* accel = nullptr;
 };
 
 Mesh heightmap(const Array2d<float>& height_map);
@@ -196,8 +231,8 @@ Mesh heightmap(vec2i resolution, psl::function<float(vec2i)> height_function);
 Mesh heightmap(vec2i resolution, psl::function<float(vec2)> height_function);
 
 struct SDF {
-  SDF(vec3 center, vec3 size, psl::function<float(vec3)> sdf)
-      : aabb(center - size / 2, center + size / 2), sdf(MOVE(sdf)) {
+  SDF(vec3 center, vec3 half_size, psl::function<float(vec3)> sdf)
+      : aabb(center - half_size, center + half_size), sdf(MOVE(sdf)) {
     threshold = min_value(aabb.diagonal()) * 1e-6f;
   }
   SDF(AABB aabb, psl::function<float(vec3)> sdf) : aabb(aabb), sdf(MOVE(sdf)) {
@@ -214,7 +249,7 @@ struct SDF {
   psl::optional<ShapeSample> sample(vec3, vec2) const {
     PINE_UNREACHABLE;
   }
-  float pdf(const Interaction&, const SurfaceInteraction&, const Ray&) const {
+  float pdf(const Ray&, vec3, vec3) const {
     PINE_UNREACHABLE;
   }
   float area() const {
@@ -227,7 +262,7 @@ private:
   float threshold;
 };
 
-struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line, Mesh, SDF> {
+struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Cone, Rect, Disk, Line, Mesh, SDF> {
   using variant::variant;
 
   bool hit(const Ray& ray) const {
@@ -239,20 +274,27 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Rect, Disk, Line
   void compute_surface_info(SurfaceInteraction& it) const {
     return dispatch([&](auto&& x) { return x.compute_surface_info(it); });
   }
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+
   AABB get_aabb() const {
     return dispatch([&](auto&& x) { return x.get_aabb(); });
   }
   float area() const {
     return dispatch([&](auto&& x) { return x.area(); });
   }
-  psl::optional<ShapeSample> sample(vec3 p, vec2 u) const {
-    auto ss = dispatch([&](auto&& x) { return x.sample(p, u); });
-    if (ss->pdf <= 0.0f)
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u, float u1) const {
+    auto gs = dispatch([&]<typename T>(const T& x) {
+      if constexpr (psl::same_as<T, Mesh>)
+        return x.sample(p, u, u1);
+      else
+        return x.sample(p, u);
+    });
+    if (!gs || gs->pdf <= 0 || psl::isinf(gs->pdf))
       return psl::nullopt;
-    return ss;
+    return gs;
   }
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
-    return dispatch([&](auto&& x) { return x.pdf(it, git, ray); });
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const {
+    return dispatch([&](auto&& x) { return x.pdf(ray, ps, ns); });
   }
 };
 
@@ -273,11 +315,11 @@ struct Geometry {
   AABB get_aabb() const {
     return shape.get_aabb();
   }
-  psl::optional<ShapeSample> sample(vec3 p, vec2 u) const {
-    return shape.sample(p, u);
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u, float u1) const {
+    return shape.sample(p, u, u1);
   }
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
-    return shape.pdf(it, git, ray);
+  float pdf(const Ray& ray, vec3 ps, vec3 ns) const {
+    return shape.pdf(ray, ps, ns);
   }
   float area() const {
     return shape.area();

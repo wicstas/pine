@@ -1,0 +1,20 @@
+scene = Scene();
+image_size = [720, 360];
+
+scene.add("floor", Uber(
+    lerp(Checkerboard(UV(), 0.95), [0.5, 0.7, 1.], [0.01, 0.02, 0.03]),
+    lerp(Checkerboard(UV(), 0.95), 0.0, 0.4)
+));
+scene.add("diffuse", Diffuse([0.8, 0.8, 0.8]));
+scene.add("metal", Uber([1.0, 1.0, 1.0], 0.0, 1.0));
+scene.add("glossy", Uber([0.98, 0.55, 0.02], 0.0, 0.0));
+
+scene.add(Disk([0, 0, 0], [0, 1, 0], 10), "floor");
+scene.add(Sphere([-3, 1, 0], 1), "metal");
+scene.add(Sphere([0, 1, 0], 1), "diffuse");
+scene.add(Sphere([3, 1, 0], 1), "glossy");
+scene.add(Rect([-0.5, 3, 1], [1, 0, 0], [0, 0, 1]), Emissive([1, 1, 1] * 160));
+scene.set(ThinLenCamera(Film(image_size), [0, 4, -8], [0, 1, 0], 0.3));
+
+PathIntegrator(BlueSampler(64), 6).render(scene);
+scene.camera.film().save("images/classic.png");

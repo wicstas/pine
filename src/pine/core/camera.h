@@ -28,8 +28,8 @@ struct ThinLenCamera {
 struct Camera : psl::variant<ThinLenCamera> {
   using variant::variant;
 
-  Ray gen_ray(vec2 pFilm, vec2 u2) const {
-    return dispatch([&](auto &&x) { return x.gen_ray(pFilm, u2); });
+  Ray gen_ray(vec2 pfilm, vec2 u2 = vec2(0.5f)) const {
+    return dispatch([&](auto &&x) { return x.gen_ray(pfilm, u2); });
   }
   Film &film() {
     return dispatch([&](auto &&x) -> Film & { return x.film(); });

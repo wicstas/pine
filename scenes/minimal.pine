@@ -1,0 +1,7 @@
+scene = Scene();
+
+scene.add(Sphere([0, 0, 0], 1), Diffuse([1, 1, 1]));
+
+scene.add(DirectionalLight([1, 1, -1], [1, 1, 1]));
+
+scene.quick_render([0, 0, -4], [0, 0, 0], "images/minimal.png");

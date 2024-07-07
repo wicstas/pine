@@ -1,0 +1,22 @@
+scene := Scene();
+image_size := [720, 360]; 
+
+scene.add("floor", Diffuse([0.95, 0.95, 0.95]));
+scene.add("red", Diffuse([0.9, 0.1, 0.05]));
+scene.add("green", Diffuse([0.2, 0.9, 0.05]));
+
+scene.add(Rect([0, 0, 1], [2, 0, 0], [0, 0, 2]), "floor");
+scene.add(Rect([0, 2, 1], [2, 0, 0], [0, 0, 2]), "floor");
+scene.add(Rect([0, 1, 2], [2, 0, 0], [0, 2, 0]), "floor");
+scene.add(Rect([-1, 1, 1], [0, 0, 2], [0, 2, 0]), "red");
+scene.add(Rect([1, 1, 1], [0, 0, 2], [0, 2, 0]), "green");
+
+scene.add(Rect([0.2, 1.5, 1], [1.6, 0, 0], [0, 0, 2]), "floor");
+
+scene.add(Rect([0, 1.9, 1], [0.2, 0, 0], [0, 0, 0.2]), 
+    Emissive(600 * [1.0, 0.64, 0.185]));
+
+scene.set(ThinLenCamera(Film(image_size), [0, 1, -4], [0, 1, 0], 0.25));
+
+PathIntegrator(BlueSampler(64), 5).render(scene);
+scene.camera.film().save("images/cbox0.png");

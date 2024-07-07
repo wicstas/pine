@@ -419,6 +419,13 @@ template <typename T>
 auto ref(T& x) {
   return Ref<T>(x);
 }
+template <typename T>
+auto foward_ref(psl::TypeIdentity<T>& x) {
+  if constexpr (psl::is_lv_reference<T>)
+    return psl::ref(x);
+  else
+    return x;
+}
 
 template <typename T>
 struct _is_psl_ref : FalseType {};

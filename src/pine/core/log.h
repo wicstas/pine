@@ -25,8 +25,6 @@ private:
   psl::string message;
 };
 
-void optionally_stop_program_for_stacktrace();
-
 template <typename... Args>
 void Debugr(const Args&... args) {
   using psl::to_string;
@@ -60,12 +58,9 @@ void Warning(const Args&... args) {
 template <typename... Args>
 [[noreturn]] void Fatal(const Args&... args) {
   using psl::to_string;
+  fatal_stream(to_string(args...) + "\n");
+  psl::abort();
   throw Exception{to_string(args...)};
-}
-template <typename... Args>
-[[noreturn]] void ReturnControlToMain(const Args&... args) {
-  using psl::to_string;
-  throw psl::MessagedException{to_string(args...)};
 }
 
 #define CHECK(x)                                                                            \

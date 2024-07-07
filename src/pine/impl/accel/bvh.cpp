@@ -587,4 +587,40 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
   return hit;
 }
 
+void ShapeBVH::build(const Mesh* mesh) {
+  this->mesh = mesh;
+
+  CHECK(mesh->num_triangles() != 0);
+  auto primitives = psl::vector<BVHImpl::Primitive>{};
+  for (size_t it = 0; it < mesh->num_triangles(); it++) {
+    auto primitive = BVHImpl::Primitive{};
+    primitive.aabb = mesh->get_aabb(it);
+    primitive.index = int(primitives.size());
+    primitives.push_back(primitive);
+  }
+  bvh.build(MOVE(primitives));
+}
+
+bool ShapeBVH::hit(Ray ray) const {
+  return bvh.hit(ray, [&](const Ray& ray, int index) { return mesh->hit(ray, index); });
+}
+
+bool ShapeBVH::intersect(Ray& ray, SurfaceInteraction& it) const {
+  auto prim_index = 0;
+
+  auto hit = bvh.Intersect(ray, [&](Ray& ray, int index) {
+    auto hit = mesh->intersect(ray, index);
+    if (hit)
+      prim_index = index;
+    return hit;
+  });
+
+  if (hit) {
+    it.p = ray();
+    mesh->compute_surface_info(it, prim_index);
+  }
+
+  return hit;
+}
+
 }  // namespace pine

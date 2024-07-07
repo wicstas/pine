@@ -15,7 +15,7 @@ T&& forward(TypeIdentity<T>& x) {
   return static_cast<T&&>(x);
 }
 
-#define FWD(x) psl::forward<decltype(x)>(x)
+#define FWD(x) static_cast<decltype(x)&&>(x)
 #define MOVE(x) psl::move(x)
 
 template <typename T>
@@ -237,42 +237,72 @@ auto tie(Ts&... xs) {
   return tuple<Ts&...>(xs...);
 }
 
-template <typename F>
-decltype(auto) apply(tuple<>&, F&& f) {
-  return f();
+template <typename T>
+constexpr int tuple_size = 0;
+template <typename... Args>
+constexpr int tuple_size<tuple<Args...>> = sizeof...(Args);
+template <typename... Args>
+constexpr int tuple_size<tuple<Args...>&> = sizeof...(Args);
+
+template <typename T, typename F>
+decltype(auto) apply(T&& t, F&& f) {
+  constexpr auto size = tuple_size<T>;
+  if constexpr (size == 0)
+    return f();
+  else if constexpr (size == 1)
+    return f(t.v0);
+  else if constexpr (size == 2)
+    return f(t.v0, t.v1);
+  else if constexpr (size == 3)
+    return f(t.v0, t.v1, t.v2);
+  else if constexpr (size == 4)
+    return f(t.v0, t.v1, t.v2, t.v3);
+  else if constexpr (size == 5)
+    return f(t.v0, t.v1, t.v2, t.v3, t.v4);
+  else if constexpr (size == 6)
+    return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5);
+  else if constexpr (size == 7)
+    return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6);
+  else if constexpr (size == 8)
+    return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6, t.v7);
 }
-template <typename F, typename T0>
-decltype(auto) apply(tuple<T0>& t, F&& f) {
-  return f(t.v0);
+
+template <typename T, typename F>
+decltype(auto) apply_with_index(T&& t, F&& f) {
+  constexpr auto size = tuple_size<T>;
+  if constexpr (size == 0)
+    return f();
+  else if constexpr (size == 1)
+    return f(psl::make_pair(t.v0, 0));
+  else if constexpr (size == 2)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1));
+  else if constexpr (size == 3)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2));
+  else if constexpr (size == 4)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2),
+             psl::make_pair(t.v3, 3));
+  else if constexpr (size == 5)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2),
+             psl::make_pair(t.v3, 3), psl::make_pair(t.v4, 4));
+  else if constexpr (size == 6)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2),
+             psl::make_pair(t.v3, 3), psl::make_pair(t.v4, 4), psl::make_pair(t.v5, 5));
+  else if constexpr (size == 7)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2),
+             psl::make_pair(t.v3, 3), psl::make_pair(t.v4, 4), psl::make_pair(t.v5, 5),
+             psl::make_pair(t.v6, 6));
+  else if constexpr (size == 8)
+    return f(psl::make_pair(t.v0, 0), psl::make_pair(t.v1, 1), psl::make_pair(t.v2, 2),
+             psl::make_pair(t.v3, 3), psl::make_pair(t.v4, 4), psl::make_pair(t.v5, 5),
+             psl::make_pair(t.v6, 6), psl::make_pair(t.v7, 7));
 }
-template <typename F, typename T0, typename T1>
-decltype(auto) apply(tuple<T0, T1>& t, F&& f) {
-  return f(t.v0, t.v1);
+
+template <typename... Fs>
+auto overloaded_lambda(Fs... fs) {
+  struct Overloads : Fs... {
+    using Fs::operator()...;
+  };
+  return Overloads{fs...};
 }
-template <typename F, typename T0, typename T1, typename T2>
-decltype(auto) apply(tuple<T0, T1, T2>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2);
-}
-template <typename F, typename T0, typename T1, typename T2, typename T3>
-decltype(auto) apply(tuple<T0, T1, T2, T3>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2, t.v3);
-}
-template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4>
-decltype(auto) apply(tuple<T0, T1, T2, T3, T4>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2, t.v3, t.v4);
-}
-template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
-decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5);
-}
-template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
-          typename T6>
-decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5, T6>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6);
-}
-template <typename F, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5,
-          typename T6, typename T7>
-decltype(auto) apply(tuple<T0, T1, T2, T3, T4, T5, T6, T6, T7>& t, F&& f) {
-  return f(t.v0, t.v1, t.v2, t.v3, t.v4, t.v5, t.v6, t.v7);
-}
+
 }  // namespace psl

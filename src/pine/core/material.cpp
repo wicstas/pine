@@ -6,6 +6,27 @@
 
 namespace pine {
 
+BXDF UberMaterial::sample_bxdf(const BxdfSampleCtx& bc, Sampler& sampler) const {
+  if (with_probability(metallic(bc), sampler)) {
+    return ConductorBSDF(albedo(bc), roughness(bc));
+  } else {
+    if (with_probability(transmission(bc), sampler))
+      return RefractiveDielectricBSDF(albedo(bc), roughness(bc), ior);
+    else
+      return DiffusiveDielectricBSDF(albedo(bc), roughness(bc), ior);
+  }
+}
+
+BXDF SubsurfaceMaterial::sample_bxdf(const BxdfSampleCtx& bc, Sampler& sampler) const {
+  auto fr = FrDielectric(dot(bc.wi, bc.n), ior);
+  if (sampler.get1d() < fr)
+    return RefractiveBSDF(albedo(bc), psl::max(roughness(bc), bc.min_roughness), ior);
+  else if (bc.diffused)
+    return DiffuseBSDF(albedo(bc));
+  else
+    return BSSRDF(albedo(bc), ior, sigma_s);
+}
+
 // vec3 Material::BumpNormal(const MaterialEvalCtx& c) const {
 // if (!bumpMap)
 // return c.n;
@@ -23,25 +44,20 @@ namespace pine {
 // }
 
 void material_context(Context& ctx) {
-  // ctx.type<DiffuseBSDF>("DiffuseBSDF").ctor<Node3f>();
-  // ctx.type<ConductorBSDF>("ConductorBSDF").ctor<Node3f, Nodef>();
-  // ctx.type<SpecularReflectionBSDF>("SpecularReflectionBSDF").ctor<Node3f>();
-  // ctx.type<SpecularRefrectionBSDF>("SpecularRefrectionBSDF").ctor<Node3f, Nodef>();
-  // ctx.type<BSDF>("BSDF").ctor_variant<DiffuseBSDF, ConductorBSDF, DielectricBSDF>();
   ctx.type<EmissiveMaterial>("Emissive").ctor<Node3f>();
   ctx.type<DiffuseMaterial>("Diffuse").ctor<Node3f>();
-  ctx.type<MirrorMaterial>("Mirror").ctor<Node3f>();
-  ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>();
-  ctx.type<DispersionMaterial>("Dispersion").ctor<Node3f>();
+  ctx.type<MetalMaterial>("Metal").ctor<Node3f, Nodef>();
+  ctx.type<GlossyMaterial>("Glossy").ctor<Node3f, Nodef>().ctor<Node3f, Nodef, Nodef>();
+  ctx.type<GlassMaterial>("Glass").ctor<Node3f, Nodef>().ctor<Node3f, Nodef, Nodef>();
   ctx.type<SubsurfaceMaterial>("Subsurface").ctor<Node3f, Nodef, vec3>();
   ctx.type<UberMaterial>("Uber")
       .ctor<Node3f, Nodef>()
       .ctor<Node3f, Nodef, Nodef>()
       .ctor<Node3f, Nodef, Nodef, Nodef>()
-      .ctor<Node3f, Nodef, Nodef, Nodef, Nodef>();
+      .ctor<Node3f, Nodef, Nodef, Nodef, float>();
   ctx.type<Material>("Material")
-      .ctor_variant<EmissiveMaterial, DiffuseMaterial, MirrorMaterial, GlassMaterial,
-                    DispersionMaterial, UberMaterial, SubsurfaceMaterial>();
+      .ctor_variant<EmissiveMaterial, DiffuseMaterial, MetalMaterial, GlossyMaterial, GlassMaterial,
+                    UberMaterial, SubsurfaceMaterial>();
   ctx.type<psl::shared_ptr<Material>>("MaterialPtr");
 }
 

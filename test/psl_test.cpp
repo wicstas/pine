@@ -507,6 +507,12 @@ void test_algorithm() {
   CHECK(psl::contains(xs, 30));
   CHECK(!psl::contains(xs, 0));
   CHECK(!psl::contains(xs, 40));
+
+  CHECK(psl::start_with(xs, psl::array_of(10, 20)));
+  CHECK(psl::start_with(xs, psl::array_of(10, 20, 30)));
+  CHECK(!psl::start_with(xs, psl::array_of(10, 21)));
+  CHECK(!psl::start_with(xs, psl::array_of(10, 20, 30)));
+
   SCOPE_END
   auto _xs_ = psl::array_of(1, 3, 2, 2, 4);
 
@@ -591,7 +597,7 @@ void test_algorithm() {
 }
 
 int main() {
-    return 0;
+  return 0;
   try {
     test_vector();
     test_variant();

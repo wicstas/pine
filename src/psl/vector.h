@@ -17,7 +17,6 @@ struct default_allocator {
     return ptr;
   }
   void free(T* ptr) const {
-    psl_check(ptr != nullptr);
     ::operator delete(ptr);
   }
 
@@ -41,7 +40,6 @@ struct context_allocator {
     return ptr;
   }
   void free(T* ptr) const {
-    psl_check(ptr != nullptr);
     context_free(ptr);
   }
 
@@ -64,7 +62,6 @@ struct static_allocator {
     return reinterpret_cast<T*>(storage.ptr());
   }
   void free(T* ptr [[maybe_unused]]) const {
-    psl_check(ptr != nullptr);
   }
 
   template <typename... Args>
@@ -92,7 +89,7 @@ public:
   using ConstIterator = const T*;
 
   ~vector() {
-    clear();
+    reset();
   }
 
   vector() = default;
@@ -100,6 +97,12 @@ public:
   explicit vector(size_t len) {
     resize(len);
   }
+  struct _reserve_size {};
+  inline static constexpr _reserve_size reserve_size{};
+  vector(size_t len, _reserve_size) {
+    reserve(len);
+  }
+
   template <Range ARange>
   explicit vector(ARange&& range) {
     if constexpr (psl::has_size<ARange>) {
@@ -107,7 +110,7 @@ public:
       psl::copy_inplace(begin(), range);
       len = psl::size(range);
     } else {
-      psl::insert([this](const auto& x) { push_back(x); }, range);
+      psl::insert([&](const auto& x) { push_back(x); }, range);
     }
   }
   template <ForwardIterator It>
@@ -142,6 +145,11 @@ public:
     reserve(size() + 1);
     len += 1;
     allocator.construct_at(&back(), psl::move(x));
+  }
+  template <typename... Ts>
+  requires(sizeof...(Ts) > 1)
+  void push_back(auto... xs) {
+    (push_back(MOVE(xs)), ...);
   }
   void push_front(T x) {
     insert(begin(), psl::move(x));
@@ -537,7 +545,7 @@ auto vector_of(Ts... xs) {
     else {
       auto r = vector<T>();
       r.reserve(sizeof...(xs));
-      ((r.push_back(MOVE(xs))), ...);
+      (r.push_back(MOVE(xs)), ...);
       return r;
     }
   } else {
@@ -548,10 +556,18 @@ auto vector_of(Ts... xs) {
       using T = FirstType<Ts...>;
       auto r = vector<T>();
       r.reserve(sizeof...(xs));
-      ((r.push_back(MOVE(xs))), ...);
+      (r.push_back(MOVE(xs)), ...);
       return r;
     }
   }
+}
+
+auto transform_vector(Range auto&& xs, auto f) {
+  using R = RemoveReference<decltype(f(*xs.begin()))>;
+  auto res = vector<R>(xs.size(), vector<R>::reserve_size);
+  for (const auto& x : xs)
+    res.push_back(f(x));
+  return res;
 }
 
 }  // namespace psl

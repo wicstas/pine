@@ -4,12 +4,6 @@
 
 namespace pine {
 
-void optionally_stop_program_for_stacktrace() {
-#ifndef NDEBUG
-  psl::abort();
-#endif
-}
-
 void null_stream(psl::string_view) {
 }
 void cout_stream(psl::string_view data) {

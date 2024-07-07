@@ -1,7 +1,5 @@
 .*
 build/
 build-debug/
-scenes/
 images/
-gallery/
 *.bpm

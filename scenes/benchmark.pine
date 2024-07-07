@@ -1,0 +1,18 @@
+sum = 0;
+
+for N in 0..100 {
+    for n in 1..50000 {
+        x = n;
+        iter = 0;
+        while (x != 1) {
+            if (x % 2 == 0)
+                x = x / 2;
+            else
+                x = x * 3 + 1;
+            iter += 1;
+        }
+        sum += iter;
+    }
+}
+
+println(sum);

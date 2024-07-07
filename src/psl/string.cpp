@@ -78,7 +78,7 @@ string& string::operator=(const char* cstr) {
   return *this;
 }
 string_view string::subview(size_t pos, size_t len) const {
-  return string_view(*this).substr(pos, len);
+  return string_view(*this).subview(pos, len);
 }
 
 string& string::operator=(string_view str) {
@@ -109,10 +109,10 @@ string& string::operator+=(char c) {
   return *this;
 }
 
-string_view string_view::substr(size_t pos, iterator end) const {
-  return substr(pos, distance(begin(), end) - pos);
+string_view string_view::subview(size_t pos, iterator end) const {
+  return subview(pos, distance(begin(), end) - pos);
 }
-string_view string_view::substr(size_t pos, size_t len) const {
+string_view string_view::subview(size_t pos, size_t len) const {
   pos = clamp(pos, size_t{0}, size());
   if (len == size_t(-1))
     return string_view(data() + pos, size() - pos);

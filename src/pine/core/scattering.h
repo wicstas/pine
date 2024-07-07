@@ -8,7 +8,7 @@ inline float CosTheta(vec3 w) {
   return w.z;
 }
 inline float Cos2Theta(vec3 w) {
-  return psl::sqr(w.z);
+  return sqr(w.z);
 }
 inline float AbsCosTheta(vec3 w) {
   return psl::abs(w.z);
@@ -40,7 +40,13 @@ inline bool SameHemisphere(vec3 w0, vec3 w1) {
 inline vec3 FaceForward(vec3 v, vec3 n) {
   return (dot(v, n) < 0.0f) ? -v : v;
 }
+inline vec3 FaceNormal(vec3 v) {
+  return v.z < 0.0f ? -v : v;
+}
 
+inline vec3 Reflect(vec3 w) {
+  return vec3(-w.x, -w.y, w.z);
+}
 inline vec3 Reflect(vec3 wi, vec3 n) {
   return 2.0f * dot(wi, n) * n - wi;
 }
@@ -52,8 +58,8 @@ inline bool Refract(vec3 wi, vec3 n, float eta, vec3& wt, float* etap = nullptr)
     n = -n;
   }
 
-  float sin2ThetaI = psl::max(0.0f, 1.0f - psl::sqr(cosThetaI));
-  float sin2ThetaT = sin2ThetaI / psl::sqr(eta);
+  float sin2ThetaI = psl::max(0.0f, 1.0f - sqr(cosThetaI));
+  float sin2ThetaT = sin2ThetaI / sqr(eta);
   if (sin2ThetaT >= 1)
     return false;
 
@@ -71,15 +77,15 @@ inline float FrDielectric(float cosThetaI, float eta) {
     cosThetaI = -cosThetaI;
   }
 
-  float sin2ThetaI = 1.0f - psl::sqr(cosThetaI);
-  float sin2ThetaT = sin2ThetaI / psl::sqr(eta);
+  float sin2ThetaI = 1.0f - sqr(cosThetaI);
+  float sin2ThetaT = sin2ThetaI / sqr(eta);
   if (sin2ThetaT >= 1.0f)
     return 1.0f;
   float cosThetaT = psl::sqrt(1.0f - sin2ThetaT);
 
   float rParl = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
   float rPerp = (cosThetaI - eta * cosThetaT) / (cosThetaI + eta * cosThetaT);
-  return (psl::sqr(rParl) + psl::sqr(rPerp)) / 2.0f;
+  return (sqr(rParl) + sqr(rPerp)) / 2.0f;
 }
 
 inline vec3 FrSchlick(vec3 F0, float cosTheta) {
@@ -93,15 +99,15 @@ public:
   TrowbridgeReitzDistribution(float alphaX, float alphaY) : alphaX(alphaX), alphaY(alphaY){};
   float D(vec3 wm) const {
     float tan2Theta = Tan2Theta(wm);
-    float cos4Theta = psl::sqr(Cos2Theta(wm));
+    float cos4Theta = sqr(Cos2Theta(wm));
     if (cos4Theta < 1e-6f)
       return 0.0f;
-    float e = tan2Theta * (psl::sqr(CosPhi(wm) / alphaX) + psl::sqr(SinPhi(wm) / alphaY));
-    return 1.0f / (Pi * alphaX * alphaY * cos4Theta * psl::sqr(1 + e));
+    float e = tan2Theta * (sqr(CosPhi(wm) / alphaX) + sqr(SinPhi(wm) / alphaY));
+    return 1.0f / (Pi * alphaX * alphaY * cos4Theta * sqr(1 + e));
   }
   float Lambda(vec3 w) const {
     float tan2Theta = Tan2Theta(w);
-    float alpha2 = psl::sqr(CosPhi(w) * alphaX) + psl::sqr(SinPhi(w) * alphaY);
+    float alpha2 = sqr(CosPhi(w) * alphaX) + sqr(SinPhi(w) * alphaY);
     return (psl::sqrt(1.0f + alpha2 * tan2Theta) - 1.0f) / 2.0f;
   }
 
@@ -110,6 +116,9 @@ public:
   }
   float G(vec3 wi, vec3 wo) const {
     return 1.0f / (1.0f + Lambda(wi) + Lambda(wo));
+  }
+  float D_G(vec3 wi, vec3 wm, vec3 wo) const {
+    return D(wm) * G(wi, wo);
   }
 
   float D(vec3 w, vec3 wm) const {
@@ -130,7 +139,7 @@ public:
 
     vec2 p = sample_disk_polar(u);
 
-    float h = psl::sqrt(1.0f - psl::sqr(p.x));
+    float h = psl::sqrt(1.0f - sqr(p.x));
     p.y = psl::lerp((1.0f + wh.z) / 2, h, p.y);
 
     float pz = psl::sqrt(psl::max(0.0f, 1.0f - length_squared(p)));

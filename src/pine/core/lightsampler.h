@@ -10,8 +10,8 @@ namespace pine {
 struct UniformLightSampler {
   void build(const Scene* scene);
 
-  psl::optional<LightSample> sample(const Interaction& it, float u1, vec2 u2) const;
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const;
+  psl::optional<LightSample> sample(vec3 p, float u1, vec2 u2) const;
+  float pdf(vec3 p, const SurfaceInteraction& git, const Ray& ray) const;
 
 private:
   psl::vector<Light> lights;
@@ -23,11 +23,11 @@ struct LightSampler : private psl::variant<UniformLightSampler> {
   void build(const Scene* scene) {
     return dispatch([&](auto&& x) { return x.build(scene); });
   }
-  psl::optional<LightSample> sample(const Interaction& it, float u1, vec2 u2) const {
-    return dispatch([&](auto&& x) { return x.sample(it, u1, u2); });
+  psl::optional<LightSample> sample(vec3 p, Sampler& sampler) const {
+    return dispatch([&](auto&& x) { return x.sample(p, sampler.get1d(), sampler.get2d()); });
   }
-  float pdf(const Interaction& it, const SurfaceInteraction& git, const Ray& ray) const {
-    return dispatch([&](auto&& x) { return x.pdf(it, git, ray); });
+  float pdf(const Ray& ray, const SurfaceInteraction& git) const {
+    return dispatch([&](auto&& x) { return x.pdf(ray.o, git, ray); });
   }
 };
 

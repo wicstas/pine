@@ -36,7 +36,7 @@ void camera_context(Context& ctx) {
   ctx.type<ThinLenCamera>("ThinLenCamera")
       .ctor<Film, vec3, vec3, float>()
       .ctor<Film, vec3, vec3, float, float, float>();
-  ctx.type<Camera>("Camera").ctor_variant<ThinLenCamera>().method("film", &Camera::film);
+  ctx.type<Camera>("Camera").ctor_variant<ThinLenCamera>().method<&Camera::film>("film");
 }
 
 }  // namespace pine

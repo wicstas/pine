@@ -6,22 +6,6 @@
 
 #include <future>
 
-struct F {
-  int y0;
-  int y1;
-};
-
-F make_f() {
-  F f;
-  f.y0 = 1;
-  f.y1 = 2;
-  return f;
-}
-
-void print2(F f, int v0, int v1, int v2, int v3) {
-  pine::Logs(f.y0, f.y1, v0, v1, v2, v3);
-};
-
 int main(int argc, char* argv[]) {
   using namespace pine;
 
@@ -37,7 +21,8 @@ int main(int argc, char* argv[]) {
   Profiler::Initialize();
 
   try {
-    auto context = get_program_context();
+    setup_program_context();
+    auto& context = Context::context;
 
     auto task = std::async(std::launch::async, [&]() {
       try {

@@ -1,0 +1,20 @@
+scene := Scene();
+image_size := [640, 640];
+
+scene.add("floor", Diffuse([1, 1, 1]));
+scene.add("glossy", Glossy([1, 0.7, 0.7], 0.4, 1.4));
+scene.add("glass", Glass([1, 1, 1], 0.0, 1.4));
+scene.add("sss", Subsurface([1, 1, 1], 0.0, 1 * [1, 5, 10]));
+
+scene.add(Disk([0, 0, 10], [0, 0, -1], 15), "floor");
+scene.add(Disk([0, 0, 0], [0, 1, 0], 15), "floor");
+scene.add(Mesh("scenes/model/rubber_duck_toy.pineb").apply(rotate_y(-Pi / 2) * scale(10)), "glossy");
+ 
+scene.add(Rect([-4, 4, 0], [0, 1, 0], [0, 0, 1]), Emissive(40 * [1, 1, 1]));
+#scene.add(SpotLight([-2, 6, 0], [0.4, -1, 0], 20 * [1, 1, 1], 0.3));
+#scene.add(DirectionalLight([-0.4, 1, -1], [1, 1, 1]));
+
+scene.set(ThinLenCamera(Film(image_size, ACES()), [0, 4, -8], [0, 1, 0], 0.3));
+
+GuidedPathIntegrator(BlueSampler(64), 4).render(scene);
+scene.camera.film().save("images/sss2.png");

@@ -28,9 +28,9 @@ float NodeImagef::eval(const NodeEvalCtx& ctx) const {
 
 void node_context(Context& ctx) {
   ctx.type<NodeEvalCtx>("NodeCtx")
-      .member("p", &NodeEvalCtx::p)
-      .member("n", &NodeEvalCtx::n)
-      .member("uv", &NodeEvalCtx::uv);
+      .member<&NodeEvalCtx::p>("p")
+      .member<&NodeEvalCtx::n>("n")
+      .member<&NodeEvalCtx::uv>("uv");
   ctx.type<Nodef>("Nodef");
   ctx.type<Node3f>("Node3f");
   ctx.type<NodePosition>("Position").ctor<>();
@@ -67,35 +67,35 @@ void node_context(Context& ctx) {
   ctx.type<NodeImage>("Texture").ctor<Node3f, psl::shared_ptr<Image>>();
   ctx.type<NodeFunction<float>>("Functionf").ctor<psl::function<float(NodeEvalCtx)>>("Function");
   ctx.type<NodeFunction<vec3>>("Function3f").ctor<psl::function<vec3(NodeEvalCtx)>>("Function");
-  ctx("+") = +[](Nodef a, Nodef b) { return NodeBinary<float, '+'>{MOVE(a), MOVE(b)}; };
-  ctx("-") = +[](Nodef a, Nodef b) { return NodeBinary<float, '-'>{MOVE(a), MOVE(b)}; };
-  ctx("*") = +[](Nodef a, Nodef b) { return NodeBinary<float, '*'>{MOVE(a), MOVE(b)}; };
-  ctx("/") = +[](Nodef a, Nodef b) { return NodeBinary<float, '/'>{MOVE(a), MOVE(b)}; };
-  ctx("^") = +[](Nodef a, Nodef b) { return NodeBinary<float, '^'>{MOVE(a), MOVE(b)}; };
-  ctx("-x") = +[](Nodef a) { return NodeUnary<float, '-'>{MOVE(a)}; };
-  ctx("+") = +[](Node3f a, Node3f b) { return NodeBinary<vec3, '+'>{MOVE(a), MOVE(b)}; };
-  ctx("-") = +[](Node3f a, Node3f b) { return NodeBinary<vec3, '-'>{MOVE(a), MOVE(b)}; };
-  ctx("*") = +[](Node3f a, Node3f b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
-  ctx("/") = +[](Node3f a, Node3f b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
-  ctx("^") = +[](Node3f a, Node3f b) { return NodeBinary<vec3, '^'>{MOVE(a), MOVE(b)}; };
-  ctx("-x") = +[](Node3f a) { return NodeUnary<vec3, '-'>{MOVE(a)}; };
-  ctx("*") = +[](Node3f a, Nodef b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
-  ctx("*") = +[](Nodef a, Node3f b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
-  ctx("^") = +[](Node3f a, Nodef b) { return NodeBinary<vec3, '^'>{MOVE(a), MOVE(b)}; };
-  ctx("/") = +[](Node3f a, Nodef b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
-  ctx("/") = +[](Nodef a, Node3f b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
-  ctx("[]") = +[](Node3f a, int index) { return NodeComponent{MOVE(a), index}; };
-  ctx("lerp") = +[](Nodef t, Nodef a, Nodef b) {
+  ctx("+") = [](Nodef a, Nodef b) { return NodeBinary<float, '+'>{MOVE(a), MOVE(b)}; };
+  ctx("-") = [](Nodef a, Nodef b) { return NodeBinary<float, '-'>{MOVE(a), MOVE(b)}; };
+  ctx("*") = [](Nodef a, Nodef b) { return NodeBinary<float, '*'>{MOVE(a), MOVE(b)}; };
+  ctx("/") = [](Nodef a, Nodef b) { return NodeBinary<float, '/'>{MOVE(a), MOVE(b)}; };
+  ctx("^") = [](Nodef a, Nodef b) { return NodeBinary<float, '^'>{MOVE(a), MOVE(b)}; };
+  ctx("-x") = [](Nodef a) { return NodeUnary<float, '-'>{MOVE(a)}; };
+  ctx("+") = [](Node3f a, Node3f b) { return NodeBinary<vec3, '+'>{MOVE(a), MOVE(b)}; };
+  ctx("-") = [](Node3f a, Node3f b) { return NodeBinary<vec3, '-'>{MOVE(a), MOVE(b)}; };
+  ctx("*") = [](Node3f a, Node3f b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
+  ctx("/") = [](Node3f a, Node3f b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
+  ctx("^") = [](Node3f a, Node3f b) { return NodeBinary<vec3, '^'>{MOVE(a), MOVE(b)}; };
+  ctx("-x") = [](Node3f a) { return NodeUnary<vec3, '-'>{MOVE(a)}; };
+  ctx("*") = [](Node3f a, Nodef b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
+  ctx("*") = [](Nodef a, Node3f b) { return NodeBinary<vec3, '*'>{MOVE(a), MOVE(b)}; };
+  ctx("^") = [](Node3f a, Nodef b) { return NodeBinary<vec3, '^'>{MOVE(a), MOVE(b)}; };
+  ctx("/") = [](Node3f a, Nodef b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
+  ctx("/") = [](Nodef a, Node3f b) { return NodeBinary<vec3, '/'>{MOVE(a), MOVE(b)}; };
+  ctx("[]") = [](Node3f a, int index) { return NodeComponent{MOVE(a), index}; };
+  ctx("lerp") = [](Nodef t, Nodef a, Nodef b) {
     return NodeBinary<float, '+'>(
         NodeBinary<float, '*'>(t, MOVE(b)),
         NodeBinary<float, '*'>(NodeBinary<float, '-'>(Nodef(1.0f), t), MOVE(a)));
   };
-  ctx("lerp") = +[](Nodef t, Node3f a, Node3f b) {
+  ctx("lerp") = [](Nodef t, Node3f a, Node3f b) {
     return NodeBinary<vec3, '+'>(
         NodeBinary<vec3, '*'>(NodeToVec3(t), MOVE(b)),
         NodeBinary<vec3, '*'>(NodeToVec3(NodeBinary<float, '-'>(Nodef(1.0f), t)), MOVE(a)));
   };
-  ctx("lerp") = +[](Node3f t, Node3f a, Node3f b) {
+  ctx("lerp") = [](Node3f t, Node3f a, Node3f b) {
     return NodeBinary<vec3, '+'>(
         NodeBinary<vec3, '*'>(t, MOVE(b)),
         NodeBinary<vec3, '*'>(NodeBinary<vec3, '-'>(Node3f(vec3(1.0f)), t), MOVE(a)));
@@ -112,24 +112,24 @@ void node_context(Context& ctx) {
           NodeBinary<vec3, '/'>, NodeBinary<vec3, '^'>, NodeUnary<vec3, '-'>, NodeUnary<vec3, 'a'>,
           NodeUnary<vec3, 's'>, NodeUnary<vec3, 'r'>, NodeUnary<vec3, 'f'>, NodeToVec3, NodeNoise3f,
           NodePosition, NodeNormal, NodeUV, NodeImage, psl::function<vec3(NodeEvalCtx)>>();
-  ctx("pnoise") = overloaded<float, int>(perlin_noise);
-  ctx("pnoise") = overloaded<vec2, int>(perlin_noise);
-  ctx("pnoise") = overloaded<vec3, int>(perlin_noise);
-  ctx("pnoise2d") = overloaded<float, int>(perlin_noise2d);
-  ctx("pnoise2d") = overloaded<vec2, int>(perlin_noise2d);
-  ctx("pnoise2d") = overloaded<vec3, int>(perlin_noise2d);
-  ctx("pnoise3d") = overloaded<float, int>(perlin_noise3d);
-  ctx("pnoise3d") = overloaded<vec2, int>(perlin_noise3d);
-  ctx("pnoise3d") = overloaded<vec3, int>(perlin_noise3d);
-  ctx("fbm") = overloaded<float, int>(fbm);
-  ctx("fbm") = overloaded<vec2, int>(fbm);
-  ctx("fbm") = overloaded<vec3, int>(fbm);
-  ctx("fbm2d") = overloaded<float, int>(fbm2d);
-  ctx("fbm2d") = overloaded<vec2, int>(fbm2d);
-  ctx("fbm2d") = overloaded<vec3, int>(fbm2d);
-  ctx("fbm3d") = overloaded<float, int>(fbm3d);
-  ctx("fbm3d") = overloaded<vec2, int>(fbm3d);
-  ctx("fbm3d") = overloaded<vec3, int>(fbm3d);
+  ctx("pnoise") = led<overloaded<float, int>(perlin_noise)>;
+  ctx("pnoise") = led<overloaded<vec2, int>(perlin_noise)>;
+  ctx("pnoise") = led<overloaded<vec3, int>(perlin_noise)>;
+  ctx("pnoise2d") = led<overloaded<float, int>(perlin_noise2d)>;
+  ctx("pnoise2d") = led<overloaded<vec2, int>(perlin_noise2d)>;
+  ctx("pnoise2d") = led<overloaded<vec3, int>(perlin_noise2d)>;
+  ctx("pnoise3d") = led<overloaded<float, int>(perlin_noise3d)>;
+  ctx("pnoise3d") = led<overloaded<vec2, int>(perlin_noise3d)>;
+  ctx("pnoise3d") = led<overloaded<vec3, int>(perlin_noise3d)>;
+  ctx("fbm") = led<overloaded<float, int>(fbm)>;
+  ctx("fbm") = led<overloaded<vec2, int>(fbm)>;
+  ctx("fbm") = led<overloaded<vec3, int>(fbm)>;
+  ctx("fbm2d") = led<overloaded<float, int>(fbm2d)>;
+  ctx("fbm2d") = led<overloaded<vec2, int>(fbm2d)>;
+  ctx("fbm2d") = led<overloaded<vec3, int>(fbm2d)>;
+  ctx("fbm3d") = led<overloaded<float, int>(fbm3d)>;
+  ctx("fbm3d") = led<overloaded<vec2, int>(fbm3d)>;
+  ctx("fbm3d") = led<overloaded<vec3, int>(fbm3d)>;
 }
 
 }  // namespace pine

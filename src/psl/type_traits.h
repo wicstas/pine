@@ -140,11 +140,11 @@ concept LinearArithmetic = requires(T x) {
 };
 
 template <typename T>
-struct _IsReference : FalseType {};
+struct _IsLvReference : FalseType {};
 template <typename T>
-struct _IsReference<T &> : TrueType {};
+struct _IsLvReference<T &> : TrueType {};
 template <typename T>
-constexpr bool is_reference = _IsReference<T>::value;
+constexpr bool is_lv_reference = _IsLvReference<T>::value;
 
 template <typename T>
 struct _IsRvReference : FalseType {};
@@ -152,6 +152,15 @@ template <typename T>
 struct _IsRvReference<T &&> : TrueType {};
 template <typename T>
 concept is_rv_reference = _IsRvReference<T>::value;
+
+template <typename T>
+struct _IsReference : FalseType {};
+template <typename T>
+struct _IsReference<T &> : TrueType {};
+template <typename T>
+struct _IsReference<T &&> : TrueType {};
+template <typename T>
+constexpr bool is_reference = _IsReference<T>::value;
 
 template <typename T>
 struct _IsConst : FalseType {};
@@ -247,11 +256,11 @@ constexpr bool convertible = requires(From x) { To(x); };
 template <typename T>
 constexpr bool copyable = requires(T x) { T(x); };
 template <typename T>
-constexpr bool movable = requires(T x) { T(MOVE(x)); };
+constexpr bool movable = requires(T x) { T(static_cast<T&&>(x)); };
 template <typename T>
 constexpr bool copy_assignable = requires(T x) { x = x; };
 template <typename T>
-constexpr bool move_assignable = requires(T x) { x = MOVE(x); };
+constexpr bool move_assignable = requires(T x) { x = static_cast<T&&>(x); };
 
 template <typename Derived, typename Base>
 constexpr bool derived_from = convertible<const Derived *, const Base *>;
