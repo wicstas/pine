@@ -20,7 +20,7 @@ float bluenoise_16spp(int pixel_i, int pixel_j, int sampleIndex, int sampleDimen
 	sampleDimension = sampleDimension & 255;
 
 	// xor index based on optimized ranking
-	int rankedSampleIndex = sampleIndex ^ rankingTile[sampleDimension + (pixel_i + pixel_j*128)*8];
+	int rankedSampleIndex = sampleIndex ^ rankingTile[(sampleDimension + (pixel_i + pixel_j*128)*8) % (128 * 128 * 8)];
 
 	// fetch value in sequence
 	int value = sobol_256spp_256d[sampleDimension + rankedSampleIndex*256];

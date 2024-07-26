@@ -1,28 +1,22 @@
-#include <pine/impl/accel/bvh.h>
 #include <pine/core/profiler.h>
-#include <pine/core/scene.h>
 #include <pine/core/rng.h>
+#include <pine/core/scene.h>
+#include <pine/impl/accel/bvh.h>
 
-#include <queue>
 #include <algorithm>
+#include <queue>
 
 namespace pine {
 
-float BVHImpl::Node::surface_area() const {
-  return union_(aabbs[0], aabbs[1]).surface_area();
-}
-AABB BVHImpl::Node::get_aabb() const {
-  return union_(aabbs[0], aabbs[1]);
-}
+float BVHImpl::Node::surface_area() const { return union_(aabbs[0], aabbs[1]).surface_area(); }
+AABB BVHImpl::Node::get_aabb() const { return union_(aabbs[0], aabbs[1]); }
 void BVHImpl::Node::update_aabb(Node* nodes) {
   aabbs[0] = nodes[children[0]].get_aabb();
   aabbs[1] = nodes[children[1]].get_aabb();
-  if (parent != -1)
-    nodes[parent].update_aabb(nodes);
+  if (parent != -1) nodes[parent].update_aabb(nodes);
 }
 float BVHImpl::Node::compute_cost(Node* nodes) {
-  if (primitiveIndices.size())
-    return surface_area();
+  if (primitiveIndices.size()) return surface_area();
   return surface_area() + nodes[children[0]].compute_cost(nodes) +
          nodes[children[1]].compute_cost(nodes);
 }
@@ -38,8 +32,7 @@ void BVHImpl::build(psl::vector<Primitive> primitives) {
   Timer timer;
 
   AABB aabb;
-  for (auto& primitive : primitives)
-    aabb.extend(primitive.aabb);
+  for (auto& primitive : primitives) aabb.extend(primitive.aabb);
 
   nodes.reserve(primitives.size());
   build_sah_binned(primitives.data(), primitives.data() + primitives.size(), aabb);
@@ -53,21 +46,17 @@ int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
   CHECK_NE(numPrimitives, 0);
 
   auto MakeLeaf = [&]() {
-    for (int i = 0; i < numPrimitives; i++)
-      node.primitiveIndices.push_back(begin[i].index);
-    for (Primitive* prim = begin; prim != end; prim++)
-      node.aabbs[0].extend(prim->aabb);
+    for (int i = 0; i < numPrimitives; i++) node.primitiveIndices.push_back(begin[i].index);
+    for (Primitive* prim = begin; prim != end; prim++) node.aabbs[0].extend(prim->aabb);
     node.aabbs[1] = node.aabbs[0];
     node.index = (int)nodes.size();
     nodes.push_back(node);
     return node.index;
   };
-  if (numPrimitives == 1)
-    return MakeLeaf();
+  if (numPrimitives == 1) return MakeLeaf();
 
   AABB aabbCentroid;
-  for (int i = 0; i < numPrimitives; i++)
-    aabbCentroid.extend(begin[i].aabb.centroid());
+  for (int i = 0; i < numPrimitives; i++) aabbCentroid.extend(begin[i].aabb.centroid());
   float surfaceArea = aabb.surface_area();
 
   struct Bucket {
@@ -81,8 +70,7 @@ int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
   int splitBucket = -1;
 
   for (int axis = 0; axis < 3; axis++) {
-    if (aabbCentroid.degenerated(axis))
-      continue;
+    if (aabbCentroid.degenerated(axis)) continue;
 
     Bucket buckets[nBuckets];
 
@@ -133,23 +121,19 @@ int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
   }
 
   float leafCost = numPrimitives;
-  if (minCost > leafCost)
-    return MakeLeaf();
+  if (minCost > leafCost) return MakeLeaf();
 
   Primitive* pmid = psl::partition(psl::range(begin, end), [=](const Primitive& prim) {
     int b = nBuckets * aabbCentroid.relative_position(prim.aabb.centroid(bestAxis), bestAxis);
-    if (b == nBuckets)
-      b = nBuckets - 1;
+    if (b == nBuckets) b = nBuckets - 1;
     return b <= splitBucket;
   });
 
   CHECK(begin != pmid);
   CHECK(end != pmid);
 
-  for (Primitive* prim = begin; prim != pmid; prim++)
-    node.aabbs[0].extend(prim->aabb);
-  for (Primitive* prim = pmid; prim != end; prim++)
-    node.aabbs[1].extend(prim->aabb);
+  for (Primitive* prim = begin; prim != pmid; prim++) node.aabbs[0].extend(prim->aabb);
+  for (Primitive* prim = pmid; prim != end; prim++) node.aabbs[1].extend(prim->aabb);
   node.children[0] = build_sah_binned(begin, pmid, node.aabbs[0]);
   node.children[1] = build_sah_binned(pmid, end, node.aabbs[1]);
   node.index = (int)nodes.size();
@@ -164,20 +148,16 @@ int BVHImpl::build_sah_binned(Primitive* begin, Primitive* end, AABB aabb) {
 
 struct Item {
   Item(int nodeIndex, float costInduced, float inverseCost)
-      : nodeIndex(nodeIndex), costInduced(costInduced), inverseCost(inverseCost){};
+      : nodeIndex(nodeIndex), costInduced(costInduced), inverseCost(inverseCost) {};
 
-  friend bool operator<(Item l, Item r) {
-    return l.inverseCost < r.inverseCost;
-  }
+  friend bool operator<(Item l, Item r) { return l.inverseCost < r.inverseCost; }
 
   int nodeIndex;
   float costInduced;
   float inverseCost;
 };
 struct pair {
-  friend bool operator<(pair l, pair r) {
-    return l.inefficiency > r.inefficiency;
-  }
+  friend bool operator<(pair l, pair r) { return l.inefficiency > r.inefficiency; }
 
   int index = -1;
   float inefficiency;
@@ -199,8 +179,7 @@ void BVHImpl::optimize() {
       auto CiLX = item.costInduced;
       auto& X = nodes[item.nodeIndex];
 
-      if (CiLX + L.surface_area() >= costBest)
-        break;
+      if (CiLX + L.surface_area() >= costBest) break;
 
       float CdLX = union_(X.get_aabb(), L.get_aabb()).surface_area();
       float CLX = CiLX + CdLX;
@@ -244,8 +223,7 @@ void BVHImpl::optimize() {
     if (pass % 3 == 0) {
       psl::vector<pair> inefficiencies(nodes.size());
 
-      for (int i = 0; i < (int)nodes.size(); i++)
-        inefficiencies[i] = {i, nodes[i].inefficiency()};
+      for (int i = 0; i < (int)nodes.size(); i++) inefficiencies[i] = {i, nodes[i].inefficiency()};
       std::partial_sort(inefficiencies.begin(), inefficiencies.end(),
                         inefficiencies.begin() + nodes.size() / 200, psl::less<pair>{});
 
@@ -341,8 +319,7 @@ void BVHImpl::optimize() {
 
 template <typename F>
 bool BVHImpl::hit(const Ray& ray, F&& f) const {
-  if (this->nodes.size() == 0)
-    return false;
+  if (this->nodes.size() == 0) return false;
   RayOctant rayOctant = RayOctant(ray);
   const Node* PINE_RESTRICT nodes = this->nodes.data();
 
@@ -353,8 +330,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 
   if (PINE_UNLIKELY(nodes[next].primitiveIndices.size())) {
     for (int index : nodes[next].primitiveIndices)
-      if (f(ray, index))
-        return true;
+      if (f(ray, index)) return true;
   } else {
     while (true) {
       const Node& node = nodes[next];
@@ -367,8 +343,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
           leftChildIndex = node.children[0];
         } else {
           for (int index : leftChild.primitiveIndices)
-            if (f(ray, index))
-              return true;
+            if (f(ray, index)) return true;
         }
       }
       if (node.aabbs[1].hit(rayOctant, ray.tmin, t1)) {
@@ -378,8 +353,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 
         } else {
           for (int index : rightChild.primitiveIndices)
-            if (f(ray, index))
-              return true;
+            if (f(ray, index)) return true;
         }
       }
 
@@ -400,8 +374,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
       } else if (rightChildIndex != -1) {
         next = rightChildIndex;
       } else {
-        if (PINE_UNLIKELY(ptr == 0))
-          break;
+        if (PINE_UNLIKELY(ptr == 0)) break;
         next = stack[--ptr];
       }
     }
@@ -412,8 +385,7 @@ bool BVHImpl::hit(const Ray& ray, F&& f) const {
 
 template <typename F>
 bool BVHImpl::Intersect(Ray& ray, F&& f) const {
-  if (this->nodes.size() == 0)
-    return false;
+  if (this->nodes.size() == 0) return false;
   RayOctant rayOctant = RayOctant(ray);
   const Node* PINE_RESTRICT nodes = this->nodes.data();
 
@@ -425,8 +397,7 @@ bool BVHImpl::Intersect(Ray& ray, F&& f) const {
 
   if (PINE_UNLIKELY(nodes[next].primitiveIndices.size())) {
     for (int index : nodes[next].primitiveIndices)
-      if (f(ray, index))
-        hit = true;
+      if (f(ray, index)) hit = true;
   } else {
     while (true) {
       const Node& node = nodes[next];
@@ -439,8 +410,7 @@ bool BVHImpl::Intersect(Ray& ray, F&& f) const {
           leftChildIndex = node.children[0];
         } else {
           for (int index : leftChild.primitiveIndices)
-            if (f(ray, index))
-              hit = true;
+            if (f(ray, index)) hit = true;
         }
       }
       if (node.aabbs[1].hit(rayOctant, ray.tmin, t1)) {
@@ -450,8 +420,7 @@ bool BVHImpl::Intersect(Ray& ray, F&& f) const {
 
         } else {
           for (int index : rightChild.primitiveIndices)
-            if (f(ray, index))
-              hit = true;
+            if (f(ray, index)) hit = true;
         }
       }
 
@@ -472,8 +441,7 @@ bool BVHImpl::Intersect(Ray& ray, F&& f) const {
       } else if (rightChildIndex != -1) {
         next = rightChildIndex;
       } else {
-        if (PINE_UNLIKELY(ptr == 0))
-          break;
+        if (PINE_UNLIKELY(ptr == 0)) break;
         next = stack[--ptr];
       }
     }
@@ -487,14 +455,12 @@ void BVH::build(const Scene* scene) {
   tbvh = {};
   indices = {};
   this->scene = scene;
-  if (scene->geometries.size() == 0)
-    return;
+  if (scene->geometries.size() == 0) return;
 
   for (size_t i = 0; i < scene->geometries.size(); i++) {
     if (scene->geometries[i]->shape.is<Mesh>()) {
       auto& mesh = scene->geometries[i]->shape.as<Mesh>();
-      if (mesh.num_triangles() == 0)
-        continue;
+      if (mesh.num_triangles() == 0) continue;
       auto primitives = psl::vector<BVHImpl::Primitive>{};
       for (size_t it = 0; it < mesh.num_triangles(); it++) {
         auto primitive = BVHImpl::Primitive{};
@@ -529,8 +495,7 @@ void BVH::build(const Scene* scene) {
 }
 
 bool BVH::hit(Ray ray) const {
-  if (scene->geometries.size() == 0)
-    return false;
+  if (scene->geometries.size() == 0) return false;
 
   return tbvh.hit(ray, [&](const Ray& ray, int lbvhIndex) {
     auto& geometry = scene->geometries[indices[lbvhIndex]];
@@ -546,8 +511,7 @@ bool BVH::hit(Ray ray) const {
 }
 
 bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
-  if (scene->geometries.size() == 0)
-    return false;
+  if (scene->geometries.size() == 0) return false;
 
   auto geom_index = uint32_t(0), prim_index = uint32_t(0);
 
@@ -558,30 +522,26 @@ bool BVH::intersect(Ray& ray, SurfaceInteraction& it) const {
       auto& mesh = geometry->shape.as<Mesh>();
       auto hit = lbvh[i_lbvh].Intersect(ray, [&](Ray& ray, int index) {
         auto hit = mesh.intersect(ray, index);
-        if (hit)
-          prim_index = index;
+        if (hit) prim_index = index;
         return hit;
       });
-      if (hit)
-        geom_index = indices[i_lbvh];
+      if (hit) geom_index = indices[i_lbvh];
       return hit;
     } else {
-      auto hit = geometry->intersect(ray);
+      auto hit = geometry->intersect(ray, it);
 
-      if (hit)
-        geom_index = indices[i_lbvh];
+      if (hit) geom_index = indices[i_lbvh];
       return hit;
     }
   });
   if (hit) {
-    it.p = ray();
     auto& shape = scene->geometries[geom_index]->shape;
     it._material = scene->geometries[geom_index]->material.get();
     it.shape = &shape;
     if (shape.is<Mesh>())
-      shape.as<Mesh>().compute_surface_info(it, prim_index);
+      shape.as<Mesh>().compute_surface_info(ray(), it, prim_index);
     else
-      shape.compute_surface_info(it);
+      shape.compute_surface_info(ray(), it);
   }
 
   return hit;
@@ -610,14 +570,12 @@ bool ShapeBVH::intersect(Ray& ray, SurfaceInteraction& it) const {
 
   auto hit = bvh.Intersect(ray, [&](Ray& ray, int index) {
     auto hit = mesh->intersect(ray, index);
-    if (hit)
-      prim_index = index;
+    if (hit) prim_index = index;
     return hit;
   });
 
   if (hit) {
-    it.p = ray();
-    mesh->compute_surface_info(it, prim_index);
+    mesh->compute_surface_info(ray(), it, prim_index);
   }
 
   return hit;

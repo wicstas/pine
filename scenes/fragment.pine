@@ -1,8 +1,0 @@
-draw([640, 640] * 2, (p: vec2): vec3 {
-    y := fbm2d(p * 10, 10);
-    x := fbm(p + y, 10);
-    
-    color := lerp(y.x, vec3(0, 109, 37), vec3(200, 7, 7)) / 255;
-    color = lerp(x, color, vec3(0, 191, 255) / 255);
-    return pow(color, 6) * 40;
-}).save("images/fragment.png");

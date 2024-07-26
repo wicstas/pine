@@ -1,11 +1,18 @@
 scene = Scene();
-image_size = [640, 360] * 2;
+image_size = [640, 360];
 
-scene.add(Mesh("scenes/model/backdrop/backdrop.pineb").apply(scale(10, 5, 5)), Diffuse([1, 1, 1]));
-scene.load("scenes/model/pine/pine.pineb", scale(vec3(0.04)));
+scene.add("diffuse", Diffuse([1, 1, 1]));
 
-scene.add(Rect([0, 4, 0], [0.5, 0, 0], [0, 0, 0.5]), Emissive(200 * [1, 1, 1]));
-scene.set(ThinLenCamera(Film(image_size), [-1.2, 1.1, 4], [-1.2, 1.1, 0], 0.3));
+scene.add(Plane([0, 0, 0], [0, 1, 0]), "diffuse");
+#scene.add(Box([-1, 0, -1], [1, 2, 1]), "diffuse");
+#scene.add(Box([-1, 0, -1], [1, 2, 1]) + Box([0, 1, 0], [2, 3, 2]), "diffuse");
+#scene.add(Box([-1, 0, -1], [1, 2, 1]) * Box([0, 1, 0], [2, 3, 2]), "diffuse");
+scene.add(Box([-1, 0, -1], [1, 1, 1]) - Sphere([0, 1.5, 0], 1), "diffuse");
+#scene.add(Box([-1, 0, -1], [1, 2, 1]) - Box([-1, 2, -1]/2.0, [1, 5, 1]/2.0), "diffuse");
 
-PathIntegrator(BlueSampler(256), 8).render(scene);
+scene.add(PointLight([0, 5, 0], 50 * [1, 1, 1]));
+
+scene.set(ThinLenCamera(Film(image_size), [0, 4, -4] * 0.5, [0, 0, 0], 0.5));
+
+PathIntegrator(BlueSampler(32), 2).render(scene);
 scene.camera.film().save("images/pine.png");

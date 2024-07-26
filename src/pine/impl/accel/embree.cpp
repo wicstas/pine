@@ -1,10 +1,13 @@
-#include <pine/impl/accel/embree.h>
+#include <embree4/rtcore.h>
 #include <pine/core/profiler.h>
 #include <pine/core/scene.h>
-
-#include <embree4/rtcore.h>
+#include <pine/impl/accel/embree.h>
 
 namespace pine {
+
+struct RayInteraction : RTCRayHit {
+  SurfaceInteraction* it;
+};
 
 static void bounds_func(const RTCBoundsFunctionArguments* args) {
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
@@ -19,16 +22,16 @@ static void bounds_func(const RTCBoundsFunctionArguments* args) {
 }
 
 static void intersect_func(const RTCIntersectFunctionNArguments* args) {
-  if (!args->valid[0])
-    return;
+  if (!args->valid[0]) return;
 
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
-  auto& ray_ = reinterpret_cast<RTCRayHit*>(args->rayhit)->ray;
-  auto& hit_ = reinterpret_cast<RTCRayHit*>(args->rayhit)->hit;
+  auto& ray_ = reinterpret_cast<RayInteraction*>(args->rayhit)->ray;
+  auto& hit_ = reinterpret_cast<RayInteraction*>(args->rayhit)->hit;
+  auto& it = *reinterpret_cast<RayInteraction*>(args->rayhit)->it;
 
   auto ray = Ray(vec3(ray_.org_x, ray_.org_y, ray_.org_z), vec3(ray_.dir_x, ray_.dir_y, ray_.dir_z),
                  ray_.tnear, ray_.tfar);
-  if (shape.intersect(ray)) {
+  if (shape.intersect(ray, it)) {
     ray_.tfar = ray.tmax;
     hit_.geomID = args->geomID;
     hit_.primID = args->primID;
@@ -36,8 +39,7 @@ static void intersect_func(const RTCIntersectFunctionNArguments* args) {
   }
 }
 static void hit_func(const RTCOccludedFunctionNArguments* args) {
-  if (!args->valid[0])
-    return;
+  if (!args->valid[0]) return;
 
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   auto& ray_ = *reinterpret_cast<RTCRay*>(args->ray);
@@ -53,7 +55,6 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
   const Shape& shape = *reinterpret_cast<const Shape*>(args->geometryUserPtr);
   auto& ray_ = *reinterpret_cast<RTCRay8*>(args->ray);
 
-#pragma unroll
   for (int i = 0; i < 8; i++) {
     if (args->valid[i]) {
       if (shape.hit(Ray(vec3(ray_.org_x[i], ray_.org_y[i], ray_.org_z[i]),
@@ -64,11 +65,10 @@ static void hit8_func(const RTCOccludedFunctionNArguments* args) {
   }
 }
 static void filter_func(const RTCFilterFunctionNArguments* args) {
-  if (!args->valid[0])
-    return;
+  if (!args->valid[0]) return;
 
   //   const auto& geo = *reinterpret_cast<const Geometry*>(args->geometryUserPtr);
-//   args->valid[0] = 0;
+  //   args->valid[0] = 0;
 }
 static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& shape,
                        uint32_t expected_index) {
@@ -100,13 +100,13 @@ static void build_geom(RTCDevice rtc_device, RTCScene rtc_scene, const Shape& sh
 }
 void EmbreeAccel::build(const Scene* scene) {
   this->scene = scene;
-  rtc_device = psl::opaque_shared_ptr(
-      rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
+  rtc_device =
+      psl::opaque_shared_ptr(rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
   rtcSetDeviceErrorFunction(
       rtc_device, +[](void*, enum RTCError, const char* str) { Fatal("[Embree]", str); }, nullptr);
-  rtc_scene = psl::opaque_shared_ptr(
-      rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); });
+  rtc_scene =
+      psl::opaque_shared_ptr(rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); });
   auto rtc_scene = RTCScene(this->rtc_scene.get());
   rtcSetSceneFlags(rtc_scene, RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS);
   rtcSetSceneBuildQuality(rtc_scene, RTC_BUILD_QUALITY_HIGH);
@@ -188,13 +188,12 @@ uint8_t EmbreeAccel::hit8(psl::span<const Ray> rays) const {
   rtcOccluded8(valid, RTCScene(rtc_scene.get()), &ray_, &args);
   auto result = uint8_t(0);
   for (int i = 0; i < 8; i++)
-    if (ray_.tfar[i] < 0)
-      result |= 1 << i;
+    if (ray_.tfar[i] < 0) result |= 1 << i;
 
   return result;
 }
 bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
-  RTCRayHit rayhit;
+  RayInteraction rayhit;
   rayhit.ray.org_x = ray.o.x;
   rayhit.ray.org_y = ray.o.y;
   rayhit.ray.org_z = ray.o.z;
@@ -206,6 +205,7 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
   rayhit.ray.mask = -1;
   rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
   rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+  rayhit.it = &it;
 
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
@@ -215,8 +215,7 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
                                       RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS |
                                       RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS);
   rtcIntersect1(RTCScene(rtc_scene.get()), &rayhit, &args);
-  if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID)
-    return false;
+  if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) return false;
   ray.tmax = rayhit.ray.tfar;
 
   auto instancing_index = uint32_t(-1);
@@ -246,8 +245,7 @@ bool EmbreeAccel::intersect(Ray& ray, SurfaceInteraction& it) const {
     else
       it.uv = uv;
   } else {
-    it.p = ray();
-    it.shape->compute_surface_info(it);
+    it.shape->compute_surface_info(ray(), it);
   }
 
   if (instancing_index != uint32_t(-1))

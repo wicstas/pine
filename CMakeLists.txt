@@ -20,12 +20,13 @@ src/psl/check.cpp
 )
 target_include_directories(psl PUBLIC src/)
 target_compile_options(psl PRIVATE -Wall -Wextra -pedantic)
+set_target_properties(psl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 #target_compile_options(psl PUBLIC $<$<CONFIG:Debug>: -g -fsanitize=address -fno-omit-frame-pointer>)
 #target_link_options(psl PUBLIC $<$<CONFIG:Debug>:-g -fsanitize=address>)
 
 #psl Test
-add_executable(psl_test test/psl_test.cpp)
-target_link_libraries(psl_test psl)
+# add_executable(psl_test test/psl_test.cpp)
+# target_link_libraries(psl_test psl)
 
 #Pine Core Library
 add_library(pinelib
@@ -78,6 +79,7 @@ src/pine/impl/integrator/ao.cpp
 src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 
+
 src/contrib/libgwavi/avi-utils.cpp
 src/contrib/libgwavi/fileio.cpp
 src/contrib/libgwavi/gwavi.cpp
@@ -117,23 +119,17 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 find_package(Embree REQUIRED)
-find_package(LLVM 17 REQUIRED CONFIG)
-llvm_map_components_to_libnames(llvm_libs 
-Core
-ExecutionEngine
-MCJIT
-Passes
-nativecodegen)
-#add_subdirectory(src/contrib/tinyusdz)
-target_link_libraries(pinelib psl Threads::Threads embree ${llvm_libs})
+find_package(LLVM 18.1.8 REQUIRED CONFIG)
+target_include_directories(pinelib PRIVATE ${LLVM_INCLUDE_DIRS})
+target_link_libraries(pinelib psl Threads::Threads embree LLVM-18)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib)
 
 #Gltf tool
-add_executable(gltf-tool src/cli/gltf-tool.cpp)
-target_link_libraries(gltf-tool pinelib)
+# add_executable(gltf-tool src/cli/gltf-tool.cpp)
+# target_link_libraries(gltf-tool pinelib)
 
 #Image tool
 #add_executable(image-tool src/cli/image-tool.cpp)
