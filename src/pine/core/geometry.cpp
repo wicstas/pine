@@ -712,63 +712,58 @@ AABB CSGIntersection::get_aabb() const { return intersect_(a->get_aabb(), b->get
 CSGDifference::CSGDifference(Shape a, Shape b)
     : a(psl::make_shared<Shape>(MOVE(a))), b(psl::make_shared<Shape>(MOVE(b))) {}
 bool CSGDifference::hit(Ray ray) const {
-  auto it = SurfaceInteraction();
-  auto rit = it;
+  auto ita = SurfaceInteraction(), itb = SurfaceInteraction();
+  auto ra = ray, rb = ray;
+  auto end = ray();
   while (true) {
-    auto tmax = ray.tmax;
-    auto r = ray;
-    if (!a->intersect_full(ray, it)) return false;
-    if (!b->intersect_full(r, rit)) return true;
+    if (!a->intersect_full(ra, ita)) return false;
+    if (!b->intersect_full(rb, itb)) {
+      return true;
+    }
 
-    if (r.tmax < ray.tmax) {
-      if (rit.is_outward(ray)) {
-        if (it.is_outward(ray)) {
-          it = rit;
-          it.n *= -1;
-          return true;
-        } else {
-          ray = rit.spawn_ray(ray.d, tmax - r.tmax);
-        }
+    if (ra.tmax < rb.tmax) {
+      if (itb.is_inward(ray)) {
+        return true;
       } else {
-        ray = rit.spawn_ray(ray.d, tmax - r.tmax);
+        ra = rb = ita.spawn_ray(ray.d, distance(ita.p, end));
       }
     } else {
-      if (rit.is_outward(ray)) {
-        ray = rit.spawn_ray(ray.d, tmax - r.tmax);
-      } else {
+      if (ita.is_outward(ray) && itb.is_outward(ray)) {
         return true;
+      } else {
+        ra = rb = itb.spawn_ray(ray.d, distance(itb.p, end));
       }
     }
   }
 }
 bool CSGDifference::intersect(Ray& ray, SurfaceInteraction& it) const {
-  auto o = ray.o;
-  auto rit = it;
+  auto ita = it, itb = it;
+  auto ra = ray, rb = ray;
+  auto end = ray();
   while (true) {
-    auto tmax = ray.tmax;
-    auto r = ray;
-    if (!a->intersect_full(ray, it)) return false;
-    if (!b->intersect_full(r, rit)) return true;
+    if (!a->intersect_full(ra, ita)) return false;
+    if (!b->intersect_full(rb, itb)) {
+      it = ita;
+      ray.tmax = distance(ray.o, ra());
+      return true;
+    }
 
-    if (r.tmax < ray.tmax) {
-      if (rit.is_outward(ray)) {
-        if (it.is_outward(ray)) {
-          it = rit;
-          it.n *= -1;
-          ray.tmax = distance(o, it.p);
-          return true;
-        } else {
-          ray = rit.spawn_ray(ray.d, tmax - r.tmax);
-        }
+    if (ra.tmax < rb.tmax) {
+      if (itb.is_inward(ray)) {
+        it = ita;
+        ray.tmax = distance(ray.o, ra());
+        return true;
       } else {
-        ray = rit.spawn_ray(ray.d, tmax - r.tmax);
+        ra = rb = ita.spawn_ray(ray.d, distance(ita.p, end));
       }
     } else {
-      if (rit.is_outward(ray)) {
-        ray = rit.spawn_ray(ray.d, tmax - r.tmax);
-      } else {
-        ray.tmax = distance(o, it.p);
+      if (ita.is_outward(ray) && itb.is_outward(ray)) {
+        it = itb;
+        it.n *= -1;
+        ray.tmax = distance(ray.o, rb());
         return true;
+      } else {
+        ra = rb = itb.spawn_ray(ray.d, distance(itb.p, end));
       }
     }
   }

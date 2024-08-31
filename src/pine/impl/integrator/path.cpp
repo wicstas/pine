@@ -51,10 +51,10 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   auto& Lo = result.Lo;
 
   auto it = intersect(ray);
-//   if (it) {
-//     Lo = it->n / 2 + vec3(0.5f);
-//     return result;
-//   }
+  // if (it) {
+  //   Lo = it->n / 2 + vec3(0.5f);
+  //   return result;
+  // }
 
   if (pv.diffuse_length == 0)
     if (auto mit = sample_medium(ray, sampler)) {
