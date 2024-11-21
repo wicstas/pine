@@ -1,18 +1,28 @@
-scene = Scene();
 image_size = [640, 360];
 
-scene.add("diffuse", Diffuse([1, 1, 1]));
+for f in 0.0~0.2~Pi {
+scene = Scene();
+scene.add('diffuse', Diffuse([1, 1, 1]));
 
-scene.add(Plane([0, 0, 0], [0, 1, 0]), "diffuse");
-#scene.add(Box([-1, 0, -1], [1, 2, 1]), "diffuse");
-#scene.add(Box([-1, 0, -1], [1, 2, 1]) + Box([0, 1, 0], [2, 3, 2]), "diffuse");
-#scene.add(Box([-1, 0, -1], [1, 2, 1]) * Box([0, 1, 0], [2, 3, 2]), "diffuse");
-#scene.add(Box([-1, 0, -1], [1, 1, 1]) - Sphere([0, 1.5, 0], 1), "diffuse");
-scene.add(Box([-1, 0, -1], [1, 1, 1]) - Box([-0.5, 0.5, -0.5], [0.5, 1.5, 0.5]), "diffuse");
+#scene.add(Plane([0, 0, 0], [0, 1, 0]), 'diffuse');
+#scene.add(Box([-1, 0, -1], [1, 2, 1]), 'diffuse');
+#scene.add(Box([-1, 0, -1], [1, 2, 1]) + Box([0, 1, 0], [2, 3, 2]), 'diffuse');
+#scene.add(Box([-1, 0, -1], [1, 2, 1]) * Box([0, 1, 0], [2, 3, 2]), 'diffuse');
+#scene.add(Box([-1, 0, -1], [1, 1, 1]) - Sphere([0, 1.5, 0], 1), 'diffuse');
 
+#scene.add(Box([-1.8, 0.8, -0.2], [1.8, 1.2, 0.2], rotate_y(f)), 'diffuse');
+#scene.add(Box([-2, 0, -2], [2, 1, 2]) - Box([-1.8, 0.8, -0.2], [1.8, 1.2, 0.2], rotate_y(f)), 'diffuse');
+#scene.add(Box([-2, 0, -2], [2, 1, 2]) - Cone([0, 1.5, 0], [f, -1, 0], 1, 1), 'diffuse');
+scene.add(Cone([0, 3, 0], [0, 1, 0], 1, 2), 'diffuse');
+#scene.add(Box([-2, 0, -2], [2, 1, 2]) - Sphere([0, 0.8, 0], 1.0), 'diffuse');
+#scene.add(Box([-1, 0.5, -0.5], [1, 1.5, 0.5], rotate_y(f)), 'diffuse');
+#scene.add(Line([0, 0, 0], [0, 2, 0], 0.5), 'diffuse');
 scene.add(Rect([-1, 5, -1], [1, 0, 0], [0, 0, 1]), Emissive([20, 20, 20]));
 
-scene.set(ThinLenCamera(Film(image_size), [0, 4, -4], [0, 1, 0], 0.5));
+scene.set(ThinLenCamera(Film(image_size), [0, 6, -4], [0, 0, 0], 0.5));
+scene.set(ThinLenCamera(Film(image_size), [0, 0, -8], [0, 2, 0], 0.5));
 
-PathIntegrator(BlueSampler(32), 2).render(scene);
-scene.camera.film().save("images/pine.png");
+PathIntegrator(BlueSampler(4), 3).render(scene);
+scene.camera.film().save('images/pine'+f+'.png');
+println(f);
+}

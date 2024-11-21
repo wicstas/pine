@@ -119,6 +119,7 @@ void AABB::compute_surface_info(vec3 p, SurfaceInteraction& it) const {
   auto axis = max_axis(abs(pu));
   it.n = vec3(0.0f);
   it.n[axis] = pu[axis] > 0 ? 1 : -1;
+  it.p[axis] = pu[axis] > 0 ? upper[axis] : lower[axis];
 }
 
 OBB::OBB(AABB aabb, mat4 m) : base(aabb), m(m), m_inv(inverse(m)) {}
@@ -152,7 +153,7 @@ bool OBB::intersect(Ray& ray, SurfaceInteraction&) const {
 }
 void OBB::compute_surface_info(vec3 p, SurfaceInteraction& it) const {
   base.compute_surface_info(vec3(m_inv * vec4(p, 1.0f)), it);
-  it.p = p;
+  it.p = vec3(m * vec4(it.p, 1.0f));
   it.n = normalize(transpose(mat3(m_inv)) * it.n);
 }
 

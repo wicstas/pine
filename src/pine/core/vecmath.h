@@ -1,7 +1,6 @@
 #pragma once
 
 #include <pine/core/math.h>
-
 #include <psl/string.h>
 
 namespace pine {
@@ -42,19 +41,14 @@ constexpr bool is_pine_vector_or_matrix = is_pine_vector<T> || is_pine_matrix<T>
 template <typename T>
 struct Vector2 {
   Vector2() = default;
-  explicit Vector2(auto v) : x(T(v)), y(T(v)) {
-  }
-  Vector2(auto x, auto y) : x(T(x)), y(T(y)) {
-  }
+  explicit Vector2(auto v) : x(T(v)), y(T(v)) {}
+  Vector2(auto x, auto y) : x(T(x)), y(T(y)) {}
   template <typename U>
-  Vector2(const Vector2<U> &v) : x(T(v.x)), y(T(v.y)) {
-  }
+  Vector2(const Vector2<U> &v) : x(T(v.x)), y(T(v.y)) {}
   template <typename U>
-  explicit Vector2(Vector3<U> v) : x(T(v.x)), y(T(v.y)) {
-  }
+  explicit Vector2(Vector3<U> v) : x(T(v.x)), y(T(v.y)) {}
   template <typename U>
-  explicit Vector2(Vector4<U> v) : x(T(v.x)), y(T(v.y)) {
-  }
+  explicit Vector2(Vector4<U> v) : x(T(v.x)), y(T(v.y)) {}
 
   template <typename U>
   Vector2 &operator+=(Vector2<U> rhs) {
@@ -151,29 +145,15 @@ struct Vector2 {
   friend bool operator!=(Vector2<T> lhs, Vector2<U> rhs) {
     return !(lhs == rhs);
   }
-  bool has_nan() const {
-    return psl::isnan(x) || psl::isnan(y);
-  }
-  bool has_inf() const {
-    return psl::isinf(x) || psl::isinf(y);
-  }
-  bool is_zero() const {
-    return x == 0 && y == 0;
-  }
-  bool is_black() const {
-    return is_zero();
-  }
+  bool has_nan() const { return psl::isnan(x) || psl::isnan(y); }
+  bool has_inf() const { return psl::isinf(x) || psl::isinf(y); }
+  bool is_zero() const { return x == 0 && y == 0; }
+  bool is_black() const { return is_zero(); }
 
-  Vector2 operator-() const {
-    return {-x, -y};
-  }
+  Vector2 operator-() const { return {-x, -y}; }
 
-  T &operator[](int i) {
-    return (&x)[i];
-  }
-  const T &operator[](int i) const {
-    return (&x)[i];
-  }
+  T &operator[](int i) { return (&x)[i]; }
+  const T &operator[](int i) const { return (&x)[i]; }
 
   T x{0}, y{0};
 };
@@ -181,25 +161,18 @@ struct Vector2 {
 template <typename T>
 struct Vector3 {
   Vector3() = default;
-  explicit Vector3(auto v) : x(T(v)), y(T(v)), z(T(v)) {
-  }
-  Vector3(auto x, auto y, auto z) : x(T(x)), y(T(y)), z(T(z)) {
-  }
+  explicit Vector3(auto v) : x(T(v)), y(T(v)), z(T(v)) {}
+  Vector3(auto x, auto y, auto z) : x(T(x)), y(T(y)), z(T(z)) {}
   template <typename U>
-  explicit Vector3(Vector2<U> xy) : x(T(xy.x)), y(T(xy.y)), z(T(0)) {
-  }
+  explicit Vector3(Vector2<U> xy) : x(T(xy.x)), y(T(xy.y)), z(T(0)) {}
   template <typename U>
-  Vector3(const Vector3<U> &v) : x(T(v.x)), y(T(v.y)), z(T(v.z)) {
-  }
+  Vector3(const Vector3<U> &v) : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
   template <typename U>
-  explicit Vector3(Vector4<U> v) : x(T(v.x)), y(T(v.y)), z(T(v.z)) {
-  }
+  explicit Vector3(Vector4<U> v) : x(T(v.x)), y(T(v.y)), z(T(v.z)) {}
   template <typename U>
-  Vector3(Vector2<U> xy, U z) : x(T(xy.x)), y(T(xy.y)), z(T(z)) {
-  }
+  Vector3(Vector2<U> xy, U z) : x(T(xy.x)), y(T(xy.y)), z(T(z)) {}
   template <typename U>
-  Vector3(U x, Vector2<U> yz) : x(T(x)), y(T(yz.x)), z(T(yz.y)) {
-  }
+  Vector3(U x, Vector2<U> yz) : x(T(x)), y(T(yz.x)), z(T(yz.y)) {}
 
   template <typename U>
   Vector3 &operator+=(Vector3<U> rhs) {
@@ -304,29 +277,15 @@ struct Vector3 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
   }
 
-  bool has_nan() const {
-    return psl::isnan(x) || psl::isnan(y) || psl::isnan(z);
-  }
-  bool has_inf() const {
-    return psl::isinf(x) || psl::isinf(y) || psl::isinf(z);
-  }
-  bool is_zero() const {
-    return x == 0 && y == 0 && z == 0;
-  }
-  bool is_black() const {
-    return is_zero();
-  }
+  bool has_nan() const { return psl::isnan(x) || psl::isnan(y) || psl::isnan(z); }
+  bool has_inf() const { return psl::isinf(x) || psl::isinf(y) || psl::isinf(z); }
+  bool is_zero() const { return x == 0 && y == 0 && z == 0; }
+  bool is_black() const { return is_zero(); }
 
-  Vector3 operator-() const {
-    return {-x, -y, -z};
-  }
+  Vector3 operator-() const { return {-x, -y, -z}; }
 
-  T &operator[](int i) {
-    return (&x)[i];
-  }
-  const T &operator[](int i) const {
-    return (&x)[i];
-  }
+  T &operator[](int i) { return (&x)[i]; }
+  const T &operator[](int i) const { return (&x)[i]; }
 
   T x{0}, y{0}, z{0};
 };
@@ -334,31 +293,22 @@ struct Vector3 {
 template <typename T>
 struct Vector4 {
   Vector4() = default;
-  explicit Vector4(auto v) : x(T(v)), y(T(v)), z(T(v)), w(T(v)) {
-  }
-  Vector4(auto x, auto y, auto z, auto w) : x(T(x)), y(T(y)), z(T(z)), w(T(w)) {
-  }
+  explicit Vector4(auto v) : x(T(v)), y(T(v)), z(T(v)), w(T(v)) {}
+  Vector4(auto x, auto y, auto z, auto w) : x(T(x)), y(T(y)), z(T(z)), w(T(w)) {}
   template <typename U>
-  explicit Vector4(Vector2<U> v) : x(T(v.x)), y(T(v.y)), z(T(0)), w(T(0)) {
-  }
+  explicit Vector4(Vector2<U> v) : x(T(v.x)), y(T(v.y)), z(T(0)), w(T(0)) {}
   template <typename U>
-  explicit Vector4(Vector3<U> v) : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(0)) {
-  }
+  explicit Vector4(Vector3<U> v) : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(0)) {}
   template <typename U>
-  Vector4(const Vector4<U> &v) : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {
-  }
+  Vector4(const Vector4<U> &v) : x(T(v.x)), y(T(v.y)), z(T(v.z)), w(T(v.w)) {}
   template <typename U>
-  Vector4(Vector2<U> xy, Vector2<U> zw) : x(T(xy.x)), y(T(xy.y)), z(T(zw.x)), w(T(zw.y)) {
-  }
+  Vector4(Vector2<U> xy, Vector2<U> zw) : x(T(xy.x)), y(T(xy.y)), z(T(zw.x)), w(T(zw.y)) {}
   template <typename U>
-  Vector4(Vector2<U> xy, U z, U w) : x(T(xy.x)), y(T(xy.y)), z(T(z)), w(T(w)) {
-  }
+  Vector4(Vector2<U> xy, U z, U w) : x(T(xy.x)), y(T(xy.y)), z(T(z)), w(T(w)) {}
   template <typename U>
-  Vector4(Vector3<U> xyz, U w) : x(T(xyz.x)), y(T(xyz.y)), z(T(xyz.z)), w(T(w)) {
-  }
+  Vector4(Vector3<U> xyz, U w) : x(T(xyz.x)), y(T(xyz.y)), z(T(xyz.z)), w(T(w)) {}
   template <typename U>
-  Vector4(U x, Vector3<U> yzw) : x(T(x)), y(T(yzw.x)), z(T(yzw.y)), w(T(yzw.z)) {
-  }
+  Vector4(U x, Vector3<U> yzw) : x(T(x)), y(T(yzw.x)), z(T(yzw.y)), w(T(yzw.z)) {}
 
   template <typename U>
   Vector4 &operator+=(Vector4<U> rhs) {
@@ -470,114 +420,74 @@ struct Vector4 {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
   }
 
-  bool has_nan() const {
-    return psl::isnan(x) || psl::isnan(y) || psl::isnan(z) || psl::isnan(w);
-  }
-  bool has_inf() const {
-    return psl::isinf(x) || psl::isinf(y) || psl::isinf(z) || psl::isinf(w);
-  }
-  bool is_zero() const {
-    return x == 0 && y == 0 && z == 0 && w == 0;
-  }
-  bool is_black() const {
-    return is_zero();
-  }
+  bool has_nan() const { return psl::isnan(x) || psl::isnan(y) || psl::isnan(z) || psl::isnan(w); }
+  bool has_inf() const { return psl::isinf(x) || psl::isinf(y) || psl::isinf(z) || psl::isinf(w); }
+  bool is_zero() const { return x == 0 && y == 0 && z == 0 && w == 0; }
+  bool is_black() const { return is_zero(); }
 
-  Vector4 operator-() const {
-    return {-x, -y, -z, -w};
-  }
+  Vector4 operator-() const { return {-x, -y, -z, -w}; }
 
-  T &operator[](int i) {
-    return (&x)[i];
-  }
-  const T &operator[](int i) const {
-    return (&x)[i];
-  }
+  T &operator[](int i) { return (&x)[i]; }
+  const T &operator[](int i) const { return (&x)[i]; }
 
   T x{0}, y{0}, z{0}, w{0};
 };
 
 template <typename T>
 struct Matrix2 {
-  static Matrix2 zeros() {
-    return Matrix2(0, 0, 0, 0);
-  }
+  static Matrix2 zeros() { return Matrix2(0, 0, 0, 0); }
 
-  static Matrix2 identity() {
-    return Matrix2(1, 0, 1, 0);
-  }
+  static Matrix2 identity() { return Matrix2(1, 0, 1, 0); }
 
-  Matrix2() {
-    *this = identity();
-  }
+  Matrix2() { *this = identity(); }
 
-  Matrix2(T x0, T y0, T x1, T y1) : x(x0, x1), y(y0, y1) {
-  }
+  Matrix2(T x0, T y0, T x1, T y1) : x(x0, x1), y(y0, y1) {}
 
-  Matrix2(Vector2<T> x, Vector2<T> y) : x(x), y(y){};
+  Matrix2(Vector2<T> x, Vector2<T> y) : x(x), y(y) {};
 
   Matrix2 &operator+=(const Matrix2 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] += rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] += rhs[c][r];
     return *this;
   }
 
   Matrix2 &operator-=(const Matrix2 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] -= rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] -= rhs[c][r];
     return *this;
   }
 
   Matrix2 &operator*=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] *= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] *= rhs;
     return *this;
   }
 
   Matrix2 &operator/=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] /= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] /= rhs;
     return *this;
   }
 
-  friend Matrix2 operator*(Matrix2 lhs, T rhs) {
-    return lhs *= rhs;
-  }
-  friend Matrix2 operator/(Matrix2 lhs, T rhs) {
-    return lhs /= rhs;
-  }
-  friend Matrix2 operator+(Matrix2 lhs, const Matrix2 &rhs) {
-    return lhs += rhs;
-  }
-  friend Matrix2 operator-(Matrix2 lhs, const Matrix2 &rhs) {
-    return lhs -= rhs;
-  }
+  friend Matrix2 operator*(Matrix2 lhs, T rhs) { return lhs *= rhs; }
+  friend Matrix2 operator/(Matrix2 lhs, T rhs) { return lhs /= rhs; }
+  friend Matrix2 operator+(Matrix2 lhs, const Matrix2 &rhs) { return lhs += rhs; }
+  friend Matrix2 operator-(Matrix2 lhs, const Matrix2 &rhs) { return lhs -= rhs; }
 
   friend Matrix2 operator*(const Matrix2 &lhs, const Matrix2 &rhs) {
     Matrix2 ret = zeros();
     for (int c = 0; c < N; c++)
       for (int r = 0; r < N; r++) {
-        for (int i = 0; i < N; i++)
-          ret[c][r] += lhs[i][r] * rhs[c][i];
+        for (int i = 0; i < N; i++) ret[c][r] += lhs[i][r] * rhs[c][i];
       }
 
     return ret;
   }
 
-  Vector2<T> row(int i) const {
-    return {x[i], y[i]};
-  }
+  Vector2<T> row(int i) const { return {x[i], y[i]}; }
 
-  Vector2<T> &operator[](int i) {
-    return (&x)[i];
-  }
-  const Vector2<T> &operator[](int i) const {
-    return (&x)[i];
-  }
+  Vector2<T> &operator[](int i) { return (&x)[i]; }
+  const Vector2<T> &operator[](int i) const { return (&x)[i]; }
 
   friend bool operator==(const Matrix2 &m0, const Matrix2 &m1) {
     return m0.x == m1.x && m0.y == m1.y;
@@ -592,86 +502,60 @@ struct Matrix2 {
 
 template <typename T>
 struct Matrix3 {
-  static Matrix3 zeros() {
-    return Matrix3(0, 0, 0, 0, 0, 0, 0, 0, 0);
-  }
+  static Matrix3 zeros() { return Matrix3(0, 0, 0, 0, 0, 0, 0, 0, 0); }
 
-  static Matrix3 identity() {
-    return Matrix3(1, 0, 0, 0, 1, 0, 0, 0, 1);
-  }
+  static Matrix3 identity() { return Matrix3(1, 0, 0, 0, 1, 0, 0, 0, 1); }
 
-  Matrix3() {
-    *this = identity();
-  }
+  Matrix3() { *this = identity(); }
 
   Matrix3(T x0, T y0, T z0, T x1, T y1, T z1, T x2, T y2, T z2)
-      : x(x0, x1, x2), y(y0, y1, y2), z(z0, z1, z2) {
-  }
+      : x(x0, x1, x2), y(y0, y1, y2), z(z0, z1, z2) {}
 
-  Matrix3(Vector3<T> x, Vector3<T> y, Vector3<T> z) : x(x), y(y), z(z){};
+  Matrix3(Vector3<T> x, Vector3<T> y, Vector3<T> z) : x(x), y(y), z(z) {};
 
   Matrix3 &operator+=(const Matrix3 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] += rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] += rhs[c][r];
     return *this;
   }
 
   Matrix3 &operator-=(const Matrix3 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] -= rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] -= rhs[c][r];
     return *this;
   }
 
   Matrix3 &operator*=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] *= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] *= rhs;
     return *this;
   }
 
   Matrix3 &operator/=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] /= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] /= rhs;
     return *this;
   }
 
-  friend Matrix3 operator*(Matrix3 lhs, T rhs) {
-    return lhs *= rhs;
-  }
-  friend Matrix3 operator/(Matrix3 lhs, T rhs) {
-    return lhs /= rhs;
-  }
-  friend Matrix3 operator+(Matrix3 lhs, const Matrix3 &rhs) {
-    return lhs += rhs;
-  }
-  friend Matrix3 operator-(Matrix3 lhs, const Matrix3 &rhs) {
-    return lhs -= rhs;
-  }
+  friend Matrix3 operator*(Matrix3 lhs, T rhs) { return lhs *= rhs; }
+  friend Matrix3 operator/(Matrix3 lhs, T rhs) { return lhs /= rhs; }
+  friend Matrix3 operator+(Matrix3 lhs, const Matrix3 &rhs) { return lhs += rhs; }
+  friend Matrix3 operator-(Matrix3 lhs, const Matrix3 &rhs) { return lhs -= rhs; }
 
   friend Matrix3 operator*(const Matrix3 &lhs, const Matrix3 &rhs) {
     Matrix3 ret = zeros();
     for (int c = 0; c < N; c++)
       for (int r = 0; r < N; r++) {
-        for (int i = 0; i < N; i++)
-          ret[c][r] += lhs[i][r] * rhs[c][i];
+        for (int i = 0; i < N; i++) ret[c][r] += lhs[i][r] * rhs[c][i];
       }
 
     return ret;
   }
 
-  Vector3<T> row(int i) const {
-    return {x[i], y[i], z[i]};
-  }
+  Vector3<T> row(int i) const { return {x[i], y[i], z[i]}; }
 
-  Vector3<T> &operator[](int i) {
-    return (&x)[i];
-  }
-  const Vector3<T> &operator[](int i) const {
-    return (&x)[i];
-  }
+  Vector3<T> &operator[](int i) { return (&x)[i]; }
+  const Vector3<T> &operator[](int i) const { return (&x)[i]; }
 
   friend bool operator==(const Matrix3 &m0, const Matrix3 &m1) {
     return m0.x == m1.x && m0.y == m1.y && m0.z == m1.z;
@@ -686,90 +570,63 @@ struct Matrix3 {
 
 template <typename T>
 struct Matrix4 {
-  static Matrix4 zeros() {
-    return Matrix4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  }
+  static Matrix4 zeros() { return Matrix4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); }
 
-  static Matrix4 identity() {
-    return Matrix4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
-  }
+  static Matrix4 identity() { return Matrix4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
 
-  Matrix4() {
-    *this = identity();
-  }
+  Matrix4() { *this = identity(); }
 
   Matrix4(T x0, T y0, T z0, T w0, T x1, T y1, T z1, T w1, T x2, T y2, T z2, T w2, T x3, T y3, T z3,
           T w3)
-      : x(x0, x1, x2, x3), y(y0, y1, y2, y3), z(z0, z1, z2, z3), w(w0, w1, w2, w3) {
-  }
+      : x(x0, x1, x2, x3), y(y0, y1, y2, y3), z(z0, z1, z2, z3), w(w0, w1, w2, w3) {}
 
-  Matrix4(Vector4<T> x, Vector4<T> y, Vector4<T> z, Vector4<T> w) : x(x), y(y), z(z), w(w){};
+  Matrix4(Vector4<T> x, Vector4<T> y, Vector4<T> z, Vector4<T> w) : x(x), y(y), z(z), w(w) {};
+  explicit Matrix4(Matrix3<T> m) : x(m.x), y(m.y), z(m.z), w(0, 0, 0, 1) {};
 
-  operator Matrix3<T>() const {
-    return Matrix3<T>(Vector3<T>{x}, Vector3<T>{y}, Vector3<T>{z});
-  }
+  operator Matrix3<T>() const { return Matrix3<T>(Vector3<T>{x}, Vector3<T>{y}, Vector3<T>{z}); }
 
   Matrix4 &operator+=(const Matrix4 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] += rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] += rhs[c][r];
     return *this;
   }
 
   Matrix4 &operator-=(const Matrix4 &rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] -= rhs[c][r];
+      for (int r = 0; r < N; r++) (*this)[c][r] -= rhs[c][r];
     return *this;
   }
 
   Matrix4 &operator*=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] *= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] *= rhs;
     return *this;
   }
 
   Matrix4 &operator/=(T rhs) {
     for (int c = 0; c < N; c++)
-      for (int r = 0; r < N; r++)
-        (*this)[c][r] /= rhs;
+      for (int r = 0; r < N; r++) (*this)[c][r] /= rhs;
     return *this;
   }
 
-  friend Matrix4 operator*(Matrix4 lhs, T rhs) {
-    return lhs *= rhs;
-  }
-  friend Matrix4 operator/(Matrix4 lhs, T rhs) {
-    return lhs /= rhs;
-  }
-  friend Matrix4 operator+(Matrix4 lhs, const Matrix4 &rhs) {
-    return lhs += rhs;
-  }
-  friend Matrix4 operator-(Matrix4 lhs, const Matrix4 &rhs) {
-    return lhs -= rhs;
-  }
+  friend Matrix4 operator*(Matrix4 lhs, T rhs) { return lhs *= rhs; }
+  friend Matrix4 operator/(Matrix4 lhs, T rhs) { return lhs /= rhs; }
+  friend Matrix4 operator+(Matrix4 lhs, const Matrix4 &rhs) { return lhs += rhs; }
+  friend Matrix4 operator-(Matrix4 lhs, const Matrix4 &rhs) { return lhs -= rhs; }
 
   friend Matrix4 operator*(const Matrix4 &lhs, const Matrix4 &rhs) {
     Matrix4 ret = zeros();
     for (int c = 0; c < N; c++)
       for (int r = 0; r < N; r++) {
-        for (int i = 0; i < N; i++)
-          ret[c][r] += lhs[i][r] * rhs[c][i];
+        for (int i = 0; i < N; i++) ret[c][r] += lhs[i][r] * rhs[c][i];
       }
     return ret;
   }
 
-  Vector4<T> row(int i) const {
-    return {x[i], y[i], z[i], w[i]};
-  }
+  Vector4<T> row(int i) const { return {x[i], y[i], z[i], w[i]}; }
 
-  Vector4<T> &operator[](int i) {
-    return (&x)[i];
-  }
-  const Vector4<T> &operator[](int i) const {
-    return (&x)[i];
-  }
+  Vector4<T> &operator[](int i) { return (&x)[i]; }
+  const Vector4<T> &operator[](int i) const { return (&x)[i]; }
 
   friend bool operator==(const Matrix4 &m0, const Matrix4 &m1) {
     return m0.x == m1.x && m0.y == m1.y && m0.z == m1.z && m0.w == m1.w;
@@ -875,15 +732,13 @@ auto distance(T lhs, T rhs) {
 template <typename T>
 auto normalize(T v) {
   auto len = length(v);
-  if (len == 0)
-    return v;
+  if (len == 0) return v;
   return v / len;
 }
 template <typename T, typename U>
 auto normalize(T v, U &len) {
   len = length(v);
-  if (len == 0)
-    return v;
+  if (len == 0) return v;
   return v / len;
 }
 
@@ -1200,9 +1055,7 @@ Matrix4<T> transpose(const Matrix4<T> &m) {
 
 // Floating-point vecmath
 
-inline float safe_rcp(float v) {
-  return v == 0.0f ? 1e+20f : 1.0f / v;
-}
+inline float safe_rcp(float v) { return v == 0.0f ? 1e+20f : 1.0f / v; }
 inline vec3 safe_rcp(vec3 v) {
   v.x = v.x == 0.0f ? 1e+20f : 1.0f / v.x;
   v.y = v.y == 0.0f ? 1e+20f : 1.0f / v.y;
@@ -1217,9 +1070,7 @@ inline vec4 safe_rcp(vec4 v) {
   return v;
 }
 
-inline float determinant(const mat3 &m) {
-  return dot(m.x, cross(m.y, m.z));
-}
+inline float determinant(const mat3 &m) { return dot(m.x, cross(m.y, m.z)); }
 
 inline mat2 inverse(const mat2 &m) {
   float d = m[0][0] * m[1][1] - m[1][0] * m[0][1];
@@ -1298,9 +1149,7 @@ inline mat4 rotate_y(float rad) {
              };
   // clang-format on
 }
-inline mat4 rotate(vec3 r) {
-  return rotate_x(r[0]) * rotate_y(r[1]) * rotate_z(r[2]);
-}
+inline mat4 rotate(vec3 r) { return rotate_x(r[0]) * rotate_y(r[1]) * rotate_z(r[2]); }
 inline mat4 rotate_around(vec3 u, float rad) {
   auto c = psl::cos(rad), c1 = 1 - c;
   auto s = psl::sin(rad);
@@ -1319,8 +1168,7 @@ inline mat4 quaternion_to_matrix(float q0, float q1, float q2, float q3) {
 inline mat4 look_at(vec3 from, vec3 at, vec3 up = vec3(0, 1, 0)) {
   vec3 z = normalize(at - from);
 
-  if (psl::abs(dot(z, up)) > 0.999f)
-    z = normalize(z + vec3(0.0f, 0.0f, 1e-5f));
+  if (psl::abs(dot(z, up)) > 0.999f) z = normalize(z + vec3(0.0f, 0.0f, 1e-5f));
 
   vec3 x = normalize(cross(up, z));
   vec3 y = cross(z, x);
@@ -1360,20 +1208,15 @@ inline float phi2pi(float x, float y) {
   return phi < 0.0f ? Pi * 2 + phi : phi;
 }
 
-inline vec2 cartesian_to_spherical(vec3 d) {
-  return vec2(phi2pi(d.x, d.y), psl::acos(d.z));
-}
+inline vec2 cartesian_to_spherical(vec3 d) { return vec2(phi2pi(d.x, d.y), psl::acos(d.z)); }
 inline vec2 cartesian_to_unit_square(vec3 d) {
   return cartesian_to_spherical(d) / vec2{2 * Pi, Pi};
 }
 
-inline vec3 face_same_hemisphere(vec3 v, vec3 ref) {
-  return dot(v, ref) < 0 ? -v : v;
-}
+inline vec3 face_same_hemisphere(vec3 v, vec3 ref) { return dot(v, ref) < 0 ? -v : v; }
 
 inline uint32_t left_shift_32x3(uint32_t x) {
-  if (x == (1 << 10))
-    x--;
+  if (x == (1 << 10)) x--;
   x = (x | (x << 16)) & 0x30000ff;
   x = (x | (x << 8)) & 0x300f00f;
   x = (x | (x << 4)) & 0x30c30c3;

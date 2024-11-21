@@ -166,7 +166,7 @@ psl::optional<ShapeSample> Disk::sample(vec3 p, vec2 u2) const {
 float Disk::pdf(const Ray& ray, vec3, vec3 ns) const {
   return psl::sqr(ray.tmax) / (area() * absdot(ns, ray.d));
 }
-AABB Disk::get_aabb() const { return {position - vec3(r, 0.0f, r), position + vec3(r, 0.0f, r)}; }
+AABB Disk::get_aabb() const { return Sphere(position, r).get_aabb(); }
 
 Line::Line(vec3 p0, vec3 p1, float thickness)
     : p0(p0),
@@ -406,6 +406,12 @@ AABB Rect::get_aabb() const {
   return aabb;
 }
 
+Cone::Cone(vec3 p, vec3 n, float r, float h)
+    : bottom(p, n, r), p(p + n * h), n(normalize(n)), r(r), h(h) {
+  A2 = sqr(r / h) + 1;
+  A = psl::sqrt(A2);
+  S = r / psl::sqrt(r * r + h * h);
+}
 bool Cone::hit(const Ray& ray) const {
   auto o = ray.o - p;
   const auto& d = ray.d;
@@ -413,21 +419,38 @@ bool Cone::hit(const Ray& ray) const {
   auto b = 2 * (-A2 * dot(o, n) * dot(d, n) + dot(o, d));
   auto c = -A2 * sqr(dot(o, n)) + dot(o, o);
   auto tmax = ray.tmax;
-  if (!intersect_quadratic(a, b, c, ray.tmin, tmax)) return false;
-  if (dot(o + tmax * d, n) > 0) return false;
-  return true;
+  if (intersect_quadratic(a, b, c, ray.tmin, tmax) && dot(o + tmax * d, n) <= 0)
+    return true;
+  else
+    return false;
+  // return bottom.hit(ray);
 }
-bool Cone::intersect(Ray& ray, SurfaceInteraction&) const {
+bool Cone::intersect(Ray& ray, SurfaceInteraction& it) const {
   auto o = ray.o - p;
   const auto& d = ray.d;
   auto a = -A2 * sqr(dot(d, n)) + dot(d, d);
   auto b = 2 * (-A2 * dot(o, n) * dot(d, n) + dot(o, d));
   auto c = -A2 * sqr(dot(o, n)) + dot(o, o);
   auto tmax = ray.tmax;
-  if (!intersect_quadratic(a, b, c, ray.tmin, tmax)) return false;
-  if (dot(o + tmax * d, n) > 0) return false;
-  ray.tmax = tmax;
-  return true;
+  if (intersect_quadratic(a, b, c, ray.tmin, tmax) && dot(o + tmax * d, n) < 0) {
+    ray.tmax = tmax;
+
+    // auto ps = ray();t
+    // auto l = length(ps - p) * A;
+    // auto x = p - n * l;
+    // it.n = normalize(ps - x);
+    // it.p = x + it.n * l * S;
+
+    // if (bottom.intersect(ray, it)) bottom.compute_surface_info(ray(), it);
+    return true;
+  }
+
+  // if (bottom.intersect(ray, it)) {
+  //   bottom.compute_surface_info(ray(), it);
+  //   return true;
+  // } else {
+  return false;
+  // }
 }
 void Cone::compute_surface_info(vec3 ps, SurfaceInteraction& it) const {
   auto l = length(ps - p) * A;
@@ -435,11 +458,68 @@ void Cone::compute_surface_info(vec3 ps, SurfaceInteraction& it) const {
   it.n = normalize(ps - x);
   it.p = x + it.n * l * S;
 }
-
-AABB Cone::get_aabb() const { return bottom.get_aabb().extend(p); }
 psl::optional<ShapeSample> Cone::sample(vec3, vec2) const { return {}; }
 float Cone::pdf(const Ray& ray, vec3, vec3 ns) const {
   return psl::sqr(ray.tmax) / area() * absdot(ns, ray.d);
+}
+
+bool Cylinder::hit(const Ray& ray) const {
+  vec3 m = ray.o - p0;
+  vec3 v = ray.d - dot(ray.d, n) * n;
+  vec3 w = m - dot(m, n) * n;
+
+  float a = dot(v, v);
+  float b = 2 * dot(v, w);
+  float c = dot(w, w) - r * r;
+
+  float discriminant = b * b - 4 * a * c;
+
+  if (discriminant < 0) return false;
+
+  float sqrtDisc = std::sqrt(discriminant);
+  float t = (-b - sqrtDisc) / (2 * a);
+  if (t < ray.tmin) t = (-b + sqrtDisc) / (2 * a);
+  if (t > ray.tmax) return false;
+  auto hit_point = ray(t);
+
+  vec3 projection = p0 + dot(hit_point - p0, n) * n;
+
+  if (dot(projection - p0, n) < 0 || dot(projection - p1, n) > 0) return false;
+  return true;
+}
+bool Cylinder::intersect(Ray& ray, SurfaceInteraction& it) const {
+  vec3 m = ray.o - p0;
+  vec3 v = ray.d - dot(ray.d, n) * n;
+  vec3 w = m - dot(m, n) * n;
+
+  float a = dot(v, v);
+  float b = 2 * dot(v, w);
+  float c = dot(w, w) - r * r;
+
+  float discriminant = b * b - 4 * a * c;
+
+  if (discriminant < 0) return false;
+
+  float sqrtDisc = std::sqrt(discriminant);
+  float t = (-b - sqrtDisc) / (2 * a);
+  if (t < ray.tmin) t = (-b + sqrtDisc) / (2 * a);
+  if (t > ray.tmax) return false;
+  auto hit_point = ray(t);
+
+  vec3 projection = p0 + dot(hit_point - p0, n) * n;
+
+  if (dot(projection - p0, n) < 0 || dot(projection - p1, n) > 0) return false;
+
+  ray.tmax = t;
+  it.n = normalize(hit_point - projection);
+  it.p = hit_point;
+  return true;
+}
+void Cylinder::compute_surface_info(vec3, SurfaceInteraction&) const {
+  // auto l = length(ps - p) * A;
+  // auto x = p - n * l;
+  // it.n = normalize(ps - x);
+  // it.p = x + it.n * l * S;
 }
 
 Triangle::Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 n) : v0(v0), v1(v1), v2(v2), n{normalize(n)} {
@@ -715,13 +795,13 @@ bool CSGDifference::hit(Ray ray) const {
   auto ita = SurfaceInteraction(), itb = SurfaceInteraction();
   auto ra = ray, rb = ray;
   auto end = ray();
-  while (true) {
+  for (auto i = 0; i < 1000; i++) {
     if (!a->intersect_full(ra, ita)) return false;
     if (!b->intersect_full(rb, itb)) {
       return true;
     }
 
-    if (ra.tmax < rb.tmax) {
+    if (ra.tmax <= rb.tmax) {
       if (itb.is_inward(ray)) {
         return true;
       } else {
@@ -735,23 +815,26 @@ bool CSGDifference::hit(Ray ray) const {
       }
     }
   }
+  return false;
 }
 bool CSGDifference::intersect(Ray& ray, SurfaceInteraction& it) const {
   auto ita = it, itb = it;
   auto ra = ray, rb = ray;
   auto end = ray();
-  while (true) {
+  for (auto i = 0; i < 1000; i++) {
     if (!a->intersect_full(ra, ita)) return false;
     if (!b->intersect_full(rb, itb)) {
       it = ita;
-      ray.tmax = distance(ray.o, ra());
+      ray.tmax = distance(ray.o, it.p);
+      // it.n = vec3(-1, -1, 1);
       return true;
     }
 
-    if (ra.tmax < rb.tmax) {
+    if (ra.tmax <= rb.tmax) {
       if (itb.is_inward(ray)) {
         it = ita;
-        ray.tmax = distance(ray.o, ra());
+        ray.tmax = distance(ray.o, it.p);
+        // it.n = vec3(1, -1, -1);
         return true;
       } else {
         ra = rb = ita.spawn_ray(ray.d, distance(ita.p, end));
@@ -760,13 +843,15 @@ bool CSGDifference::intersect(Ray& ray, SurfaceInteraction& it) const {
       if (ita.is_outward(ray) && itb.is_outward(ray)) {
         it = itb;
         it.n *= -1;
-        ray.tmax = distance(ray.o, rb());
+        ray.tmax = distance(ray.o, it.p);
+        // it.n = vec3(-1, 1, -1);
         return true;
       } else {
         ra = rb = itb.spawn_ray(ray.d, distance(itb.p, end));
       }
     }
   }
+  return false;
 }
 AABB CSGDifference::get_aabb() const { return a->get_aabb(); }
 
@@ -812,6 +897,7 @@ void geometry_context(Context& ctx) {
   ctx.type<Line>("Line").ctor<vec3, vec3, float>();
   ctx.type<Rect>("Rect").ctor<vec3, vec3, vec3>().ctor<vec3, vec3, vec3, bool>();
   ctx.type<Cone>("Cone").ctor<vec3, vec3, float, float>();
+  ctx.type<Cylinder>("Cylinder").ctor<vec3, vec3, float>();
   ctx.type<Triangle>("Triangle").ctor<vec3, vec3, vec3>();
   ctx.type<SDF>("SDF")
       .ctor<vec3, vec3, psl::function<float(vec3)>>()
@@ -822,8 +908,8 @@ void geometry_context(Context& ctx) {
   ctx.type<CSGIntersection>("CSGIntersection").ctor<Shape, Shape>("*");
   ctx.type<CSGDifference>("CSGDifference").ctor<Shape, Shape>("-");
   ctx.type<Shape>()
-      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Cone, Triangle, Rect, Mesh, SDF, CSGUnion,
-                    CSGIntersection, CSGDifference>();
+      .ctor_variant<AABB, OBB, Sphere, Plane, Disk, Line, Cone, Cylinder, Triangle, Rect, Mesh, SDF,
+                    CSGUnion, CSGIntersection, CSGDifference>();
   ctx.type<InstancedShape>("Instancing")
       .ctor<Mesh>()
       .method<overloaded<mat4, psl::shared_ptr<Material>>(&InstancedShape::add)>("add")

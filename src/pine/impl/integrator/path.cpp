@@ -40,8 +40,8 @@ void PathIntegrator::render(Scene& scene) {
       L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
     film[p] = vec4(L / spp, 1.0f);
-    if (p.x % 64 == 0)
-      set_progress(progress_2d(p, film.size()));
+    // if (p.x % 64 == 0)
+      // set_progress(progress_2d(p, film.size()));
   });
 }
 PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
@@ -51,10 +51,10 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   auto& Lo = result.Lo;
 
   auto it = intersect(ray);
-  // if (it) {
-  //   Lo = it->n / 2 + vec3(0.5f);
-  //   return result;
-  // }
+  if (it) {
+    Lo = it->n / 2 + vec3(0.5f);
+    return result;
+  }
 
   if (pv.diffuse_length == 0)
     if (auto mit = sample_medium(ray, sampler)) {

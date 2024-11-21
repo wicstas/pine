@@ -1,8 +1,8 @@
-#include <pine/core/program_context.h>
-#include <pine/core/integrator.h>
-#include <pine/core/profiler.h>
 #include <pine/core/context.h>
 #include <pine/core/fileio.h>
+#include <pine/core/integrator.h>
+#include <pine/core/profiler.h>
+#include <pine/core/program_context.h>
 
 #include <future>
 
@@ -34,13 +34,12 @@ int main(int argc, char* argv[]) {
       }
     });
     while (true) {
-      if (get_progress() != 0)
-        Logr(get_progress(), "\r");
+      if (get_progress() != 0) Logr(get_progress(), "\r");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
-        break;
+      if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) break;
     }
     Log("");
+    // interpret_file(context, argv[1]);
   } catch (const std::exception& e) {
     Log(e.what());
   } catch (const psl::Exception& e) {

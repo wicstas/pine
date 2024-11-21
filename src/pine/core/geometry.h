@@ -117,17 +117,13 @@ struct Triangle {
 };
 
 struct Cone {
-  Cone(vec3 p, vec3 n, float r, float h) : bottom(p, n, r), p(p + n * h), n(n), r(r), h(h) {
-    A2 = sqr(r / h) + 1;
-    A = psl::sqrt(A2);
-    S = r / psl::sqrt(r * r + h * h);
-  }
+  Cone(vec3 p, vec3 n, float r, float h);
 
   bool hit(const Ray& ray) const;
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   void compute_surface_info(vec3 p, SurfaceInteraction& it) const;
 
-  AABB get_aabb() const;
+  AABB get_aabb() const { return bottom.get_aabb().extend(p); }
   psl::optional<ShapeSample> sample(vec3, vec2 u) const;
   float pdf(const Ray& ray, vec3 ps, vec3 ns) const;
   float area() const { return psl::sqrt(r * r + h * h) * Pi * r + bottom.area(); }
@@ -140,7 +136,24 @@ struct Cone {
   float h;
   float A, A2, S;
 };
+struct Cylinder {
+  Cylinder(vec3 p0, vec3 p1, float r)
+      : p0(p0), p1(p1), n(normalize(p1 - p0)), r(r), bottom(p0, -n, r), top(p0, n, r) {}
 
+  bool hit(const Ray& ray) const;
+  bool intersect(Ray& ray, SurfaceInteraction& it) const;
+  void compute_surface_info(vec3 p, SurfaceInteraction& it) const;
+
+  AABB get_aabb() const { return union_(bottom.get_aabb(), top.get_aabb()); }
+  psl::optional<ShapeSample> sample(vec3, vec2) const { PINE_UNREACHABLE; }
+  float pdf(const Ray&, vec3, vec3) const { PINE_UNREACHABLE; }
+  float area() const { PINE_UNREACHABLE; }
+
+ private:
+  vec3 p0, p1, n;
+  float r;
+  Disk bottom, top;
+};
 struct Mesh {
   Mesh() = default;
   Mesh(psl::vector<vec3> vertices, psl::vector<vec3u32> indices, psl::vector<vec2> texcoords = {},
@@ -276,8 +289,8 @@ struct CSGDifference {
   psl::shared_ptr<Shape> a, b;
 };
 
-struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Cone, Rect, Disk, Line, Mesh, SDF,
-                            CSGUnion, CSGIntersection, CSGDifference> {
+struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Cone, Cylinder, Rect, Disk, Line,
+                            Mesh, SDF, CSGUnion, CSGIntersection, CSGDifference> {
   using variant::variant;
 
   bool hit(const Ray& ray) const {
