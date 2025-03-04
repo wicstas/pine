@@ -47,6 +47,7 @@ void MicroRenderIntegrator::render(Scene& scene) {
 
   auto window = GLWindow(film.size(), "MicroRenderGI");
 
+  // Output
   GLuint texture;
   glGenTextures(1, &texture);
   glBindTexture(GL_TEXTURE_2D, texture);
@@ -56,17 +57,18 @@ void MicroRenderIntegrator::render(Scene& scene) {
 
   auto compute_program =
       GLProgram(GLShader(GLShader::Compute, read_string_file("shaders/compute.comp")));
-  GLuint ssbo;
-  glGenBuffers(1, &ssbo);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+  GLuint discs_ssbo;
+  glGenBuffers(1, &discs_ssbo);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, discs_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, discs.size() * sizeof(Disc), (float*)discs.data(),
                GL_STATIC_DRAW);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, discs_ssbo);
   compute_program.set_uniform("w2c", camera.w2c());
   compute_program.set_uniform("position", camera.position());
   compute_program.set_uniform("fov2d", camera.fov2d());
+  compute_program.set_uniform("mr_size", vec2i(16, 16));
 
-  glDispatchCompute(discs.size(), 1, 1);
+  glDispatchCompute(discs.size(), 64, 64);
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
   auto program = GLProgram(GLShader(GLShader::Vertex, read_string_file("shaders/basic.vert")),

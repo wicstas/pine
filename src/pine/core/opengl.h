@@ -153,6 +153,11 @@ struct GLProgram {
     if (loc == -1) SEVERE("GLProgram: uniform `", name, "` not found");
     glUniform2f(loc, value[0], value[1]);
   }
+  void set_uniform(const char* name, vec2i value) const {
+    auto loc = glGetUniformLocation(program, name);
+    if (loc == -1) SEVERE("GLProgram: uniform `", name, "` not found");
+    glUniform2i(loc, value[0], value[1]);
+  }
   void set_uniform(const char* name, vec3 value) const {
     auto loc = glGetUniformLocation(program, name);
     if (loc == -1) SEVERE("GLProgram: uniform `", name, "` not found");

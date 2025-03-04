@@ -3,6 +3,7 @@
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D pixels;
+uniform ivec2 mr_size;
 
 layout(std430, binding = 1) buffer SSBO {
     float discs[];
@@ -17,27 +18,25 @@ float sqr(float x) {
 }
 
 void main() {
-    uint I = gl_GlobalInvocationID.x; 
+    uint I = gl_GlobalInvocationID.x;
     vec3 Dp = vec3(discs[I*10+0],discs[I*10+1],discs[I*10+2]);
     vec3 Dn = vec3(discs[I*10+3],discs[I*10+4],discs[I*10+5]);
     float Dr = discs[I*10+6];
     vec3 Dc = vec3(discs[I*10+7],discs[I*10+8],discs[I*10+9]);
 
-    vec2 image_size = imageSize(pixels);
-
     vec3 p = w2c * (Dp - position);
     p /= p.z;
     p.xy = vec2(p) / fov2d / 2 + vec2(0.5f);
-    p.xy *= image_size;
+    p.xy *= mr_size;
     
-    float tanx = Dr / length(Dp - position) / fov2d.x * image_size.x;
-    float tany = Dr / length(Dp - position) / fov2d.y * image_size.y;
+    float tanx = Dr / length(Dp - position) / fov2d.x * mr_size.x;
+    float tany = Dr / length(Dp - position) / fov2d.y * mr_size.y;
 
     for(int x = int(p.x - tanx); x <= p.x + tanx; x++) {
         float dy = tany * sqrt(1 - sqr((x - p.x) / tanx));
         for(int y = int(p.y - dy); y <= p.y + dy; y++) { 
-            if (x >= 0 && y > 0 && x < image_size.x && y < image_size.y)
-                imageStore(pixels, ivec2(x, y), vec4(Dc, 1));
+            if (x >= 0 && y > 0 && x < mr_size.x && y < mr_size.y)
+                imageStore(pixels, ivec2(gl_GlobalInvocationID.yz * mr_size) + ivec2(x, y), vec4(Dc, 1));
         }
     }
 }
