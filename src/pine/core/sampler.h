@@ -14,7 +14,7 @@ struct UniformSampler {
   UniformSampler(int samples_per_pixel, int seed = 0)
       : samples_per_pixel(samples_per_pixel), rng(seed) {
     if (samples_per_pixel <= 0)
-      Fatal("`UniformSampler` should have positive samples per pixel");
+      SEVERE("`UniformSampler` should have positive samples per pixel");
   }
 
   void init(vec2i) {

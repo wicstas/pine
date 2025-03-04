@@ -702,6 +702,10 @@ Vector4<T> operator*(const Matrix4<T> &m, const Vector4<T> &v) {
 }
 
 template <typename T>
+Vector3<T> operator*(const Matrix4<T> &m, const Vector3<T> &v) {
+  return Vector3<T>(m.x * v.x + m.y * v.y + m.z * v.z + m.w);
+}
+template <typename T>
 T length_squared(Vector2<T> v) {
   return v.x * v.x + v.y * v.y;
 }

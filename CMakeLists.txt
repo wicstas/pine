@@ -68,11 +68,12 @@ src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
 src/pine/core/log.cpp
-#src/pine/impl/integrator/randomwalk.cpp
+src/pine/impl/integrator/micro_render.cpp
+src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
-#src/pine/impl/integrator/cachedpath.cpp
-#src/pine/impl/integrator/denoiser.cpp
-#src/pine/impl/integrator/restir.cpp
+src/pine/impl/integrator/cachedpath.cpp
+src/pine/impl/integrator/denoiser.cpp
+src/pine/impl/integrator/restir.cpp
 src/pine/impl/integrator/mlt.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
@@ -86,6 +87,7 @@ src/contrib/libgwavi/gwavi.cpp
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp
 src/contrib/tiny_gltf.cpp
+src/contrib/glad/glad.c
 
 src/contrib/bluesobol/bluenoise_1spp.cpp
 src/contrib/bluesobol/bluenoise_2spp.cpp
@@ -98,20 +100,6 @@ src/contrib/bluesobol/bluenoise_128spp.cpp
 src/contrib/bluesobol/bluenoise_256spp.cpp
 )
 
-#add_library(pine_gui
-#src/contrib/glad/glad.c
-#src/contrib/imgui/imgui.cpp
-#src/contrib/imgui/imgui_demo.cpp
-#src/contrib/imgui/imgui_draw.cpp
-#src/contrib/imgui/imgui_tables.cpp
-#src/contrib/imgui/imgui_widgets.cpp
-#src/contrib/imgui/backends/imgui_impl_glfw.cpp
-#src/contrib/imgui/backends/imgui_impl_opengl3.cpp
-#)
-#find_package(glfw3 REQUIRED)
-#target_include_directories(pine_gui PRIVATE src/contrib/)
-#target_link_libraries(pine_gui PRIVATE glfw)
-
 target_compile_options(pinelib PRIVATE -Wall -Wextra -pedantic)
 target_include_directories(pinelib PUBLIC src/)
 target_include_directories(pinelib PRIVATE src/contrib)
@@ -121,7 +109,8 @@ find_package(Threads REQUIRED)
 find_package(Embree REQUIRED)
 find_package(LLVM 18.1.8 REQUIRED CONFIG)
 target_include_directories(pinelib PRIVATE ${LLVM_INCLUDE_DIRS})
-target_link_libraries(pinelib psl Threads::Threads embree LLVM-18)
+find_package(glfw3 REQUIRED)
+target_link_libraries(pinelib psl Threads::Threads embree LLVM-18 glfw)
 
 #Pine executable
 add_executable(pine src/cli/pine.cpp)

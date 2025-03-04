@@ -39,7 +39,7 @@ void denoise(DenoiseQuality quality, Array2d<vec3>& output, const Array2d<vec3>&
     // filter.execute();
     // const char* error_message;
     // if (device.getError(error_message) != oidn::Error::None)
-    //   Fatal(error_message);
+    //   SEVERE(error_message);
 }
 
 }  // namespace pine

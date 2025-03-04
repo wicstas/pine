@@ -16,8 +16,8 @@ int main(int argc, char* argv[]) {
       auto dir = psl::until_last_of(path, '/');
       auto output_path = psl::until_last_of(path, '.') + ".pineb";
       auto old_basedir = get_current_dir_name();
-      Log("-----------------------------------------------------------");
-      Log("Packing...\n", path, "\nInto:\n", output_path, "\n");
+      LOG("-----------------------------------------------------------");
+      LOG("Packing...\n", path, "\nInto:\n", output_path, "\n");
       chdir(dir.c_str());
       auto fs = read_folder("./");
       chdir(old_basedir);
@@ -27,6 +27,6 @@ int main(int argc, char* argv[]) {
     }
 
   } catch (const pine::Exception& e) {
-    Log(e.what());
+    LOG(e.what());
   }
 }

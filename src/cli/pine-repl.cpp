@@ -19,11 +19,11 @@ int main() {
       compile(context, source.c_str(), bytecodes);
       execute(context, bytecodes, vm);
     } catch (const Exception& e) {
-      Log(e.what());
+      LOG(e.what());
     } catch (const FallthroughException& e) {
-      Log(e.what());
+      LOG(e.what());
     } catch (const std::exception& e) {
-      Log(e.what());
+      LOG(e.what());
     }
   }
 

@@ -42,35 +42,35 @@ namespace pine {
 //     if (auto it = functions.find(name); it != functions.end())
 //       return it->second.ptr;
 //     else
-//       Fatal("Function `", name, "` is not found");
+//       SEVERE("Function `", name, "` is not found");
 //   }
 //   size_t function_param_byte_size(psl::string_view name) const {
 //     if (auto it = functions.find(name); it != functions.end())
 //       return it->second.param_byte_size;
 //     else
-//       Fatal("Function `", name, "` is not found");
+//       SEVERE("Function `", name, "` is not found");
 //   }
 
 //   llvm::Type* type(psl::string_view name) const {
 //     if (auto it = types.find(name); it != types.end())
 //       return it->second.ptr;
 //     else
-//       Fatal("Type `", name, "` is not found");
+//       SEVERE("Type `", name, "` is not found");
 //   }
 //   size_t type_size(psl::string_view name) const {
 //     if (auto it = types.find(name); it != types.end())
 //       return it->second.byte_size;
 //     else
-//       Fatal("Type `", name, "` is not found");
+//       SEVERE("Type `", name, "` is not found");
 //   }
 //   llvm::Function* copy_operator(psl::string_view name) const {
 //     if (auto it = types.find(name); it != types.end()) {
 //       if (it->second.copy_operator)
 //         return it->second.copy_operator;
 //       else
-//         Fatal("Type `", name, "` is not copyable");
+//         SEVERE("Type `", name, "` is not copyable");
 //     } else {
-//       Fatal("Type `", name, "` is not found");
+//       SEVERE("Type `", name, "` is not found");
 //     }
 //   }
 

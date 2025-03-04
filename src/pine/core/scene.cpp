@@ -49,7 +49,7 @@ psl::shared_ptr<Material> Scene::find_material(psl::string_view name) {
   if (const auto it = materials.find(name); it != materials.end())
     return it->second;
   else
-    Fatal("Can't find material `", name, '`');
+    SEVERE("Can't find material `", name, '`');
 }
 
 AABB Scene::get_aabb() const {

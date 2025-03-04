@@ -3,6 +3,18 @@
 
 namespace pine {
 
+Distribution1D::Distribution1D(const psl::vector<float>& density) : cdf(density.size()) {
+  for (size_t i = 1; i < density.size(); i++) cdf[i] = cdf[i - 1] + density[i];
+  density_sum_ = cdf.back();
+  for (auto& pdf : cdf) pdf /= cdf.back();
+}
+
+Distribution1DSample Distribution1D::sample(float u) const {
+  auto i = int(u * cdf.size());
+  return {i, pdf(i)};
+}
+float Distribution1D::pdf(int i) const { return cdf[i] - (i == 0 ? 0.0f : cdf[i - 1]); }
+
 Distribution2D::Distribution2D(const Array2d<float>& density, int max_depth)
     : max_depth{max_depth} {
   Profiler _("Build Distribution2D");
@@ -11,7 +23,6 @@ Distribution2D::Distribution2D(const Array2d<float>& density, int max_depth)
     CHECK_GE(density[p], 0);
     weight += density[p];
   });
-  density_to_pdf_ = weight / area(density.size());
   root = psl::shared_ptr<Node>{build(density, vec2i{0}, density.size(), weight)};
 }
 
@@ -29,8 +40,7 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
   if (split_x) {
     for (int x = lower.x; x < upper.x - 1; x++) {
       auto sum = 0.0;
-      for (int y = lower.y; y < upper.y; y++)
-        sum += density[{x, y}];
+      for (int y = lower.y; y < upper.y; y++) sum += density[{x, y}];
       partial_weight += sum;
       if (partial_weight >= weight / 2) {
         p = x + 1;
@@ -41,8 +51,7 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
   } else {
     for (int y = lower.y; y < upper.y - 1; y++) {
       auto sum = 0.0;
-      for (int x = lower.x; x < upper.x; x++)
-        sum += density[{x, y}];
+      for (int x = lower.x; x < upper.x; x++) sum += density[{x, y}];
       partial_weight += sum;
       if (partial_weight >= weight / 2) {
         p = y + 1;
@@ -52,8 +61,7 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
     }
   }
 
-  if (p == 0)
-    p = split_x ? upper.x - 1 : upper.y - 1;
+  if (p == 0) p = split_x ? upper.x - 1 : upper.y - 1;
 
   return new Node{
       float(weight),
@@ -66,10 +74,10 @@ Distribution2D::Node* Distribution2D::build(const Array2d<float>& density, vec2i
                                   weight - partial_weight, depth + 1)}};
 }
 
-static DistributionSample sample(const Distribution2D::Node* node, vec2 u2, float pdf) {
+static Distribution2DSample sample(const Distribution2D::Node* node, vec2 u2, float pdf) {
   if (!node->left || node->weight == 0.0f)
-    return DistributionSample{lerp(u2, node->lower, node->upper),
-                              pdf / area(node->upper - node->lower)};
+    return Distribution2DSample{lerp(u2, node->lower, node->upper),
+                                pdf / area(node->upper - node->lower)};
 
   auto r = node->left->weight / node->weight;
   auto& u = node->split_x ? u2[0] : u2[1];
@@ -83,10 +91,8 @@ static DistributionSample sample(const Distribution2D::Node* node, vec2 u2, floa
 }
 
 static float pdf(const Distribution2D::Node* node, vec2i p, float pdf_) {
-  if (node->weight == 0)
-    return 0;
-  if (!node->left)
-    return pdf_ / area(node->upper - node->lower);
+  if (node->weight == 0) return 0;
+  if (!node->left) return pdf_ / area(node->upper - node->lower);
 
   if (inside(p, node->left->lower, node->left->upper))
     return pdf(node->left.get(), p, pdf_ * node->left->weight / node->weight);
@@ -94,9 +100,8 @@ static float pdf(const Distribution2D::Node* node, vec2i p, float pdf_) {
     return pdf(node->right.get(), p, pdf_ * node->right->weight / node->weight);
 }
 
-DistributionSample Distribution2D::sample(vec2 u2) const {
-  if (!root)
-    return DistributionSample{};
+Distribution2DSample Distribution2D::sample(vec2 u2) const {
+  if (!root) return Distribution2DSample{};
 
   return pine::sample(root.get(), u2, area(root->upper - root->lower));
 }

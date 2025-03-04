@@ -10,12 +10,12 @@ int main(int argc, char* argv[]) {
   using namespace pine;
 
   if (argc != 2) {
-    Log("Usage: pine [filename]");
+    LOG("Usage: pine [filename]");
     return 0;
   }
 
 #ifndef NDEBUG
-  Warning("[Performance]Debug build");
+  WARNING("[Performance]Debug build");
 #endif
 
   Profiler::Initialize();
@@ -28,22 +28,22 @@ int main(int argc, char* argv[]) {
       try {
         interpret_file(context, argv[1]);
       } catch (const std::exception& e) {
-        Log(e.what());
+        LOG(e.what());
       } catch (const psl::Exception& e) {
-        Log(e.what());
+        LOG(e.what());
       }
     });
     while (true) {
-      if (get_progress() != 0) Logr(get_progress(), "\r");
+      if (get_progress() != 0) LOGr(get_progress(), "\r");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) break;
     }
-    Log("");
+    LOG("");
     // interpret_file(context, argv[1]);
   } catch (const std::exception& e) {
-    Log(e.what());
+    LOG(e.what());
   } catch (const psl::Exception& e) {
-    Log(e.what());
+    LOG(e.what());
   }
 
   Profiler::Finalize();

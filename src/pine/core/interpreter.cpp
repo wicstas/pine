@@ -36,8 +36,8 @@ Context get_default_context() {
   sampler_context(ctx);
   fileio_context(ctx);
   parallel_context(ctx);
-  ctx("print") = +[](const psl::string &x) { Logr(x); };
-  ctx("println") = +[](const psl::string &x) { Log(x); };
+  ctx("print") = +[](const psl::string &x) { LOGr(x); };
+  ctx("println") = +[](const psl::string &x) { LOG(x); };
   ctx.type<BVH>("BVH").ctor();
   ctx.type<EmbreeAccel>("Embree").ctor();
   ctx.type<Accel>("Accel").ctor_variant<EmbreeAccel>();

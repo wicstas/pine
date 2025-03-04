@@ -11,10 +11,10 @@ VideoWriter::VideoWriter(psl::string filename, vec2i size, int fps)
   ptr = psl::opaque_shared_ptr(gwavi_open(filename.c_str(), size.x, size.y, "JPEG", fps, nullptr),
                                [=](gwavi_t* ptr) {
                                  if (gwavi_close(ptr))
-                                   Warning("Unable to close `", filename, '`');
+                                   WARNING("Unable to close `", filename, '`');
                                });
   if (!ptr)
-    Fatal("Unable to open `", filename, '`');
+    SEVERE("Unable to open `", filename, '`');
 }
 void VideoWriter::add_frame(const Array2d3f& pixels) {
   auto pixel_data = Array2d3u8::from(pixels, true);
@@ -30,7 +30,7 @@ void VideoWriter::add_frame(const Array2d3f& pixels) {
       },
       &bytes, pixels.width(), pixels.height(), 3, (uint8_t*)pixel_data.data(), 90);
   if (gwavi_add_frame((gwavi_t*)ptr.get(), bytes.data(), bytes.byte_size()))
-    Warning("Failed to add frame to `", filename, '`');
+    WARNING("Failed to add frame to `", filename, '`');
 }
 void VideoWriter::done() {
   ptr.reset();

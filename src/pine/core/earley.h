@@ -302,14 +302,14 @@ struct Object {
   T &as() {
     CHECK(model != nullptr);
     if (!is<T>())
-      Fatal("Can't interpret ", type_name(), " as ", psl::type_name<T>());
+      SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
     return *reinterpret_cast<T *>(model->ptr());
   }
   template <typename T>
   const T &as() const {
     CHECK(model != nullptr);
     if (!is<T>())
-      Fatal("Can't interpret ", type_name(), " as ", psl::type_name<T>());
+      SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
     return *reinterpret_cast<const T *>(model->ptr());
   }
 
@@ -399,7 +399,7 @@ struct Generator {
   Concept *find_model(psl::string sym) const {
     auto it = models.find(sym);
     if (it == psl::end(models))
-      Fatal("Cannot find the model for `", sym, '`');
+      SEVERE("Cannot find the model for `", sym, '`');
     return it->second.get();
   }
 

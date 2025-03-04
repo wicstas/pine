@@ -19,7 +19,7 @@ EARSIntegrator::EARSIntegrator(Accel accel, Sampler sampler, LightSampler light_
       light_sampler{MOVE(light_sampler)},
       max_path_length{max_path_length} {
   if (max_path_length <= 0)
-    Fatal("`EARSIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+    SEVERE("`EARSIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 
 namespace {
@@ -40,7 +40,7 @@ struct Statistics {
   void report() const {
     // clang-format off
 #if EARS_COLLECT_STATS
-    Log(
+    LOG(
       "intersection_tests: ", intersection_tests, "\n", 
       "path_length: ", double(path_length) / path_length_n, "\n", 
       "primary_split: ", double(primary_split) / primary_split_n, "\n",
@@ -270,7 +270,7 @@ void EARSIntegrator::render(Scene& scene) {
   RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
-      Fatal("EARSIntegrator doesn't support `Plane`, please use `Rect` or `Disk` instead");
+      SEVERE("EARSIntegrator doesn't support `Plane`, please use `Rect` or `Disk` instead");
 
   light_sampler.build(&scene);
   auto& film = scene.camera.film();

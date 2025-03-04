@@ -17,7 +17,7 @@ void DenoiseIntegrator::render(Scene& scene) {
     auto ray = scene.camera.gen_ray((p + vec2(0.5f)) / film.size(), vec2(0.5f));
     auto it = SurfaceInteraction();
     if (intersect(ray, it)) {
-      albedo[p] = it.material().albedo(it);
+      albedo[p] = it.material().albedo({it, it.n});
       normal[p] = it.n;
     }
   });

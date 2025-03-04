@@ -5,13 +5,9 @@
 
 namespace pine {
 
-vec3 Uncharted2ToneMapper::operator()(vec3 v) const {
-  return uncharted2_filmic(v);
-}
+vec3 Uncharted2ToneMapper::operator()(vec3 v) const { return uncharted2_filmic(v); }
 
-vec3 ACESToneMapper::operator()(vec3 v) const {
-  return ACES(v);
-}
+vec3 ACESToneMapper::operator()(vec3 v) const { return ACES(v); }
 
 void save_film_as_image(psl::string_view filename, Film film) {
   film.finalize();
@@ -19,8 +15,7 @@ void save_film_as_image(psl::string_view filename, Film film) {
 }
 
 Film& Film::clear() {
-  for (auto& pixel : pixels)
-    pixel = {};
+  for (auto& pixel : pixels) pixel = {};
   return *this;
 }
 void Film::finalize(float scale) {
@@ -31,11 +26,10 @@ void Film::finalize(float scale) {
   apply_tone_mapping();
 }
 void Film::scale(float factor) {
-  for (auto& pixel : pixels)
-    pixel *= factor;
+  for (auto& pixel : pixels) pixel *= factor;
 }
-void Film::add_radiance(vec2 p, vec3 radiance) {
-  auto p_film = vec2i(p * size());
+void Film::add_radiance(vec2 p_film_, vec3 radiance) {
+  auto p_film = vec2i(p_film_);
   DCHECK_RANGE(p_film.x, 0, size().x - 1);
   DCHECK_RANGE(p_film.y, 0, size().y - 1);
   auto& pixel = pixels[p_film];
@@ -43,9 +37,17 @@ void Film::add_radiance(vec2 p, vec3 radiance) {
   pixel = vec4(vec3(pixel) + radiance, pixel.z);
   spin_lock.unlock();
 }
+void Film::splat(vec2 p_film_, vec3 color, float depth) {
+  auto p_film = vec2i(p_film_);
+  DCHECK_RANGE(p_film.x, 0, size().x - 1);
+  DCHECK_RANGE(p_film.y, 0, size().y - 1);
+  auto& pixel = pixels[p_film];
+  spin_lock.lock();
+  if (depth <= pixel.w) pixel = vec4(color, depth);
+  spin_lock.unlock();
+}
 void Film::add_sample(vec2i p_film, vec3 color, float weight) {
-  if (weight == 0.0f)
-    return;
+  if (weight == 0.0f) return;
   DCHECK_RANGE(p_film.x, 0, size().x - 1);
   DCHECK_RANGE(p_film.y, 0, size().y - 1);
   auto& pixel = pixels[p_film];
@@ -62,8 +64,7 @@ void Film::add_sample_thread_safe(vec2i p_film, vec3 color) {
   spin_lock.unlock();
 }
 void Film::apply_tone_mapping() {
-  for (auto& pixel : pixels)
-    pixel = vec4(tone_mapper(vec3(pixel)), pixel.w);
+  for (auto& pixel : pixels) pixel = vec4(tone_mapper(vec3(pixel)), pixel.w);
 }
 
 Film combine(Film a, const Film& b, float weight_a, float weight_b) {
@@ -82,15 +83,13 @@ void visualize(Film& film) {
   auto min_value = float_max;
   for_2d(film.size(), [&](vec2i p) {
     auto x = film.pixels[p].x;
-    if (x == 0.0f)
-      return;
+    if (x == 0.0f) return;
     max_value = psl::max(max_value, x);
     min_value = psl::min(min_value, x);
   });
   for_2d(film.size(), [&](vec2i p) {
     auto x = film.pixels[p].x;
-    if (x == 0.0f)
-      return;
+    if (x == 0.0f) return;
     film.pixels[p] = vec4(color_map((x - min_value) / (max_value - min_value)));
   });
 }

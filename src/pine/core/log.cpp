@@ -10,7 +10,7 @@ void cout_stream(psl::string_view data) {
   psl::cout << data;
 }
 
-void (*debug_stream)(psl::string_view data) = cout_stream;
+void (*DEBUG_stream)(psl::string_view data) = cout_stream;
 void (*log_stream)(psl::string_view data) = cout_stream;
 void (*warning_stream)(psl::string_view data) = cout_stream;
 void (*fatal_stream)(psl::string_view data) = cout_stream;

@@ -1960,7 +1960,7 @@ private:
 
 Variable execute(const Context& context, const Bytecodes& bytecodes) {
   Profiler _("[Interpreter]Execute");
-  //   Debug(bytecodes.to_string(context));
+  //   DEBUG(bytecodes.to_string(context));
 
   auto vm = VirtualMachine();
   return execute(context, bytecodes, vm);

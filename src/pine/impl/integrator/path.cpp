@@ -1,7 +1,7 @@
-#include <pine/impl/integrator/path.h>
-#include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
+#include <pine/core/profiler.h>
 #include <pine/core/scene.h>
+#include <pine/impl/integrator/path.h>
 
 namespace pine {
 
@@ -10,18 +10,14 @@ PathIntegrator::PathIntegrator(Accel accel, Sampler sampler, LightSampler light_
     : RTIntegrator{MOVE(accel), MOVE(sampler), MOVE(light_sampler)},
       max_path_length{max_path_length} {
   if (max_path_length <= 0)
-    Fatal("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+    SEVERE("`PathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 struct PathIntegrator::Vertex {
   Vertex(int length, int diffuse_length, float pdf, bool is_delta)
-      : length(length), diffuse_length(diffuse_length), pdf(pdf), is_delta(is_delta) {
-  }
+      : length(length), diffuse_length(diffuse_length), pdf(pdf), is_delta(is_delta) {}
   Vertex(const Vertex& pv, float pdf, bool is_delta = false)
-      : Vertex(pv.length + 1, pv.diffuse_length + (is_delta ? 0 : 1), pdf, is_delta) {
-  }
-  static Vertex first_vertex() {
-    return Vertex(0, 0, 0.0f, true);
-  }
+      : Vertex(pv.length + 1, pv.diffuse_length + (is_delta ? 0 : 1), pdf, is_delta) {}
+  static Vertex first_vertex() { return Vertex(0, 0, 0.0f, true); }
   int length;
   int diffuse_length;
   float pdf;
@@ -40,8 +36,7 @@ void PathIntegrator::render(Scene& scene) {
       L += radiance(scene, ray, sampler, Vertex::first_vertex()).Lo;
     }
     film[p] = vec4(L / spp, 1.0f);
-    // if (p.x % 64 == 0)
-      // set_progress(progress_2d(p, film.size()));
+    if (p.x % 64 == 0) set_progress(progress_2d(p, film.size()));
   });
 }
 PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler,
@@ -51,10 +46,6 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   auto& Lo = result.Lo;
 
   auto it = intersect(ray);
-  if (it) {
-    Lo = it->n / 2 + vec3(0.5f);
-    return result;
-  }
 
   if (pv.diffuse_length == 0)
     if (auto mit = sample_medium(ray, sampler)) {
@@ -84,21 +75,18 @@ PathIntegrator::RadianceResult PathIntegrator::radiance(Scene& scene, Ray ray, S
   if (!it) {
     if (scene.env_light) {
       Lo += Tr * scene.env_light->color(ray.d);
-      if (!pv.is_delta)
-        result.light_pdf = scene.env_light->pdf(ray.d);
+      if (!pv.is_delta) result.light_pdf = scene.env_light->pdf(ray.d);
     }
     return result;
   }
 
   if (it->material().is<EmissiveMaterial>()) {
     Lo += Tr * it->material().le({*it, wi});
-    if (!pv.is_delta)
-      result.light_pdf = light_sampler.pdf(ray, *it);
+    if (!pv.is_delta) result.light_pdf = light_sampler.pdf(ray, *it);
     return result;
   }
 
-  if (pv.length + 1 >= max_path_length)
-    return result;
+  if (pv.length + 1 >= max_path_length) return result;
 
   auto bc = BxdfSampleCtx(*it, wi, 0.6f, pv.diffuse_length > 0);
   auto bxdf = it->material().sample_bxdf(bc, sampler);

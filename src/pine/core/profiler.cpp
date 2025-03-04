@@ -27,12 +27,12 @@ psl::string pad(T x, size_t max_len) {
 
 void Profiler::Finalize() {
   main.reset();
-  Debug("[Profiler]========================================>");
+  DEBUG("[Profiler]========================================>");
   auto ReportRecord = [](auto& me, Record record, size_t indent, double totalTime) -> void {
     if (totalTime != 0.0f && record.time / totalTime < 0.005f)
       return;
     if (record.name != "") {
-      Debug(psl::string_n_of(indent, ' '), pad(record.name, 24 - indent), " ",
+      DEBUG(psl::string_n_of(indent, ' '), pad(record.name, 24 - indent), " ",
             pad(record.sampleCount, 6), pad(record.time, 8), "ms ",
             pad((totalTime == 0.0f) ? 100.0 : 100.0 * record.time / totalTime, 8), "%");
       indent += 2;

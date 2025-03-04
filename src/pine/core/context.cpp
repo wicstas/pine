@@ -8,10 +8,8 @@ Context Context::context;
 
 psl::string signature_from(const TypeTag& rtype, psl::span<const TypeTag> ptypes) {
   auto r = psl::string("(");
-  for (const auto& ptype : ptypes)
-    r += ptype.sig() + ", ";
-  if (ptypes.size() != 0)
-    r.pop_back(2);
+  for (const auto& ptype : ptypes) r += ptype.sig() + ", ";
+  if (ptypes.size() != 0) r.pop_back(2);
   r += "): " + rtype.sig();
   return r;
 }
@@ -80,26 +78,26 @@ Context::Context() {
   context.type<void*>("void*");
   context("malloc") = [](size_t size) { return malloc(psl::max(size, size_t(1))); };
 
-//   struct FunctionObject {
-    //     FunctionObject(void* obj, void* f) : obj(obj), f(f) {
-    //     }
-    //     FunctionObject(const FunctionObject&) = delete;
-    //     FunctionObject& operator=(const FunctionObject&) = delete;
-    //     FunctionObject(FunctionObject&& rhs) : obj(psl::exchange(rhs.obj, nullptr)), f(rhs.f) {
-    //     }
-    //     FunctionObject& operator=(FunctionObject&& rhs) {
-    //       obj = psl::exchange(rhs.obj, nullptr);
-    //       f = rhs.f;
-    //       return *this;
-    //     }
-    //     ~FunctionObject() {
-    //       if (obj)
-    //         psl::free(obj);
-    //     }
-//     void* obj;
-//     void* f;
-//   };
-//   context.type<FunctionObject>("@FunctionObject");
+  //   struct FunctionObject {
+  //     FunctionObject(void* obj, void* f) : obj(obj), f(f) {
+  //     }
+  //     FunctionObject(const FunctionObject&) = delete;
+  //     FunctionObject& operator=(const FunctionObject&) = delete;
+  //     FunctionObject(FunctionObject&& rhs) : obj(psl::exchange(rhs.obj, nullptr)), f(rhs.f) {
+  //     }
+  //     FunctionObject& operator=(FunctionObject&& rhs) {
+  //       obj = psl::exchange(rhs.obj, nullptr);
+  //       f = rhs.f;
+  //       return *this;
+  //     }
+  //     ~FunctionObject() {
+  //       if (obj)
+  //         psl::free(obj);
+  //     }
+  //     void* obj;
+  //     void* f;
+  //   };
+  //   context.type<FunctionObject>("@FunctionObject");
 }
 
 // static int common_prefix_length(psl::string_view a, psl::string_view b) {
@@ -122,8 +120,8 @@ Context::Context() {
 void Context::add_f(psl::string name, Function func) {
   auto [first, last] = function_name_to_index.equal_range(name);
   while (first != last) {
-    const auto& [fname, fi] = *first;
-    if (functions[fi].unique_name() == func.unique_name()) {
+    if (functions[first->second].unique_name() == func.unique_name()) {
+      DEBUG("Overriding function ", first->second, ' ', func.unique_name());
       function_name_to_index.erase(first);
       std::tie(first, last) = function_name_to_index.equal_range(name);
     } else {
@@ -149,8 +147,7 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
   auto best_converts = psl::vector<Context::FindFResult::ArgumentConversion>();
 
   auto arg_signature = psl::string();
-  for (auto atype : atypes)
-    arg_signature += atype.name + ", ";
+  for (auto atype : atypes) arg_signature += atype.name + ", ";
   if (arg_signature.size()) {
     arg_signature.pop_back();
     arg_signature.pop_back();
@@ -192,16 +189,15 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
     return {best_candidates[0], best_converts};
   } else if (best_candidates.size() > 1) {
     auto candidates = psl::string();
-    for (auto fi : best_candidates)
-      candidates += functions[fi].unique_name() + "\n";
+    for (auto fi : best_candidates) candidates += functions[fi].unique_name() + "\n";
     candidates.pop_back();
-    Fatal("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n", candidates);
+    SEVERE("Ambiguous function call `", name, "(", arg_signature, ")`, candidates:\n", candidates);
   } else {
     if (first != last) {
       auto candidates = psl::string();
       for (auto [name, fi] : psl::range(first, last))
         candidates += functions[fi].unique_name() + "\n";
-      Fatal("Function `", name, "(", arg_signature, ")` is not found, candidates:\n", candidates);
+      SEVERE("Function `", name, "(", arg_signature, ")` is not found, candidates:\n", candidates);
     } else {
       //   auto likely_func_name = psl::string();
       //   auto max_common_part_length = 0;
@@ -212,10 +208,10 @@ Context::FindFResult Context::find_f(psl::string_view name, psl::span<const Type
       //     }
       //   }
       //   if (likely_func_name != "")
-      //     Fatal("Function `", name, "(", arg_signature, ")` is not found, did you mean `",
+      //     SEVERE("Function `", name, "(", arg_signature, ")` is not found, did you mean `",
       //           likely_func_name, "`?");
       //   else
-      Fatal("Function `", name, "(", arg_signature, ")` is not found");
+      SEVERE("Function `", name, "(", arg_signature, ")` is not found");
     }
   }
 }
@@ -224,11 +220,10 @@ psl::string Context::type_name_from_id(size_t type_id) const {
   if (auto it = type_id_to_name.find(type_id); it != type_id_to_name.end())
     return it->second;
   else
-    Fatal("Type with id `", type_id, "` is not registered");
+    SEVERE("Type with id `", type_id, "` is not registered");
 }
 TypeTrait* Context::create_type_trait(psl::string name, size_t byte_size) {
-  if (auto it = types.find(name); it != types.end())
-    Fatal("Type `", name, "` already exists");
+  if (auto it = types.find(name); it != types.end()) SEVERE("Type `", name, "` already exists");
   auto trait =
       types.insert({name, psl::make_unique<TypeTrait>(name, byte_size)}).first->second.get();
   return trait;
@@ -237,49 +232,41 @@ TypeTrait* Context::get_type_trait(psl::string_view name) {
   if (auto it = types.find(name); it != types.end())
     return it->second.get();
   else
-    Fatal("Type `", name, "` is not registered");
+    SEVERE("Type `", name, "` is not registered");
 }
 const TypeTrait* Context::get_type_trait(psl::string_view name) const {
   if (auto it = types.find(name); it != types.end())
     return it->second.get();
   else
-    Fatal("Type `", name, "` is not registered");
+    SEVERE("Type `", name, "` is not registered");
 }
 
 static bool match_prefix(psl::string_view base, psl::string_view candidate) {
-  if (candidate.size() < base.size())
-    return false;
+  if (candidate.size() < base.size()) return false;
   for (size_t i = 0; i < base.size(); i++)
-    if (base[i] != candidate[i])
-      return false;
+    if (base[i] != candidate[i]) return false;
   return true;
 }
 psl::string Context::complete(psl::string part) const {
   auto result = psl::string();
 
-  if (part == "")
-    return result;
+  if (part == "") return result;
 
   for (const auto& f : function_name_to_index) {
     if (match_prefix(part, f.first)) {
-      if (result == "")
-        result = f.first;
+      if (result == "") result = f.first;
 
       auto i = part.size();
       for (;; i++) {
-        if (i >= result.size())
-          break;
-        if (i >= f.first.size())
-          break;
-        if (result[i] != f.first[i])
-          break;
+        if (i >= result.size()) break;
+        if (i >= f.first.size()) break;
+        if (result[i] != f.first[i]) break;
       }
       result.resize(i);
     }
   }
 
-  if (result.size() == 0)
-    return result;
+  if (result.size() == 0) return result;
   return result.substr(part.size());
 }
 

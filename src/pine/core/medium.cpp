@@ -166,7 +166,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     g = Grid(vec3i(32, 32, 32), grid);
 
     if (!grid)
-      Fatal("[VDBMedium]`", filename, " `has no density attribute");
+      SEVERE("[VDBMedium]`", filename, " `has no density attribute");
     sigma_a_ = average(sigma_a);
     sigma_s_ = average(sigma_s);
     sigma_z_ = sigma_a_ + sigma_s_;
@@ -182,7 +182,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     auto handle = nanovdb::io::readGrid(filename.c_str(), "flames");
     auto grid = handle.grid<float>();
     if (grid) {
-      Debug("[VDBMedium]", filename, " has flames attribute");
+      DEBUG("[VDBMedium]", filename, " has flames attribute");
       auto [aabb, mat] = get_grid_info(grid);
       world2index_flame = mat * inverse(transform);
       flame_grid = grid;
@@ -193,7 +193,7 @@ VDBMedium::VDBMedium(psl::string filename, mat4 transform, PhaseFunction pf, vec
     auto handle = nanovdb::io::readGrid(filename.c_str(), "temperature");
     auto grid = handle.grid<float>();
     if (grid) {
-      Debug("[VDBMedium]", filename, " has temperature attribute");
+      DEBUG("[VDBMedium]", filename, " has temperature attribute");
       auto [aabb, mat] = get_grid_info(grid);
       world2index_tem = mat * inverse(transform);
       temperature_grid = grid;
@@ -205,8 +205,8 @@ psl::optional<MediumSample> VDBMedium::sample(const Ray& ray, Sampler& sampler) 
   auto tmin = ray.tmin, tmax = ray.tmax;
   if (!bbox.intersect(ray.o, ray.d, tmin, tmax))
     return psl::nullopt;
-  auto pi0 = vec3(world2index * vec4(ray(0), 1.0f));
-  auto pi1 = vec3(world2index * vec4(ray(tmax), 1.0f));
+  auto pi0 = world2index * ray(0);
+  auto pi1 = world2index * ray(tmax);
   auto di = (pi1 - pi0) / tmax;
   auto density = ((nanovdb::FloatGrid*)this->density_grid)->getAccessor();
 
@@ -265,8 +265,8 @@ vec3 VDBMedium::transmittance(vec3 p, vec3 d, float tmax, Sampler& sampler) cons
   if (!bbox.intersect(p, d, tmin, tmax))
     return vec3(1.0f);
 
-  auto pi0 = vec3(world2index * vec4(p, 1.0f));
-  auto pi1 = vec3(world2index * vec4(p + d * tmax, 1.0f));
+  auto pi0 = world2index * p;
+  auto pi1 = world2index * p + d * tmax;
   auto di = (pi1 - pi0) / tmax;
   auto density = ((nanovdb::FloatGrid*)this->density_grid)->getAccessor();
 

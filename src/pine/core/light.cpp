@@ -23,13 +23,13 @@ SpotLight::SpotLight(vec3 position, vec3 direction, vec3 color, float falloff_ra
       falloff_cos(psl::cos(falloff_radian)),
       cutoff_cos(psl::cos(falloff_radian + cutoff_additonal_radian)) {
   if (falloff_radian <= 0.0f)
-    Fatal("`SpotLight` invalid falloff angle");
+    SEVERE("`SpotLight` invalid falloff angle");
   if (falloff_radian > Pi2)
-    Fatal("`SpotLight` invalid falloff angle(please use radian, not degree)");
+    SEVERE("`SpotLight` invalid falloff angle(please use radian, not degree)");
   if (cutoff_additonal_radian < 0.0f)
-    Fatal("`SpotLight` invalid cutoff angle");
+    SEVERE("`SpotLight` invalid cutoff angle");
   if (falloff_radian + cutoff_additonal_radian > Pi2)
-    Fatal("`SpotLight` invalid cutoff angle(please use radian, not degree)");
+    SEVERE("`SpotLight` invalid cutoff angle(please use radian, not degree)");
 };
 psl::optional<LightSample> SpotLight::sample(vec3 p, vec2) const {
   LightSample ls;

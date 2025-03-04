@@ -8,11 +8,11 @@ ThinLenCamera::ThinLenCamera(Film film_, vec3 from, vec3 to, float fov, float le
                              float focus_distance)
     : position(from),
       c2w(look_at(from, to)),
+      w2c(inverse(c2w)),
       film_(MOVE(film_)),
       fov2d(fov * film_.aspect(), fov),
       len_radius(len_radius),
-      focus_distance(focus_distance) {
-}
+      focus_distance(focus_distance) {}
 
 static vec2 to_camera_space(vec2 p_film, vec2 fov2d) {
   p_film = (p_film - vec2(0.5f)) * 2;
@@ -30,6 +30,11 @@ Ray ThinLenCamera::gen_ray(vec2 p_film, vec2 u2) const {
     auto p_len = vec3(len_radius * sample_disk_polar(u2), 0.0f);
     return Ray(position + p_len, c2w * normalize(p_focus - p_len));
   }
+}
+vec2 ThinLenCamera::project(vec3 p) const {
+  p = w2c * (p - position);
+  p /= p.z;
+  return vec2(p) / fov2d / 2 + vec2(0.5f);
 }
 
 void camera_context(Context& ctx) {

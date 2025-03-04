@@ -1,8 +1,5 @@
 #include <pine/impl/integrator/ao.h>
 #include <pine/core/scene.h>
-#include <pine/core/color.h>
-#include <pine/core/parallel.h>
-#include <pine/core/fileio.h>
 
 namespace pine {
 

@@ -1,24 +1,21 @@
-#include <pine/impl/integrator/spatial_tree.h>
-#include <pine/impl/integrator/guidedpath.h>
-#include <pine/core/sampling.h>
-#include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
-#include <pine/core/denoise.h>
-#include <pine/core/scene.h>
 #include <pine/core/color.h>
-#include <pine/core/gui.h>
+#include <pine/core/denoise.h>
+#include <pine/core/profiler.h>
+#include <pine/core/sampling.h>
+#include <pine/core/scene.h>
+#include <pine/impl/integrator/guidedpath.h>
 
 #include <algorithm>
 
 namespace pine {
-static SpatialTree guide;
 
 GuidedPathIntegrator::GuidedPathIntegrator(Accel accel, Sampler sampler, LightSampler light_sampler,
                                            int max_path_length)
     : RTIntegrator{MOVE(accel), MOVE(sampler), MOVE(light_sampler)},
       max_path_length{max_path_length} {
   if (max_path_length <= 0)
-    Fatal("`GuidedPathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
+    SEVERE("`GuidedPathIntegrator` expect `max_path_length` to be positive, get", max_path_length);
 }
 
 struct IterativeScheme {
@@ -31,87 +28,43 @@ struct IterativeScheme {
     float progress_start, progress_end;
   };
 
-  IterativeScheme(int spp, int batch_size) {
-    auto current_spp = 0;
-    auto iter_spp = 2;
-    auto prime_index = 1;
+  IterativeScheme(int spp, int batch_size);
 
-    auto is_final_iteration = false;
-    for (int iter = 0; !is_final_iteration; iter++) {
-      auto next_iter_spp = iter_spp;
-      if (iter % batch_size == batch_size - 1)
-        next_iter_spp *= 1.5f;
+  psl::optional<Iteration> next();
 
-      auto remaining_spp = spp - current_spp;
-      if (iter_spp + next_iter_spp / 2 > remaining_spp) {
-        iter_spp = remaining_spp;
-        is_final_iteration = true;
-      }
-
-      auto prime_hit = iter >= prime_index * prime_index;
-      iterations.emplace_back(iter, current_spp, iter_spp, is_final_iteration, prime_hit,
-                              float(current_spp) / spp, float(current_spp + iter_spp) / spp);
-      if (prime_hit)
-        prime_index++;
-      current_spp += psl::exchange(iter_spp, next_iter_spp);
-    }
-  }
-
-  psl::optional<Iteration> next() {
-    if (iterations.size()) {
-      auto iteration = iterations.front();
-      iterations.pop_front();
-      return iteration;
-    } else {
-      return psl::nullopt;
-    }
-  }
-
-private:
+ private:
   psl::vector<Iteration> iterations;
 };
 
 struct OutlierRejectedVariance {
-  OutlierRejectedVariance(vec2i image_size) : image_size(image_size), variances(area(image_size)) {
-  }
+  OutlierRejectedVariance(vec2i image_size) : image_size(image_size), variances(area(image_size)) {}
 
-  void set(vec2i p, vec3 var) {
-    variances[p.x + p.y * image_size.x] = var;
-  }
+  void set(vec2i p, vec3 var) { variances[p.x + p.y * image_size.x] = var; }
 
-  vec3 compute(float rejection_fraction) {
-    std::sort(variances.begin(), variances.end(),
-              [](vec3 a, vec3 b) { return average(a) < average(b); });
+  vec3 compute(float rejection_fraction);
 
-    auto N = area(image_size) * (1 - rejection_fraction);
-    return psl::mean<vec3d>(psl::trim(variances, 0, N));
-  }
-
-private:
+ private:
   vec2i image_size;
   psl::vector<vec3> variances;
 };
 
 struct GuidedPathIntegrator::Vertex {
   Vertex(int length, int diffuse_length, float pdf, bool is_delta)
-      : length(length), diffuse_length(diffuse_length), pdf(pdf), is_delta(is_delta) {
-  }
+      : length(length), diffuse_length(diffuse_length), pdf(pdf), is_delta(is_delta) {}
   Vertex(const Vertex& pv, float pdf, bool is_delta = false)
-      : Vertex(pv.length + 1, pv.diffuse_length + (is_delta ? 0 : 1), pdf, is_delta) {
-  }
-  static Vertex first_vertex() {
-    return Vertex(0, 0, 0.0f, true);
-  }
+      : Vertex(pv.length + 1, pv.diffuse_length + (is_delta ? 0 : 1), pdf, is_delta) {}
+  static Vertex first_vertex() { return Vertex(0, 0, 0.0f, true); }
   int length;
   int diffuse_length;
   float pdf;
   bool is_delta;
 };
+
 void GuidedPathIntegrator::render(Scene& scene) {
   RTIntegrator::render(scene);
   for (const auto& geometry : scene.geometries)
     if (geometry->shape.is<Plane>())
-      Fatal("`GuidedPathIntegrator` doesn't support `Plane`, please use `Rect` or `Disk` instead");
+      SEVERE("`GuidedPathIntegrator` doesn't support `Plane`, please use `Rect` or `Disk` instead");
 
   Profiler _("[GuidedPath]Render");
 
@@ -131,6 +84,7 @@ void GuidedPathIntegrator::render(Scene& scene) {
   while (auto iter = iteration_scheme.next()) {
     collect_radiance_sample = !iter->is_final;
     use_learned_ratio = iter->number > 0 ? 0.5f : 0.0f;
+    auto inv_spp = 1.0f / iter->spp;
 
     parallel_for(film.size(), [&](vec2i p) {
       auto& sampler = samplers[threadIdx].start_pixel(p, iter->sample_index);
@@ -142,16 +96,15 @@ void GuidedPathIntegrator::render(Scene& scene) {
         L += Li;
         L_squared += Li * Li;
       }
-      I[p] = L / iter->spp;
-      if (iter->spp > 1)
-        or_variance.set(p, (L_squared - L * L / iter->spp) / (iter->spp - 1) / iter->spp);
+      I[p] = L * inv_spp;
+      or_variance.set(p, (L_squared - L * L * inv_spp) / (iter->spp - 1) * inv_spp);
       if (p.x % 64 == 0)
-        set_progress(psl::lerp(float(p.x + p.y * film.size().x) / area(film.size()),
-                               iter->progress_start, iter->progress_end));
+        set_progress(
+            psl::lerp(progress_2d(p, film.size()), iter->progress_start, iter->progress_end));
     });
 
     auto variance = or_variance.compute(0.00001f);
-    Debug("variance: ", (float)average(variance));
+    DEBUG("variance: ", (float)average(variance));
     auto weight = 1.0f / psl::max<float>(average(variance), epsilon);
     combine_inplace(acc_I, I, acc_weight, weight);
     acc_weight += weight;
@@ -213,18 +166,15 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Ver
 
   auto Tr = transmittance(ray.o, ray.d, ray.tmax, sampler);
   if (!it) {
-    if (scene.env_light && pv.length == 0)
-      Lo += Tr * scene.env_light->color(ray.d);
+    if (scene.env_light && pv.length == 0) Lo += Tr * scene.env_light->color(ray.d);
     return Lo;
   }
   if (it->material().is<EmissiveMaterial>()) {
-    if (pv.length == 0)
-      Lo += Tr * it->material().le({*it, wi});
+    if (pv.length == 0) Lo += Tr * it->material().le({*it, wi});
     return Lo;
   }
 
-  if (pv.length + 1 >= max_path_length)
-    return Lo;
+  if (pv.length + 1 >= max_path_length) return Lo;
 
   auto lo = vec3(0.0f);
 
@@ -305,6 +255,48 @@ vec3 GuidedPathIntegrator::radiance(Scene& scene, Ray ray, Sampler& sampler, Ver
   Lo += Tr * lo;
 
   return Lo;
+}
+
+IterativeScheme::IterativeScheme(int spp, int batch_size) {
+  auto current_spp = 0;
+  auto iter_spp = 2;
+  auto prime_index = 1;
+
+  auto is_final_iteration = false;
+  for (int iter = 0; !is_final_iteration; iter++) {
+    auto next_iter_spp = iter_spp;
+    if ((iter + 1) % batch_size == 0) next_iter_spp *= 2;
+
+    auto remaining_spp = spp - current_spp;
+    if (iter_spp + next_iter_spp / 4 > remaining_spp) {
+      iter_spp = remaining_spp;
+      is_final_iteration = true;
+    }
+
+    auto hit_prime = iter >= prime_index * prime_index;
+    iterations.emplace_back(iter, current_spp, iter_spp, is_final_iteration, hit_prime,
+                            float(current_spp) / spp, float(current_spp + iter_spp) / spp);
+    if (hit_prime) prime_index++;
+    current_spp += psl::exchange(iter_spp, next_iter_spp);
+  }
+}
+
+psl::optional<IterativeScheme::Iteration> IterativeScheme::next() {
+  if (iterations.size()) {
+    auto iteration = iterations.front();
+    iterations.pop_front();
+    return iteration;
+  } else {
+    return psl::nullopt;
+  }
+}
+
+vec3 OutlierRejectedVariance::compute(float rejection_fraction) {
+  std::sort(variances.begin(), variances.end(),
+            [](vec3 a, vec3 b) { return average(a) < average(b); });
+
+  auto N = area(image_size) * (1 - rejection_fraction);
+  return psl::mean<vec3d>(psl::trim(variances, 0, N));
 }
 
 }  // namespace pine

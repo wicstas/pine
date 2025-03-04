@@ -40,7 +40,7 @@ psl::vector<uint16_t> HaltonSampler::radicalInversePermutations;
 
 HaltonSampler::HaltonSampler(int spp) : samples_per_pixel(spp) {
   if (samples_per_pixel <= 0)
-    Fatal("`HaltonSampler` should have positive samples per pixel");
+    SEVERE("`HaltonSampler` should have positive samples per pixel");
   if (radicalInversePermutations.size() == 0) {
     RNG rng;
     radicalInversePermutations = compute_radical_inverse_permutations(rng);
@@ -114,7 +114,7 @@ uint64_t SobolSampler::compute_sample_index() {
 
 BlueSobolSampler::BlueSobolSampler(int spp_) {
   if (spp_ > 256) {
-    Warning("[BlueSobolSampler]Only support up to 256 samples per pixel");
+    WARNING("[BlueSobolSampler]Only support up to 256 samples per pixel");
     spp_ = 256;
   }
   samples_per_pixel = psl::roundup2(spp_);

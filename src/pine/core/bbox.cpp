@@ -1,5 +1,6 @@
-#include <pine/core/bbox.h>
 #include <pine/core/interaction.h>
+#include <pine/core/sampling.h>
+#include <pine/core/bbox.h>
 #include <pine/core/log.h>
 
 namespace pine {
@@ -10,7 +11,7 @@ AABB::AABB(OBB obb) {
     if (i % 2 >= 1) p[0] = obb.base.upper[0];
     if (i % 4 >= 2) p[1] = obb.base.upper[1];
     if (i % 8 >= 4) p[2] = obb.base.upper[2];
-    extend(vec3(obb.m * vec4(p, 1.0f)));
+    extend(obb.m * p);
   }
 }
 AABB AABB::extend_to_max_axis() const {
@@ -121,22 +122,49 @@ void AABB::compute_surface_info(vec3 p, SurfaceInteraction& it) const {
   it.n[axis] = pu[axis] > 0 ? 1 : -1;
   it.p[axis] = pu[axis] > 0 ? upper[axis] : lower[axis];
 }
+psl::optional<ShapeSample> AABB::sample(vec3 p, vec2 u) const {
+  auto x = false, y = false, z = false;
+  if (with_prob(0.5f, u.x)) x = true;
+  if (with_prob(0.5f, u.x)) y = true;
+  if (with_prob(0.5f, u.y)) z = true;
+  auto p0 = vec3(x ? lower.x : upper.x, y ? lower.y : upper.y, z ? lower.z : upper.z);
+  auto ss = ShapeSample();
+  if (!x) {
+    p0.x += diagonal(0) * u.x;
+    u.x = u.y;
+  }
+  if (!y) {
+    p0.y += diagonal(1) * u.x;
+    u.x = u.y;
+  }
+  if (!z) {
+    p0.z += diagonal(2) * u.x;
+    u.x = u.y;
+  }
+  ss.p = p;
+  ss.n = vec3(x ? -1 : 1, y ? -1 : 1, z ? -1 : 1);
+  return ss;
+}
+float AABB::area() const {
+  auto d = diagonal();
+  return 2 * (d.x * d.y + d.x * d.z + d.y * d.z);
+}
 
 OBB::OBB(AABB aabb, mat4 m) : base(aabb), m(m), m_inv(inverse(m)) {}
 bool OBB::hit(Ray ray) const {
-  ray.o = vec3(m_inv * vec4(ray.o, 1.0f));
+  ray.o = m_inv * ray.o;
   ray.d = normalize(mat3(m_inv) * ray.d);
   return base.hit(ray);
 }
 bool OBB::intersect(vec3 o, vec3 d, float& tmin, float& tmax) const {
   auto org = o;
-  o = vec3(m_inv * vec4(o, 1.0f));
+  o = m_inv * o;
   d = normalize(mat3(m_inv) * d);
   if (base.intersect(o, d, tmin, tmax)) {
     auto ps = o + tmin * d;
     auto pe = o + tmax * d;
-    tmin = distance(vec3(m * vec4(ps, 1.0f)), org);
-    tmax = distance(vec3(m * vec4(pe, 1.0f)), org);
+    tmin = distance(m * ps, org);
+    tmax = distance(m * pe, org);
     return true;
   } else {
     return false;
@@ -152,9 +180,15 @@ bool OBB::intersect(Ray& ray, SurfaceInteraction&) const {
   }
 }
 void OBB::compute_surface_info(vec3 p, SurfaceInteraction& it) const {
-  base.compute_surface_info(vec3(m_inv * vec4(p, 1.0f)), it);
-  it.p = vec3(m * vec4(it.p, 1.0f));
+  base.compute_surface_info(m_inv * p, it);
+  it.p = m * it.p;
   it.n = normalize(transpose(mat3(m_inv)) * it.n);
 }
+psl::optional<ShapeSample> OBB::sample(vec3 p, vec2 u) const {
+  auto ss = base.sample(p, u);
+  ss->p = m * ss->p;
+  return ss;
+}
+float OBB::area() const { return base.area(); }
 
 }  // namespace pine

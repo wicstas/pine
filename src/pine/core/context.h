@@ -392,7 +392,7 @@ struct Context {
   R call(psl::string_view name, Args&&... args) const {
     if (auto fr = find_f(name, psl::array_of(tag<Args>()...))) {
       if (fr.converts.size())
-        Fatal("Arguments' type must exactly match that of the function");
+        SEVERE("Arguments' type must exactly match that of the function");
       auto ptr = functions[fr.fi].ptr();
       if (psl::is_reference<R> || psl::is_void<R>) {
         using F = R (*)(Args&&...);
@@ -404,7 +404,7 @@ struct Context {
         return *res.template ptr<R>();
       }
     } else {
-      Fatal("Unable to call function `", name, "`");
+      SEVERE("Unable to call function `", name, "`");
     }
   }
 
@@ -438,7 +438,7 @@ struct Context {
     if (auto x = psl::find_or_nullopt(type_id_to_name, psl::type_id<T>()))
       return *x;
     else
-      Fatal("Type `", psl::type_name<T>(), "` is not registered");
+      SEVERE("Type `", psl::type_name<T>(), "` is not registered");
   }
   template <typename R, typename... Args>
   psl::string name_of_function_type(psl::function<R(Args...)>*) const {

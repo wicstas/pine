@@ -109,7 +109,7 @@ psl::optional<char> SourceLines::next(SourceLoc sl) const {
   if (vicinity.size())
     vicinity.pop_back();
 
-  Fatal(message, "\n", vicinity);
+  SEVERE(message, "\n", vicinity);
 }
 
 // ================================================
@@ -181,7 +181,7 @@ struct Module {
     else if (auto type_info = psl::find_or_nullopt(types, tag.name))
       return *type_info;
     else
-      Fatal("Type `", tag.name, "` is not registered");
+      SEVERE("Type `", tag.name, "` is not registered");
   }
   const TypeInfo type(psl::string name) {
     return type(TypeTag(name));
@@ -236,7 +236,7 @@ struct Module {
                                             llvm::ConstantFP::get(C, llvm::APFloat(v.y)),
                                             llvm::ConstantFP::get(C, llvm::APFloat(v.z))});
     } else
-      Fatal("Constant `", type_name, "` is not yet supported");
+      SEVERE("Constant `", type_name, "` is not yet supported");
 
     constants[name] =
         Value(new llvm::GlobalVariable(*M, const_ptr->getType(), true,
@@ -2310,7 +2310,7 @@ void jit_interpret(Context& context, psl::string source) {
 
   struct MyObj {
     void call() {
-      Log(f());
+      LOG(f());
     }
     psl::function<float()> f;
   };
@@ -2371,7 +2371,7 @@ void jit_interpret(Context& context, psl::string source) {
               else
                 ptr = ArrayType::get(Type::getInt8Ty(C), trait->byte_size);
               break;
-              // Fatal("Did you forget to set the layout of `", trait->name, "`?");
+              // SEVERE("Did you forget to set the layout of `", trait->name, "`?");
           }
         }
       } else {
@@ -2427,10 +2427,10 @@ void jit_interpret(Context& context, psl::string source) {
   auto EE = psl::unique_ptr<llvm::ExecutionEngine>(llvm::EngineBuilder(MOVE(M)).create());
   EE->setVerifyModules(true);
   for (auto& [name, fi] : m.function_to_be_compiled) {
-    Debug("Compiling: ", name);
+    DEBUG("Compiling: ", name);
     context.functions[fi].set_ptr((void*)EE->getFunctionAddress(name.c_str()));
   }
-  Debug("Compiling: main");
+  DEBUG("Compiling: main");
   auto main = (void (*)())(void*)EE->getFunctionAddress("main");
 
   {

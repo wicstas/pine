@@ -221,7 +221,7 @@
 #endif
 
 #define FATAL(x)   THROW_RUNTIME_ERROR(x)
-#define WARNING(x) { std::cerr << "Warning: " << x << embree_endl << std::flush; }
+#define WARNING(x) { std::cerr << "WARNING: " << x << embree_endl << std::flush; }
 
 #define NOT_IMPLEMENTED FATAL(std::string(__FUNCTION__) + " not implemented")
 

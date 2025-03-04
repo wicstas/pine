@@ -12,9 +12,9 @@ namespace pine {
 
 void launch_gui(psl::string window_name, vec2i window_size, psl::function<void()> draw) {
   glfwSetErrorCallback(
-      +[](int, const char* description) { Fatal("[GUI]GLFW Error: ", description); });
+      +[](int, const char* description) { SEVERE("[GUI]GLFW Error: ", description); });
   if (!glfwInit())
-    Fatal("[GUI]Unable to initialize GLFW");
+    SEVERE("[GUI]Unable to initialize GLFW");
 
   auto glsl_version = "#version 130";
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -22,12 +22,12 @@ void launch_gui(psl::string window_name, vec2i window_size, psl::function<void()
 
   auto window = glfwCreateWindow(window_size.x, window_size.y, window_name.c_str(), nullptr, nullptr);
   if (window == nullptr)
-    Fatal("[GUI]Unable to create window");
+    SEVERE("[GUI]Unable to create window");
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1);
 
   if (gladLoadGL() == 0)
-    Fatal("[GUI]GLAD unable to load OpenGL function address");
+    SEVERE("[GUI]GLAD unable to load OpenGL function address");
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();

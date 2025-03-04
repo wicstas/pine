@@ -45,7 +45,7 @@ float sample_henyey_greenstein(float xi, float g) {
 //   g = HG shape parameter
 //   a = "alpha" shape parameter
 
-// Warning: these functions don't special case isotropic scattering and can numerically fail for
+// WARNING: these functions don't special case isotropic scattering and can numerically fail for
 // certain inputs
 
 // eval:

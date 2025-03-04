@@ -329,6 +329,14 @@ struct Shape : psl::variant<AABB, OBB, Sphere, Plane, Triangle, Cone, Cylinder, 
     if (!gs || gs->pdf <= 0 || psl::isinf(gs->pdf)) return psl::nullopt;
     return gs;
   }
+  ShapeSample sample(vec2 u, float u1) const {
+    return *dispatch([&]<typename T>(const T& x) {
+      if constexpr (psl::same_as<T, Mesh>)
+        return x.sample({}, u, u1);
+      else
+        return x.sample({}, u);
+    });
+  }
   float pdf(const Ray& ray, vec3 ps, vec3 ns) const {
     return dispatch([&](auto&& x) { return x.pdf(ray, ps, ns); });
   }
@@ -347,6 +355,7 @@ struct Geometry {
   psl::optional<ShapeSample> sample(vec3 p, vec2 u, float u1) const {
     return shape.sample(p, u, u1);
   }
+  ShapeSurfaceSample sample(vec2 u, float u1) const { return shape.sample(u, u1); }
   float pdf(const Ray& ray, vec3 ps, vec3 ns) const { return shape.pdf(ray, ps, ns); }
   float area() const { return shape.area(); }
 

@@ -18,7 +18,7 @@ namespace pine {
 psl::string read_string_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::in);
   if (!file.is_open())
-    Fatal("Unable to open file `", filename, '`');
+    SEVERE("Unable to open file `", filename, '`');
   size_t size = file.size();
   auto str = psl::string(file.size());
   file.read(&str[0], size);
@@ -27,13 +27,13 @@ psl::string read_string_file(psl::string_view filename) {
 void write_binary_file(psl::string_view filename, const void *ptr, size_t size) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::out);
   if (!file.is_open())
-    Warning("Unable to create file `", filename, '`');
+    WARNING("Unable to create file `", filename, '`');
   file.write((const char *)ptr, size);
 }
 Bytes read_binary_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::in);
   if (!file.is_open())
-    Fatal("Unable to open file `", filename, '`');
+    SEVERE("Unable to open file `", filename, '`');
   Bytes data(file.size());
   file.read(&data[0], file.size());
   return data;
@@ -47,7 +47,7 @@ psl::map<psl::string, Bytes> read_folder(psl::string path) {
       if (entry_path[0] == '/')
         entry_path.pop_front();
     }
-    // Debug(entry_path);
+    // DEBUG(entry_path);
     if (entry.is_regular_file())
       fs[entry_path] = read_binary_file(entry_path);
   }
@@ -126,7 +126,7 @@ void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *d
   else if (ext == "tga")
     stbi_write_tga(filename.c_str(), size.x, size.y, nchannel, data);
   else {
-    Warning("Unknown format `", ext, "` during saving `", filename, "`; assuming png");
+    WARNING("Unknown format `", ext, "` during saving `", filename, "`; assuming png");
     stbi_write_png((filename + ".png").c_str(), size.x, size.y, nchannel, data, 0);
   }
 }
@@ -163,7 +163,7 @@ psl::shared_ptr<Image> load_image(psl::string_view filename,
     std::lock_guard<std::mutex> lock{mutex};
     return caches[psl::string(filename)] = psl::make_shared<Image>(MOVE(*image));
   } else {
-    Fatal("Unable to load `", filename, "`");
+    SEVERE("Unable to load `", filename, "`");
   }
 }
 
@@ -230,7 +230,7 @@ void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform)
     if (auto &S = node.scale; S.size() == 3)
       transform = transform * scale(S[0], S[1], S[2]);
 
-    // Debug(node.name.c_str());
+    // DEBUG(node.name.c_str());
     if (node.mesh >= 0)
       for (const auto &primitive : model.meshes[node.mesh].primitives) {
         auto mesh_ = Mesh();
@@ -243,10 +243,10 @@ void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform)
         CHECK(indexSize == 2 || indexSize == 4);
         switch (primitive.mode) {
           case TINYGLTF_MODE_TRIANGLE_FAN: {
-            Fatal("Fan");
+            SEVERE("Fan");
           }
           case TINYGLTF_MODE_TRIANGLE_STRIP: {
-            Fatal("Strip");
+            SEVERE("Strip");
           }
           case TINYGLTF_MODE_TRIANGLES: {
             CHECK(indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE ||
@@ -273,7 +273,7 @@ void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform)
               const auto data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
               if (attribute.first == "POSITION") {
                 if (accessor.type != TINYGLTF_TYPE_VEC3)
-                  Fatal("[FIleIO][TinyGLTF]Expect position data to be vec3");
+                  SEVERE("[FIleIO][TinyGLTF]Expect position data to be vec3");
                 switch (accessor.componentType) {
                   case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                     auto ptr = (vec3 *)data;
@@ -289,7 +289,7 @@ void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform)
                 }
               } else if (attribute.first == "NORMAL") {
                 if (accessor.type != TINYGLTF_TYPE_VEC3)
-                  Fatal("[FIleIO][TinyGLFT]Expect normal data to be vec3");
+                  SEVERE("[FIleIO][TinyGLFT]Expect normal data to be vec3");
                 switch (accessor.componentType) {
                   case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                     auto ptr = (vec3 *)data;
@@ -305,7 +305,7 @@ void scene_from_gltf(Scene &scene, void *tiny_gltf_model, mat4 global_transform)
                 }
               } else if (attribute.first == "TEXCOORD_0") {
                 if (accessor.type != TINYGLTF_TYPE_VEC2)
-                  Fatal("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
+                  SEVERE("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
                 switch (accessor.componentType) {
                   case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                     auto ptr = (vec2 *)data;
@@ -412,7 +412,7 @@ Mesh mesh_from_gltf(void *tiny_gltf_model) {
     if (node.mesh < 0)
       continue;
     indices_offset = mesh_.vertices.size();
-    Debug(node.name.c_str());
+    DEBUG(node.name.c_str());
     auto transform = mat4::identity();
     for (size_t i = 0; i < node.matrix.size(); i++)
       transform[i / 4][i % 4] = node.matrix[i];
@@ -431,10 +431,10 @@ Mesh mesh_from_gltf(void *tiny_gltf_model) {
       CHECK(indexSize == 2 || indexSize == 4);
       switch (primitive.mode) {
         case TINYGLTF_MODE_TRIANGLE_FAN: {
-          Fatal("Fan");
+          SEVERE("Fan");
         }
         case TINYGLTF_MODE_TRIANGLE_STRIP: {
-          Fatal("Strip");
+          SEVERE("Strip");
         }
         case TINYGLTF_MODE_TRIANGLES: {
           if (indexSize == 2) {
@@ -456,7 +456,7 @@ Mesh mesh_from_gltf(void *tiny_gltf_model) {
             const auto data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
             if (attribute.first == "POSITION") {
               if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO][TinyGLFT]Expect position data to be vec3");
+                SEVERE("[FIleIO][TinyGLFT]Expect position data to be vec3");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec3 *)data;
@@ -472,7 +472,7 @@ Mesh mesh_from_gltf(void *tiny_gltf_model) {
               }
             } else if (attribute.first == "NORMAL") {
               if (accessor.type != TINYGLTF_TYPE_VEC3)
-                Fatal("[FIleIO][TinyGLFT]Expect normal data to be vec3");
+                SEVERE("[FIleIO][TinyGLFT]Expect normal data to be vec3");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec3 *)data;
@@ -488,7 +488,7 @@ Mesh mesh_from_gltf(void *tiny_gltf_model) {
               }
             } else if (attribute.first == "TEXCOORD_0") {
               if (accessor.type != TINYGLTF_TYPE_VEC2)
-                Fatal("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
+                SEVERE("[FIleIO][TinyGLFT]Expect texcoord data to be vec2");
               switch (accessor.componentType) {
                 case TINYGLTF_COMPONENT_TYPE_FLOAT: {
                   auto ptr = (vec2 *)data;
@@ -530,7 +530,7 @@ UberMaterial material_from_gltf(void *tiny_gltf_model) {
   }
 
   if (model.materials.size() != 1)
-    Fatal("[FileIO][GLTF]Expect a unique material, get ", model.materials.size());
+    SEVERE("[FileIO][GLTF]Expect a unique material, get ", model.materials.size());
   const auto &mat = model.materials[0];
 
   auto basecolor = Node3f(vec3(1.0f));
@@ -544,7 +544,7 @@ UberMaterial material_from_gltf(void *tiny_gltf_model) {
     ior = it->second.Get("ior").GetNumberAsDouble();
 
   for (auto &[name, param] : mat.values) {
-    Debug("\t", mat.name.c_str(), ' ', name.c_str());
+    DEBUG("\t", mat.name.c_str(), ' ', name.c_str());
     if (name == "baseColorFactor")
       basecolor = vec3(param.ColorFactor()[0], param.ColorFactor()[1], param.ColorFactor()[2]);
     else if (name == "roughnessFactor")
@@ -608,11 +608,11 @@ void scene_from_gltf(Scene &scene, psl::string file_name, const psl::map<psl::st
   gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
   auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
   if (!warn.empty())
-    Warning("[FileIO]", warn.c_str());
+    WARNING("[FileIO]", warn.c_str());
   if (!err.empty())
-    Fatal("[FileIO]", err.c_str());
+    SEVERE("[FileIO]", err.c_str());
   if (!ret)
-    Fatal("[FIleIO]Unable to create scene from GLTF file");
+    SEVERE("[FIleIO]Unable to create scene from GLTF file");
 
   scene_from_gltf(scene, &model, m);
 }
@@ -624,11 +624,11 @@ void scene_from_gltf_binary(Scene &scene, const Bytes &data, mat4 m) {
   gltf_ctx.SetStoreOriginalJSONForExtrasAndExtensions(true);
   auto ret = gltf_ctx.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size());
   if (!warn.empty())
-    Warning("[FileIO]", warn.c_str());
+    WARNING("[FileIO]", warn.c_str());
   if (!err.empty())
-    Fatal("[FileIO]", err.c_str());
+    SEVERE("[FileIO]", err.c_str());
   if (!ret)
-    Fatal("[FIleIO]Unable to create scene from GLTF file");
+    SEVERE("[FIleIO]Unable to create scene from GLTF file");
 
   scene_from_gltf(scene, &model, m);
 }
@@ -640,11 +640,11 @@ Mesh mesh_from_gltf(psl::string file_name, const psl::map<psl::string, Bytes> &f
   gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
   auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
   if (!warn.empty())
-    Warning("[FileIO]", warn.c_str());
+    WARNING("[FileIO]", warn.c_str());
   if (!err.empty())
-    Fatal("[FileIO]", err.c_str());
+    SEVERE("[FileIO]", err.c_str());
   if (!ret)
-    Fatal("[FIleIO]Unable to create scene from GLTF file");
+    SEVERE("[FIleIO]Unable to create scene from GLTF file");
 
   return mesh_from_gltf(&model);
 }
@@ -656,17 +656,17 @@ UberMaterial material_from_gltf(psl::string file_name, const psl::map<psl::strin
   gltf_ctx.SetFsCallbacks(create_tinygltf_fs(&files));
   auto ret = gltf_ctx.LoadASCIIFromFile(&model, &err, &warn, file_name.c_str());
   if (!warn.empty())
-    Warning("[FileIO]", warn.c_str());
+    WARNING("[FileIO]", warn.c_str());
   if (!err.empty())
-    Fatal("[FileIO]", err.c_str());
+    SEVERE("[FileIO]", err.c_str());
   if (!ret)
-    Fatal("[FIleIO]Unable to create scene from GLTF file");
+    SEVERE("[FIleIO]Unable to create scene from GLTF file");
 
   return material_from_gltf(&model);
 }
 
 void interpret_file(Context &context, psl::string_view filename) {
-  Debug("[FileIO]Loading `", filename, "`");
+  DEBUG("[FileIO]Loading `", filename, "`");
   auto source = read_string_file(filename);
   jit_interpret(context, source);
 }

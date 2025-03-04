@@ -127,7 +127,7 @@ struct Parser {
         else if (state.completer_type == State::CompleterType::State)
           node.children.push_back(backtrace(state_loc, state.completer_index));
         else
-          Fatal("Should never reach here");
+          SEVERE("Should never reach here");
       }
       state_loc = state.prev_loc;
       state_index = state.prev_index;
@@ -224,7 +224,7 @@ Object generate_impl(const Generator& generator, const EarleyNode& node) {
         args.push_back(build(build, child));
 
     if (model->use_string && size(node.children) != 1)
-      Fatal(
+      SEVERE(
           "Model binded with `UseString` tag requires exactly one child in the"
           "corresponding node");
 
@@ -234,9 +234,9 @@ Object generate_impl(const Generator& generator, const EarleyNode& node) {
       for (const auto& arg : args)
         argsTypesName += arg.type_name() + psl::string(" ");
       if (model->use_string)
-        Fatal("Cannot construct type ", model->type_name(), " from argument of type psl::string");
+        SEVERE("Cannot construct type ", model->type_name(), " from argument of type psl::string");
       else
-        Fatal("Cannot construct type ", model->type_name(), " from arguments of types ",
+        SEVERE("Cannot construct type ", model->type_name(), " from arguments of types ",
               argsTypesName);
     }
 

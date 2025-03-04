@@ -8243,7 +8243,7 @@ zeModuleInspectLinkageExt(
     uint32_t numModules,                                                    ///< [in] number of modules to be inspected pointed to by phModules.
     ze_module_handle_t* phModules,                                          ///< [in][range(0, numModules)] pointer to an array of modules to be
                                                                             ///< inspected for import dependencies.
-    ze_module_build_log_handle_t* phLog                                     ///< [out] pointer to handle of linkage inspection log. Log object will
+    ze_module_build_log_handle_t* phLog                                     ///< [out] pointer to handle of linkage inspection log. LOG object will
                                                                             ///< contain separate lists of imports, un-resolvable imports, and exports.
     );
 

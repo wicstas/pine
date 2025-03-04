@@ -1585,7 +1585,7 @@ private:
 
   size_t max_external_file_size_{size_t((std::numeric_limits<int32_t>::max)())};  // Default 2GB
 
-  // Warning & error messages
+  // WARNING & error messages
   std::string warn_;
   std::string err_;
 

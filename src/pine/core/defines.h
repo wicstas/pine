@@ -11,7 +11,7 @@
 #define PINE_ALWAYS_INLINE __attribute__((always_inline))
 #define PINE_UNREACHABLE                                              \
   {                                                                   \
-    Fatal("Should never be reached[", __FILE__, ":", __LINE__, "]"); \
+    SEVERE("Should never be reached[", __FILE__, ":", __LINE__, "]"); \
     __builtin_unreachable();                                          \
   }
 #else
@@ -19,7 +19,7 @@
 #define PINE_UNLIKELY(x) x
 #define PINE_RESTRICT
 #define PINE_ALWAYS_INLINE
-#define PINE_UNREACHABLE Fatal("Should never be_ reached");
+#define PINE_UNREACHABLE SEVERE("Should never be_ reached");
 #endif
 
 #define COMMA ,

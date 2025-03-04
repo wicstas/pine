@@ -181,7 +181,7 @@ private:
 struct NodeComponent {
   NodeComponent(Mnode<vec3> x, int n) : x{MOVE(x)}, n{n} {
     if (n < 0 || n > 2)
-      Fatal("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
+      SEVERE("NodeComponent's second parameter should be 0, 1, or 2, but get ", n);
   };
   float eval(const NodeEvalCtx& ctx) const {
     return x(ctx)[n];

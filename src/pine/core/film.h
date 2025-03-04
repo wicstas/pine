@@ -24,44 +24,31 @@ struct ToneMapper : psl::variant<Uncharted2ToneMapper, ACESToneMapper> {
 struct Film {
   Film() = default;
   Film(vec2i size, ToneMapper tone_mapper = Uncharted2ToneMapper())
-      : pixels(size), tone_mapper(tone_mapper){};
+      : pixels(size), tone_mapper(tone_mapper) {};
 
   void add_radiance(vec2 p_film, vec3 radiance);
+  void splat(vec2 p_film, vec3 color, float depth);
   void add_sample(vec2i p_film, vec3 color, float weight = 1.0f);
   void add_sample_thread_safe(vec2i p_film, vec3 color);
-  float aspect() const {
-    return float(size().x) / size().y;
-  }
+  float aspect() const { return float(size().x) / size().y; }
   Film& clear();
   void finalize(float scale = 1.0f);
   void scale(float factor);
 
-  vec4& operator[](vec2i p) {
-    return pixels[p];
+  vec4& operator[](vec2i p) { return pixels[p]; }
+  const vec4& operator[](vec2i p) const { return pixels[p]; }
+  void set_color(vec4 color) {
+    for (auto& pixel : pixels) pixel = color;
   }
-  const vec4& operator[](vec2i p) const {
-    return pixels[p];
-  }
-
-  vec2i size() const {
-    return pixels.size();
-  }
-  int width() const {
-    return size().x;
-  }
-  int height() const {
-    return size().y;
-  }
-  vec4* data() {
-    return pixels.data();
-  }
-  const vec4* data() const {
-    return pixels.data();
-  }
+  vec2i size() const { return pixels.size(); }
+  int width() const { return size().x; }
+  int height() const { return size().y; }
+  vec4* data() { return pixels.data(); }
+  const vec4* data() const { return pixels.data(); }
 
   Array2d<vec4> pixels;
 
-private:
+ private:
   void apply_tone_mapping();
   SpinLock spin_lock;
   ToneMapper tone_mapper;

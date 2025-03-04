@@ -8,7 +8,7 @@
 
 namespace pine {
 
-extern void (*debug_stream)(psl::string_view data);
+extern void (*DEBUG_stream)(psl::string_view data);
 extern void (*log_stream)(psl::string_view data);
 extern void (*warning_stream)(psl::string_view data);
 extern void (*fatal_stream)(psl::string_view data);
@@ -26,37 +26,27 @@ private:
 };
 
 template <typename... Args>
-void Debugr(const Args&... args) {
+void DEBUG(const Args&... args) {
   using psl::to_string;
-  debug_stream(to_string(args...));
+  DEBUG_stream(to_string(args...) + "\n");
 }
 template <typename... Args>
-void Debug(const Args&... args) {
-  using psl::to_string;
-  debug_stream(to_string(args...) + "\n");
-}
-template <typename... Args>
-void Logr(const Args&... args) {
+void LOGr(const Args&... args) {
   using psl::to_string;
   log_stream(to_string(args...));
 }
 template <typename... Args>
-void Log(const Args&... args) {
+void LOG(const Args&... args) {
   using psl::to_string;
   log_stream(to_string(args...) + "\n");
 }
 template <typename... Args>
-void Logs(const Args&... args) {
-  using psl::to_string;
-  log_stream(((to_string(args) + " ") + ...) + "\n");
-}
-template <typename... Args>
-void Warning(const Args&... args) {
+void WARNING(const Args&... args) {
   using psl::to_string;
   warning_stream(to_string(args...) + "\n");
 }
 template <typename... Args>
-[[noreturn]] void Fatal(const Args&... args) {
+[[noreturn]] void SEVERE(const Args&... args) {
   using psl::to_string;
   fatal_stream(to_string(args...) + "\n");
   psl::abort();
@@ -65,13 +55,13 @@ template <typename... Args>
 
 #define CHECK(x)                                                                            \
   if (!(x)) {                                                                               \
-    pine::Fatal("[CHECK Failure]Check(", #x, ") failed", '[', __FILE__, ':', __LINE__, ':', \
+    pine::SEVERE("[CHECK Failure]Check(", #x, ") failed", '[', __FILE__, ':', __LINE__, ':', \
                 __func__, "()]");                                                           \
   }
 
 #define CHECK_IMPL(name, op, a, b)                                                          \
   if (!((a)op(b)))                                                                          \
-    pine::Fatal("[" name " Failure]", #a, " = ", a, ", ", #b, " = ", b, '[', __FILE__, ':', \
+    pine::SEVERE("[" name " Failure]", #a, " = ", a, ", ", #b, " = ", b, '[', __FILE__, ':', \
                 __LINE__, ':', __func__, "()]");
 
 #define CHECK_EQ(a, b) CHECK_IMPL("CHECK_EQ", ==, a, b)

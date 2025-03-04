@@ -8,7 +8,7 @@ namespace pine {
 
 struct SurfaceInteraction {
   SurfaceInteraction() = default;
-  SurfaceInteraction(vec3 p) : p(p) {}
+  SurfaceInteraction(vec3 p, vec3 n, vec3 uv) : p(p), n(n), uv(uv) { compute_transformation(); }
   Ray spawn_ray(vec3 wo, float tmax = float_max) const;
 
   void compute_transformation() {

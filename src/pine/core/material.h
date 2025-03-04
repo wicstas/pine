@@ -9,24 +9,18 @@
 namespace pine {
 
 struct LeEvalCtx : NodeEvalCtx {
-  LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv), wo(wo) {
-  }
-  LeEvalCtx(const SurfaceInteraction& it, vec3 wo) : NodeEvalCtx(it.p, it.n, it.uv), wo(wo) {
-  }
+  LeEvalCtx(vec3 p, vec3 n, vec2 uv, vec3 wo) : NodeEvalCtx(p, n, uv), wo(wo) {}
+  LeEvalCtx(const SurfaceInteraction& it, vec3 wo) : NodeEvalCtx(it.p, it.n, it.uv), wo(wo) {}
 
   vec3 wo;
 };
 
 struct EmissiveMaterial {
-  EmissiveMaterial(Node3f color) : color{MOVE(color)} {
-  }
+  EmissiveMaterial(Node3f color) : color{MOVE(color)} {}
 
-  BXDF sample_bxdf(const BxdfSampleCtx&, Sampler&) const {
-    PINE_UNREACHABLE;
-  }
+  BXDF sample_bxdf(const BxdfSampleCtx&, Sampler&) const { PINE_UNREACHABLE; }
   vec3 le(const LeEvalCtx& ec) const {
-    if (dot(ec.wo, ec.n) < 0.0f)
-      return vec3(0.0f);
+    if (dot(ec.wo, ec.n) < 0.0f) return vec3(0.0f);
     return color.eval(ec);
   }
 
@@ -34,29 +28,22 @@ struct EmissiveMaterial {
 };
 
 struct DiffuseMaterial {
-  DiffuseMaterial(Node3f albedo) : albedo(MOVE(albedo)) {
-  }
+  DiffuseMaterial(Node3f albedo) : albedo(MOVE(albedo)) {}
 
-  BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const {
-    return DiffuseBSDF(albedo(bc));
-  }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const { return DiffuseBSDF(albedo(bc)); }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
 };
 
 struct MetalMaterial {
-  MetalMaterial(Node3f albedo, Nodef roughness) : albedo(MOVE(albedo)), roughness(MOVE(roughness)) {
-  }
+  MetalMaterial(Node3f albedo, Nodef roughness)
+      : albedo(MOVE(albedo)), roughness(MOVE(roughness)) {}
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const {
     return ConductorBSDF(albedo(bc), psl::max(roughness(bc), bc.min_roughness));
   }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
   Nodef roughness;
@@ -64,15 +51,12 @@ struct MetalMaterial {
 
 struct GlossyMaterial {
   GlossyMaterial(Node3f albedo, Nodef roughness, Nodef ior = 1.4f)
-      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), ior(MOVE(ior)) {
-  }
+      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), ior(MOVE(ior)) {}
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const {
     return DiffusiveDielectricBSDF(albedo(bc), psl::max(roughness(bc), bc.min_roughness), ior(bc));
   }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
   Nodef roughness;
@@ -81,15 +65,12 @@ struct GlossyMaterial {
 
 struct GlassMaterial {
   GlassMaterial(Node3f albedo, Nodef roughness, Nodef ior = 1.4f)
-      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), ior(MOVE(ior)) {
-  }
+      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), ior(MOVE(ior)) {}
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const {
     return RefractiveDielectricBSDF(albedo(bc), psl::max(roughness(bc), bc.min_roughness), ior(bc));
   }
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
   Nodef roughness;
@@ -103,13 +84,10 @@ struct UberMaterial {
         roughness(MOVE(roughness)),
         metallic(MOVE(metallic)),
         transmission(MOVE(transmission)),
-        ior(ior) {
-  }
+        ior(ior) {}
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const;
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
   Nodef roughness;
@@ -120,13 +98,10 @@ struct UberMaterial {
 
 struct SubsurfaceMaterial {
   SubsurfaceMaterial(Node3f albedo, Nodef roughness, vec3 sigma_s)
-      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), sigma_s(sigma_s) {
-  }
+      : albedo(MOVE(albedo)), roughness(MOVE(roughness)), sigma_s(sigma_s) {}
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler&) const;
-  vec3 le(const LeEvalCtx&) const {
-    return {};
-  }
+  vec3 le(const LeEvalCtx&) const { return {}; }
 
   Node3f albedo;
   Nodef roughness;
@@ -136,7 +111,7 @@ struct SubsurfaceMaterial {
 
 struct Material : psl::variant<EmissiveMaterial, DiffuseMaterial, MetalMaterial, GlossyMaterial,
                                GlassMaterial, UberMaterial, SubsurfaceMaterial> {
-public:
+ public:
   using variant::variant;
 
   BXDF sample_bxdf(const BxdfSampleCtx& bc, Sampler& sampler) const {
@@ -146,6 +121,12 @@ public:
   }
   vec3 le(const LeEvalCtx& c) const {
     return dispatch([&](auto&& x) { return x.le(c); });
+  }
+  vec3 albedo(const LeEvalCtx& c) const {
+    return dispatch([&]<typename T>(T&& x) {
+      if constexpr (psl::same_as<psl::Decay<T>, EmissiveMaterial>) return x.color.eval(c);
+      else return x.albedo.eval(c);
+    });
   }
 };
 

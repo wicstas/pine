@@ -4,10 +4,12 @@
 
 namespace pine {
 
-struct ShapeSample {
+struct ShapeSurfaceSample {
   vec3 p;
   vec3 n;
   vec2 uv;
+};
+struct ShapeSample : ShapeSurfaceSample {
   vec3 w;
   float distance = 0.0f;
   float pdf = 0.0f;
@@ -46,7 +48,7 @@ struct AABB {
 
   friend AABB union_(AABB l, AABB r) { return {min(l.lower, r.lower), max(l.upper, r.upper)}; }
   friend AABB intersect_(AABB l, AABB r) { return {max(l.lower, r.lower), min(l.upper, r.upper)}; }
-  
+
   bool degenerated() const { return degenerated(0) || degenerated(1) || degenerated(2); }
   bool degenerated(int dim) const { return upper[dim] <= lower[dim]; }
   bool contains(vec3 p) const;
@@ -73,9 +75,9 @@ struct AABB {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   void compute_surface_info(vec3 p, SurfaceInteraction& it) const;
   AABB get_aabb() const { return AABB(*this).extend_by(epsilon); }
-  psl::optional<ShapeSample> sample(vec3, vec2) const { PINE_UNREACHABLE; }
+  psl::optional<ShapeSample> sample(vec3, vec2) const;
   float pdf(const Ray&, vec3, vec3) const { PINE_UNREACHABLE; }
-  float area() const { PINE_UNREACHABLE; }
+  float area() const;
 
   vec3 lower = vec3{float_max};
   vec3 upper = vec3{-float_max};
@@ -89,9 +91,9 @@ struct OBB {
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   void compute_surface_info(vec3 p, SurfaceInteraction& it) const;
   AABB get_aabb() const { return AABB(*this); }
-  psl::optional<ShapeSample> sample(vec3, vec2) const { PINE_UNREACHABLE; }
+  psl::optional<ShapeSample> sample(vec3 p, vec2 u) const;
   float pdf(const Ray&, vec3, vec3) const { PINE_UNREACHABLE; }
-  float area() const { PINE_UNREACHABLE; }
+  float area() const;
 
   AABB base;
   mat4 m, m_inv;

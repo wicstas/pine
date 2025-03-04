@@ -104,7 +104,7 @@ void EmbreeAccel::build(const Scene* scene) {
       psl::opaque_shared_ptr(rtcNewDevice(nullptr), +[](RTCDevice ptr) { rtcReleaseDevice(ptr); });
   auto rtc_device = RTCDevice(this->rtc_device.get());
   rtcSetDeviceErrorFunction(
-      rtc_device, +[](void*, enum RTCError, const char* str) { Fatal("[Embree]", str); }, nullptr);
+      rtc_device, +[](void*, enum RTCError, const char* str) { SEVERE("[Embree]", str); }, nullptr);
   rtc_scene =
       psl::opaque_shared_ptr(rtcNewScene(rtc_device), +[](RTCScene ptr) { rtcReleaseScene(ptr); });
   auto rtc_scene = RTCScene(this->rtc_scene.get());

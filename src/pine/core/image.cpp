@@ -51,7 +51,7 @@ void image_context(Context& ctx) {
         auto data = read_binary_file(filename);
         auto image = image_from(data.data(), data.size());
         if (!image)
-          Fatal("Unable to load `", filename, '`');
+          SEVERE("Unable to load `", filename, '`');
         return psl::make_shared<Image>(*image);
       })
       .ctor<vec3>([](vec3 color) {

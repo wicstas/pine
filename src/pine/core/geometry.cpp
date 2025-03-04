@@ -29,7 +29,7 @@ bool intersect_quadratic(float a, float b, float c, float tmin, float& tmax) {
 }
 
 Plane::Plane(vec3 position, vec3 normal) : position(position), n(normalize(normal)) {
-  if (length(n) == 0) Fatal("`Plane` can't have degenerated normal");
+  if (length(n) == 0) SEVERE("`Plane` can't have degenerated normal");
   coordinate_system(n, u, v);
 }
 bool Plane::hit(const Ray& ray) const {
@@ -122,8 +122,8 @@ AABB Sphere::get_aabb() const { return {c - vec3(r), c + vec3(r)}; }
 
 Disk::Disk(vec3 position, vec3 normal, float r) : position(position), n(normalize(normal)), r(r) {
   coordinate_system(n, u, v);
-  if (r < 0.0f) Fatal("`Disk` can't have negative radius ", r);
-  if (length(n) == 0.0f) Fatal("`Disk` can't have degenerated normal");
+  if (r < 0.0f) SEVERE("`Disk` can't have negative radius ", r);
+  if (length(n) == 0.0f) SEVERE("`Disk` can't have degenerated normal");
 }
 bool Disk::hit(const Ray& ray) const {
   auto denom = dot(ray.d, n);
@@ -174,8 +174,8 @@ Line::Line(vec3 p0, vec3 p1, float thickness)
       tbn(coordinate_system(normalize(p1 - p0))),
       thickness(thickness),
       len{length(p1 - p0)} {
-  if (thickness <= 0.0f) Fatal("`Line` should have positive thickness, not ", thickness);
-  if (p0 == p1) Fatal("`Line` shouldn't have identical begin and end point ", p0);
+  if (thickness <= 0.0f) SEVERE("`Line` should have positive thickness, not ", thickness);
+  if (p0 == p1) SEVERE("`Line` shouldn't have identical begin and end point ", p0);
 }
 bool Line::hit(const Ray& ray) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
@@ -196,8 +196,8 @@ bool Line::hit(const Ray& ray) const {
 bool Line::intersect(Ray& ray, SurfaceInteraction&) const {
   auto r2o = look_at(ray.o, ray.o + ray.d);
   auto o2r = inverse(r2o);
-  auto p0 = vec3(o2r * vec4(this->p0, 1.0f));
-  auto p1 = vec3(o2r * vec4(this->p1, 1.0f));
+  auto p0 = o2r * this->p0;
+  auto p1 = o2r * this->p1;
 
   auto o = p0;
   auto d = p1 - p0;
@@ -261,7 +261,7 @@ Rect::Rect(vec3 position, vec3 ex, vec3 ey, bool flip_normal)
       ly(length(ey)),
       rx(this->ex / lx),
       ry(this->ey / ly) {
-  if (length(n) != roughly(1)) Fatal("`Rect` has degenerated shape");
+  if (length(n) != roughly(1)) SEVERE("`Rect` has degenerated shape");
 }
 Rect Rect::from_vertex(vec3 v0, vec3 v1, vec3 v2) {
   auto ex = v1 - v0;
@@ -650,7 +650,7 @@ AABB Mesh::get_aabb() const {
   return aabb;
 }
 Mesh& Mesh::apply(mat4 m) {
-  for (auto& v : vertices) v = vec3(m * vec4(v, 1.0f));
+  for (auto& v : vertices) v = m * v;
 
   auto m3 = transpose(inverse(mat3(m)));
   for (auto& n : normals) n = normalize(m3 * n);
