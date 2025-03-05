@@ -6,15 +6,11 @@ namespace pine {
 
 struct Ray {
   Ray() = default;
-  Ray(vec3 o, vec3 d) : o(o), d(d), tmin(0.0f), tmax(float_max){};
-  Ray(vec3 o, vec3 d, float tmin, float tmax) : o(o), d(d), tmin(tmin), tmax(tmax){};
+  Ray(vec3 o, vec3 d) : o(o), d(d), tmin(0.0f), tmax(float_max) {};
+  Ray(vec3 o, vec3 d, float tmin, float tmax) : o(o), d(d), tmin(tmin), tmax(tmax) {};
 
-  vec3 operator()() const {
-    return o + tmax * d;
-  }
-  vec3 operator()(float t) const {
-    return o + t * d;
-  }
+  vec3 operator()() const { return o + tmax * d; }
+  vec3 operator()(float t) const { return o + t * d; }
 
   psl::string to_string() const {
     return psl::to_string("Ray{o=", o, ", d=", d, ", tmin=", tmin, ", tmax=", tmax, "}");
@@ -46,6 +42,16 @@ inline Ray spawn_ray(vec3 p, vec3 n, vec3 wo, float distance = float_max) {
   ray.d = wo;
   ray.tmin = 0.0f;
   ray.tmax = distance * (1.0f - 1e-3f);
+  return ray;
+}
+
+inline Ray spawn_ray1(vec3 p, vec3 n, vec3 wo) {
+  Ray ray;
+  wo = normalize(wo, ray.tmax);
+  ray.o = offset_ray_origin(p, face_same_hemisphere(n, wo));
+  ray.d = wo;
+  ray.tmin = 0.0f;
+  ray.tmax *= 1.0f - 1e-3f;
   return ray;
 }
 

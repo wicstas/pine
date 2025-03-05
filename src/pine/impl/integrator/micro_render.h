@@ -13,13 +13,13 @@ class MicroRenderIntegrator : public Integrator {
  private:
   int point_count;
 
-  using Disc = psl::Array<float, 10>;
-  // struct  Disc {
-  //   vec3 p;
-  //   vec3 n;
-  //   float r;
-  //   vec3 color;
-  // };
+  struct Disc {
+    vec3 p;
+    vec3 n;
+    float r;
+    vec3 color;
+  };
+  static_assert(sizeof(Disc) == 40, "");
   psl::vector<Disc> discs;
 };
 

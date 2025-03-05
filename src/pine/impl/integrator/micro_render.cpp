@@ -6,83 +6,103 @@
 
 namespace pine {
 
+auto pl = vec3(0, 1.9, 1);
+auto cl = vec3(1, 1, 1) / 2;
+
 void MicroRenderIntegrator::render(Scene& scene) {
   if (scene.geometries.size() == 0) return;
+  auto& camera = scene.camera;
+  auto& film = scene.camera.film();
+  auto accel = EmbreeAccel(&scene);
 
-  Profiler _("[MicroRenderGI]Build");
-  auto cdf = Distribution1D();
-  for (auto&& geo : scene.geometries) {
-    cdf.add_point(geo->area());
-  }
-  cdf.done();
+  auto cdf = Distribution1D(transform_vector(scene.geometries, [](auto& x) { return x->area(); }));
+  auto radius = psl::sqrt(cdf.density_sum() / point_count);
 
-  auto radius = psl::sqrt(cdf.density_sum() / point_count) / 1.5f;
+  auto window = GLWindow(film.size(), "MicroRenderGI");
+  auto program = GLProgram(GLShader(GLShader::Vertex, read_string_file("shaders/basic.vert")),
+                           GLShader(GLShader::Fragment, read_string_file("shaders/mrgi.frag")));
+  float vs[]{-1, -1, -1, 1, 1, 1, 1, -1};
+  auto vbo = VBO(sizeof(vs), vs);
+  auto vao = VAO(vbo, 0, 2);
+
+  program.set_uniform("film_size", film.size());
+  auto position = Array2d3f(film.size());
+  auto normal = Array2d3f(film.size());
+  auto color = Array2d3f(film.size());
+  auto direct = Array2d3f(film.size());
+  auto setup_texture = [](void* data, int width, int height, int index) {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glActiveTexture(GL_TEXTURE0 + index);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    return texture;
+  };
+  GLuint Tp = setup_texture(position.data(), film.width(), film.height(), 0);
+  GLuint Tn = setup_texture(normal.data(), film.width(), film.height(), 1);
+  GLuint Tcd = setup_texture(color.data(), film.width(), film.height(), 2);
+  GLuint Tdirect = setup_texture(direct.data(), film.width(), film.height(), 3);
 
   for (int i = 0; i < point_count; i++) {
     auto idx = cdf.sample(radical_inverse(0, i)).i;
     auto geo = scene.geometries[idx];
     auto gs = geo->sample({radical_inverse(1, i), radical_inverse(2, i)}, radical_inverse(3, i));
-    auto disc = Disc();
-    disc[0] = gs.p[0];
-    disc[1] = gs.p[1];
-    disc[2] = gs.p[2];
-    disc[3] = gs.n[0];
-    disc[4] = gs.n[1];
-    disc[5] = gs.n[2];
-    disc[6] = radius;
-    auto cd = geo->material->albedo(LeEvalCtx{gs.p, gs.n, gs.uv, gs.n});
-    disc[7] = cd[0];
-    disc[8] = cd[1];
-    disc[9] = cd[2];
-    discs.push_back(disc);
+    auto cd = vec3(0);
+    if (!accel.hit(spawn_ray1(gs.p, gs.n, pl - gs.p)))
+      cd = cl * geo->material->albedo({gs.p, gs.n, gs.uv, gs.n}) /
+           (distance_squared(gs.p, pl) + .5f);
+    discs.emplace_back(gs.p, gs.n, radius, cd);
   }
+  auto discs_ssbo = SSBO(discs.size() * sizeof(Disc), discs.data(), 0);
+  program.set_uniform("n_discs", int(discs.size()));
 
-  Profiler _a("[MicroRenderGI]Render");
-  auto& camera = scene.camera;
-  auto& film = scene.camera.film();
-  film.set_color(vec4(0, 0, 0, Infinity));
-
-  // auto pixel_SA = 4 * Pi / area(film.size());
-  //   auto SA = 2 * Pi * (1 - 1 / psl::sqrt(1 + tan * tan));
-
-  auto window = GLWindow(film.size(), "MicroRenderGI");
-
-  // Output
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, film.width(), film.height(), 0, GL_RGBA, GL_FLOAT,
-               nullptr);
-  glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-
-  auto compute_program =
-      GLProgram(GLShader(GLShader::Compute, read_string_file("shaders/compute.comp")));
-  GLuint discs_ssbo;
-  glGenBuffers(1, &discs_ssbo);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, discs_ssbo);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, discs.size() * sizeof(Disc), (float*)discs.data(),
-               GL_STATIC_DRAW);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, discs_ssbo);
-  compute_program.set_uniform("w2c", camera.w2c());
-  compute_program.set_uniform("position", camera.position());
-  compute_program.set_uniform("fov2d", camera.fov2d());
-  compute_program.set_uniform("mr_size", vec2i(16, 16));
-
-  glDispatchCompute(discs.size(), 64, 64);
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-  auto program = GLProgram(GLShader(GLShader::Vertex, read_string_file("shaders/basic.vert")),
-                           GLShader(GLShader::Fragment, read_string_file("shaders/basic.frag")));
-  float vs[]{-1, -1, -1, 1, 1, 1, 1, -1};
-  auto vbo = VBO(sizeof(vs), vs);
-  auto vao = VAO(vbo);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-  program.use();
+  auto timer = Timer();
+  psl::vector<float> buffer;
 
   while (!window.should_close()) {
+    parallel_for(film.size(), [&](vec2i p) {
+      position[p] = {};
+      normal[p] = {};
+      color[p] = {};
+      direct[p] = {};
+
+      auto ray = camera.gen_ray((p + vec2(0.5f)) / film.size());
+      auto it = SurfaceInteraction();
+      if (accel.intersect(ray, it)) {
+        position[p] = it.p;
+        normal[p] = it.n;
+        auto albedo = it.material().albedo({it, it.n});
+        color[p] = albedo;
+        if (!accel.hit(spawn_ray1(it.p, it.n, pl - it.p)))
+          direct[p] = cl * albedo / (distance_squared(it.p, pl) + .5f);
+      }
+    });
+
+    glBindTexture(GL_TEXTURE_2D, Tp);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, film.width(), film.height(), GL_RGB, GL_FLOAT,
+                    position.data());
+    glBindTexture(GL_TEXTURE_2D, Tn);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, film.width(), film.height(), GL_RGB, GL_FLOAT,
+                    normal.data());
+    glBindTexture(GL_TEXTURE_2D, Tcd);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, film.width(), film.height(), GL_RGB, GL_FLOAT,
+                    color.data());
+    glBindTexture(GL_TEXTURE_2D, Tdirect);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, film.width(), film.height(), GL_RGB, GL_FLOAT,
+                    direct.data());
+
+    timer.reset();
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
     window.update();
+    buffer.push_back(timer.elapsed_ms());
+    glfwSetWindowTitle(window.ptr(),
+                       psl::to_string(mean<float>(trim(reverse_adapter(buffer), 0, 20))).c_str());
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 }
 

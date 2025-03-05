@@ -65,6 +65,8 @@ struct GLWindow {
     return offset;
   }
 
+  GLFWwindow* ptr() { return window; }
+
  private:
   GLFWwindow* window;
   mutable psl::optional<vec2> last_cursor_pos;
@@ -168,7 +170,7 @@ struct GLProgram {
     if (loc == -1) SEVERE("GLProgram: uniform `", name, "` not found");
     glUniformMatrix4fv(loc, 1, false, &value[0][0]);
   }
-void set_uniform(const char* name, mat3 value) const {
+  void set_uniform(const char* name, mat3 value) const {
     auto loc = glGetUniformLocation(program, name);
     if (loc == -1) SEVERE("GLProgram: uniform `", name, "` not found");
     glUniformMatrix3fv(loc, 1, false, &value[0][0]);
@@ -191,10 +193,12 @@ struct VBO {
 };
 
 struct VAO {
-  VAO(const VBO& vbo) {
+  VAO(const VBO& vbo, int index, int size) {
     vbo.bind();
     glCreateVertexArrays(1, &vao);
     bind();
+    glEnableVertexAttribArray(index);
+    glVertexAttribPointer(index, size, GL_FLOAT, GL_FALSE, 0, nullptr);
   }
   ~VAO() { glDeleteVertexArrays(1, &vao); }
   VAO(VAO&& rhs) : vao(psl::exchange(rhs.vao, 0)) {}
@@ -202,6 +206,17 @@ struct VAO {
   void bind() const { glBindVertexArray(vao); }
 
   GLuint vao = 0;
+};
+
+struct SSBO {
+  SSBO(size_t size, void* data, int index) {
+    glGenBuffers(1, &ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, index, ssbo);
+  }
+
+  GLuint ssbo;
 };
 
 }  // namespace pine

@@ -14,14 +14,11 @@ extern void (*warning_stream)(psl::string_view data);
 extern void (*fatal_stream)(psl::string_view data);
 
 struct Exception : psl::Exception {
-  Exception(psl::string message) : message{MOVE(message)} {
-  }
+  Exception(psl::string message) : message{MOVE(message)} {}
 
-  psl::string_view what() const override {
-    return message;
-  }
+  psl::string_view what() const override { return message; }
 
-private:
+ private:
   psl::string message;
 };
 
@@ -53,16 +50,16 @@ template <typename... Args>
   throw Exception{to_string(args...)};
 }
 
-#define CHECK(x)                                                                            \
-  if (!(x)) {                                                                               \
+#define CHECK(x)                                                                             \
+  if (!(x)) {                                                                                \
     pine::SEVERE("[CHECK Failure]Check(", #x, ") failed", '[', __FILE__, ':', __LINE__, ':', \
-                __func__, "()]");                                                           \
+                 __func__, "()]");                                                           \
   }
 
-#define CHECK_IMPL(name, op, a, b)                                                          \
-  if (!((a)op(b)))                                                                          \
+#define CHECK_IMPL(name, op, a, b)                                                           \
+  if (!((a)op(b)))                                                                           \
     pine::SEVERE("[" name " Failure]", #a, " = ", a, ", ", #b, " = ", b, '[', __FILE__, ':', \
-                __LINE__, ':', __func__, "()]");
+                 __LINE__, ':', __func__, "()]");
 
 #define CHECK_EQ(a, b) CHECK_IMPL("CHECK_EQ", ==, a, b)
 #define CHECK_NE(a, b) CHECK_IMPL("CHECK_NE", !=, a, b)
@@ -102,7 +99,9 @@ struct Timer {
   void stop();
   void continue_();
 
-private:
+  int i = 0;
+
+ private:
   psl::clock clock;
   float t0 = clock.now();
   float stop_time = 0.0f;

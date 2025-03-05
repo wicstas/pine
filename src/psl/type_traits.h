@@ -233,10 +233,10 @@ struct _DecaySelector<T, false, true> {
 };
 template <typename T>
 struct _Decay {
-private:
+ private:
   using NoRef = RemoveReference<T>;
 
-public:
+ public:
   using Type = typename _DecaySelector<NoRef>::Type;
 };
 template <typename T>
@@ -256,11 +256,11 @@ constexpr bool convertible = requires(From x) { To(x); };
 template <typename T>
 constexpr bool copyable = requires(T x) { T(x); };
 template <typename T>
-constexpr bool movable = requires(T x) { T(static_cast<T&&>(x)); };
+constexpr bool movable = requires(T x) { T(static_cast<T &&>(x)); };
 template <typename T>
 constexpr bool copy_assignable = requires(T x) { x = x; };
 template <typename T>
-constexpr bool move_assignable = requires(T x) { x = static_cast<T&&>(x); };
+constexpr bool move_assignable = requires(T x) { x = static_cast<T &&>(x); };
 
 template <typename Derived, typename Base>
 constexpr bool derived_from = convertible<const Derived *, const Base *>;
@@ -483,21 +483,21 @@ struct IteratorTraits<T> {
 template <typename T>
 concept ForwardIterator =
     Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
-      typename IteratorValueType<T>;
+      // typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       it++;
     };
 template <typename T>
 concept BackwardIterator =
     Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
-      typename IteratorValueType<T>;
+      // typename IteratorValueType<T>;
       { --it } -> SameAs<T &>;
       it--;
     };
 template <typename T>
 concept BidirectionalIterator =
     Copyable<T> && dereferenceable<T> && EqualityComparable<T, T> && requires(T it) {
-      typename IteratorValueType<T>;
+      // typename IteratorValueType<T>;
       { ++it } -> SameAs<T &>;
       { --it } -> SameAs<T &>;
       it++;

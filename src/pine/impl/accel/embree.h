@@ -10,15 +10,16 @@
 namespace pine {
 
 class EmbreeAccel {
-public:
+ public:
   EmbreeAccel() = default;
+  EmbreeAccel(const Scene* scene) { build(scene); }
   void build(const Scene* scene);
 
   bool hit(Ray ray) const;
   uint8_t hit8(psl::span<const Ray> rays) const;
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
 
-private:
+ private:
   const Scene* scene;
   psl::opaque_shared_ptr rtc_device;
   psl::opaque_shared_ptr rtc_scene;

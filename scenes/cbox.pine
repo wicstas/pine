@@ -1,5 +1,5 @@
 scene := Scene();
-image_size := [64, 64] * 16;
+image_size := [256, 256];
 
 scene.add("floor", Diffuse([0.9, 0.9, 0.9]));
 scene.add("red", Diffuse([0.9, 0.1, 0.05]));
@@ -8,19 +8,19 @@ scene.add("metal", Metal([1, 1, 1], 0.0));
 scene.add("glossy", Glossy([1, 1, 1] / 4.0, 0.05));
 scene.add("skin", Subsurface([1, 1, 1], 0.0, 40.0));
 
-scene.add(Rect([0, 0, 1], [2, 0, 0], [0, 0, 2]), "floor");
+scene.add(Rect([0, 0, 1], [2, 0, 0], [0, 0, 2], true), "floor");
 scene.add(Rect([0, 2, 1], [2, 0, 0], [0, 0, 2]), "floor");
-scene.add(Rect([-1, 1, 1], [0, 0, 2], [0, 2, 0]), "red");
+scene.add(Rect([-1, 1, 1], [0, 0, 2], [0, 2, 0], true), "red");
 scene.add(Rect([1, 1, 1], [0, 0, 2], [0, 2, 0]), "green");
-scene.add(Rect([0, 1, 2], [2, 0, 0], [0, 2, 0]), "floor");
+scene.add(Rect([0, 1, 2], [2, 0, 0], [0, 2, 0], true), "floor");
 
-#scene.add(Box(AABB([0, 0, 0], [1, 1, 1]), translate([0.0, 0.0, 0.6]) * rotate_y(0.4) * scale([0.6, 0.6, 0.6])), "floor");
-#scene.add(Box(AABB([0, 0, 0], [1, 1, 1]), translate([-0.6, 0.0, 1.0]) * rotate_y(-0.4) * scale([0.6, 1.3, 0.6])), "metal");
+scene.add(Box(AABB([0, 0, 0], [1, 1, 1]), translate([0.0, 0.0, 0.6]) * rotate_y(0.4) * scale([0.6, 0.6, 0.6])), "floor");
+scene.add(Box(AABB([0, 0, 0], [1, 1, 1]), translate([-0.6, 0.0, 1.0]) * rotate_y(-0.4) * scale([0.6, 1.3, 0.6])), "metal");
 
-scene.add(Rect([0.0, 1.9, 0.5], [0.1, 0, 0], [0, 0, 0.1]), Emissive(600 * [1.0, 0.64, 0.185]));
+#scene.add(Rect([0.0, 1.9, 1], [0.1, 0, 0], [0, 0, 0.1]), Emissive(600 * [1.0, 0.64, 0.185]));
 
 scene.set(ThinLenCamera(Film(image_size, Uncharted2()), [0, 1, -4], [0, 1, 0], 0.25));
 
-MicroRenderGI(10000).render(scene);
+MicroRenderGI(256).render(scene);
 #PathIntegrator(BlueSampler(8), 4).render(scene);
 scene.camera.film().save("images/cbox.png");
