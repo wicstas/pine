@@ -7,8 +7,7 @@ namespace pine {
 template <typename T>
 struct Array2d {
   Array2d() = default;
-  Array2d(vec2i size) : size_{size}, data_(area(size)) {
-  }
+  Array2d(vec2i size) : size_{size}, data_(area(size)) {}
   Array2d(vec2i size, const T *input) : size_{size}, data_(area(size)) {
     psl::memcpy(&data_[0], input, data_.size() * sizeof(T));
   }
@@ -60,23 +59,19 @@ struct Array2d {
     return data()[p[0] + p[1] * size_[0]];
   }
   Array2d &operator*=(auto rhs) {
-    for (auto &x : (*this))
-      x *= rhs;
+    for (auto &x : (*this)) x *= rhs;
     return *this;
   }
   Array2d &operator/=(auto rhs) {
-    for (auto &x : (*this))
-      x /= rhs;
+    for (auto &x : (*this)) x /= rhs;
     return *this;
   }
   Array2d &operator+=(auto rhs) {
-    for (auto &x : (*this))
-      x += rhs;
+    for (auto &x : (*this)) x += rhs;
     return *this;
   }
   Array2d &operator-=(auto rhs) {
-    for (auto &x : (*this))
-      x -= rhs;
+    for (auto &x : (*this)) x -= rhs;
     return *this;
   }
   T &at_index(size_t i) {
@@ -87,92 +82,56 @@ struct Array2d {
     DCHECK_LT(i, data_.size());
     return data_[i];
   }
-  size_t index(vec2i p) const {
-    return p[0] + p[1] * size_[0];
-  }
+  size_t index(vec2i p) const { return p[0] + p[1] * size_[0]; }
 
   Array2d &operator+=(T value) {
-    for (auto &x : data_)
-      x += value;
+    for (auto &x : data_) x += value;
     return *this;
   }
   Array2d &operator-=(T value) {
-    for (auto &x : data_)
-      x -= value;
+    for (auto &x : data_) x -= value;
     return *this;
   }
   Array2d &operator*=(T value) {
-    for (auto &x : data_)
-      x *= value;
+    for (auto &x : data_) x *= value;
     return *this;
   }
   Array2d &operator/=(T value) {
-    for (auto &x : data_)
-      x /= value;
+    for (auto &x : data_) x /= value;
     return *this;
   }
-  friend Array2d operator+(Array2d lhs, T rhs) {
-    return lhs += rhs;
-  }
-  friend Array2d operator-(Array2d lhs, T rhs) {
-    return lhs -= rhs;
-  }
-  friend Array2d operator*(Array2d lhs, T rhs) {
-    return lhs *= rhs;
-  }
-  friend Array2d operator/(Array2d lhs, T rhs) {
-    return lhs /= rhs;
-  }
+  friend Array2d operator+(Array2d lhs, T rhs) { return lhs += rhs; }
+  friend Array2d operator-(Array2d lhs, T rhs) { return lhs -= rhs; }
+  friend Array2d operator*(Array2d lhs, T rhs) { return lhs *= rhs; }
+  friend Array2d operator/(Array2d lhs, T rhs) { return lhs /= rhs; }
 
   void resize(vec2i new_size) {
     size_ = new_size;
     data_.resize(area(new_size));
   }
-  T *data() {
-    return data_.data();
-  }
-  const T *data() const {
-    return data_.data();
-  }
-  vec2i size() const {
-    return size_;
-  }
-  size_t byte_size() const {
-    return data_.byte_size();
-  }
-  int width() const {
-    return size().x;
-  }
-  int height() const {
-    return size().y;
-  }
+  T *data() { return data_.data(); }
+  const T *data() const { return data_.data(); }
+  vec2i size() const { return size_; }
+  size_t byte_size() const { return data_.byte_size(); }
+  int width() const { return size().x; }
+  int height() const { return size().y; }
 
-  auto begin() {
-    return data_.begin();
-  }
-  auto end() {
-    return data_.end();
-  }
-  auto begin() const {
-    return data_.begin();
-  }
-  auto end() const {
-    return data_.end();
-  }
-  void set_to_zero() {
-    for (auto &val : data_)
-      val = T();
+  auto begin() { return data_.begin(); }
+  auto end() { return data_.end(); }
+  auto begin() const { return data_.begin(); }
+  auto end() const { return data_.end(); }
+  void set(T value) {
+    for (auto &val : data_) val = value;
   }
 
   psl::string to_string() const {
     auto res = psl::string("[");
-    for (const auto &val : data_)
-      res += psl::to_string(val) + ' ';
+    for (const auto &val : data_) res += psl::to_string(val) + ' ';
     res.back() = ']';
     return res;
   }
 
-private:
+ private:
   vec2i size_;
   psl::vector<T> data_;
 };
@@ -180,13 +139,11 @@ private:
 template <typename T>
 struct Array3d {
   Array3d() = default;
-  Array3d(vec3i64 size) : size_{size}, data_(volume(size)) {
-  }
+  Array3d(vec3i64 size) : size_{size}, data_(volume(size)) {}
   template <typename U>
   static Array3d from(const Array3d<U> &rhs) {
     auto result = Array3d(rhs.size());
-    for (size_t i = 0; i < result.data_.size(); i++)
-      result.data_[i] = T(rhs.data()[i]);
+    for (size_t i = 0; i < result.data_.size(); i++) result.data_[i] = T(rhs.data()[i]);
     return result;
   }
 
@@ -210,67 +167,45 @@ struct Array3d {
     DCHECK_LT(i, data_.size());
     return data_[i];
   }
-  size_t index(vec3i64 p) const {
-    return p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1];
-  }
+  size_t index(vec3i64 p) const { return p[0] + p[1] * size_[0] + p[2] * size_[0] * size_[1]; }
 
   Array3d &operator+=(T value) {
-    for (auto &x : data_)
-      x += value;
+    for (auto &x : data_) x += value;
     return *this;
   }
   Array3d &operator-=(T value) {
-    for (auto &x : data_)
-      x -= value;
+    for (auto &x : data_) x -= value;
     return *this;
   }
   Array3d &operator*=(T value) {
-    for (auto &x : data_)
-      x *= value;
+    for (auto &x : data_) x *= value;
     return *this;
   }
   Array3d &operator/=(T value) {
-    for (auto &x : data_)
-      x /= value;
+    for (auto &x : data_) x /= value;
     return *this;
   }
 
-  T *data() {
-    return data_.data();
-  }
-  const T *data() const {
-    return data_.data();
-  }
-  vec3i64 size() const {
-    return size_;
-  }
+  T *data() { return data_.data(); }
+  const T *data() const { return data_.data(); }
+  vec3i64 size() const { return size_; }
 
-  auto begin() {
-    return data_.begin();
-  }
-  auto end() {
-    return data_.end();
-  }
-  auto begin() const {
-    return data_.begin();
-  }
-  auto end() const {
-    return data_.end();
-  }
-  void set_to_zero() {
-    for (auto &val : data_)
-      val = T();
+  auto begin() { return data_.begin(); }
+  auto end() { return data_.end(); }
+  auto begin() const { return data_.begin(); }
+  auto end() const { return data_.end(); }
+  void set(T value) {
+    for (auto &val : data_) val = value;
   }
 
   psl::string to_string() const {
     auto res = psl::string("[");
-    for (const auto &val : data_)
-      res += psl::to_string(val) + ' ';
+    for (const auto &val : data_) res += psl::to_string(val) + ' ';
     res.back() = ']';
     return res;
   }
 
-private:
+ private:
   vec3i64 size_;
   psl::vector<T> data_;
 };
@@ -285,15 +220,13 @@ using Array2d4u8 = Array2d<vec4u8>;
 template <typename F>
 void for_2d(vec2i lower, vec2i upper, F f) {
   for (int y = lower[1]; y < upper[1]; y++)
-    for (int x = lower[0]; x < upper[0]; x++)
-      f(vec2i(x, y));
+    for (int x = lower[0]; x < upper[0]; x++) f(vec2i(x, y));
 }
 template <typename F>
 void for_3d(vec3i lower, vec3i upper, F f) {
   for (int z = lower[2]; z < upper[2]; z++)
     for (int y = lower[1]; y < upper[1]; y++)
-      for (int x = lower[0]; x < upper[0]; x++)
-        f(vec3i(x, y, z));
+      for (int x = lower[0]; x < upper[0]; x++) f(vec3i(x, y, z));
 }
 
 template <typename F>

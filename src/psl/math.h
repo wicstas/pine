@@ -50,24 +50,20 @@ inline constexpr int index_of_max(T a, T b, T c) {
 template <typename T, typename... Ts>
 requires(sizeof...(Ts) > 0)
 inline constexpr T min(T a, T b, Ts... c) {
-  return psl::min(a, psl::min(b, c...));
+  return min(a, min(b, c...));
 }
 template <typename T, typename... Ts>
 requires(sizeof...(Ts) > 0)
 inline constexpr T max(T a, T b, Ts... c) {
-  return psl::max(a, psl::max(b, c...));
+  return max(a, max(b, c...));
 }
 
 template <typename T>
 inline constexpr T abs(T x) {
   return x > 0 ? x : -x;
 }
-inline constexpr auto abs(float x) {
-  return std::abs(x);
-}
-inline constexpr auto abs(double x) {
-  return std::abs(x);
-}
+inline constexpr auto abs(float x) { return std::abs(x); }
+inline constexpr auto abs(double x) { return std::abs(x); }
 
 template <typename T>
 inline constexpr T copysign(T mag, T sgn) {
@@ -78,17 +74,11 @@ inline constexpr int signbit(T sgn) {
   return sgn < 0 ? 1 : 0;
 }
 
-inline int ieeeexp(float x) {
-  return (0xff & (psl::bitcast<uint32_t>(x) >> 23)) - 127;
-}
+inline int ieeeexp(float x) { return (0xff & (psl::bitcast<uint32_t>(x) >> 23)) - 127; }
 
-inline float exp2i(int e) {
-  return psl::bitcast<float>((e + 127) << 23);
-}
+inline float exp2i(int e) { return psl::bitcast<float>((e + 127) << 23); }
 
-inline int hsb(uint32_t x) {
-  return psl::ieeeexp((float)x);
-}
+inline int hsb(uint32_t x) { return psl::ieeeexp((float)x); }
 
 template <typename T>
 int ctz(T x) {
@@ -97,12 +87,10 @@ int ctz(T x) {
 
 template <typename T>
 constexpr T roundup2(T x) {
-  if (x == 0)
-    return 0;
+  if (x == 0) return 0;
   x -= 1;
 
-  for (size_t i = 1; i != sizeof(x) * 8; i <<= 1)
-    x |= x >> i;
+  for (size_t i = 1; i != sizeof(x) * 8; i <<= 1) x |= x >> i;
 
   return x + 1;
 }
@@ -147,8 +135,7 @@ template <FloatingPoint T>
 inline constexpr T floor(T v) {
   return std::floor(v);
   auto i = (CorrespondingInt<T>)v;
-  if (v < 0 && i != v)
-    i -= 1;
+  if (v < 0 && i != v) i -= 1;
   return i;
 }
 
@@ -157,8 +144,7 @@ template <FloatingPoint T>
 inline constexpr T ceil(T v) {
   return std::ceil(v);
   auto i = (CorrespondingInt<T>)v;
-  if (v > 0 && i != v)
-    i += 1;
+  if (v > 0 && i != v) i += 1;
   return i;
 }
 
@@ -203,8 +189,7 @@ inline constexpr T powi(T x, int e) {
   T y = 1;
 
   while (e) {
-    if (e & 1)
-      y *= x;
+    if (e & 1) y *= x;
     x *= x;
     e >>= 1;
   };
@@ -286,14 +271,12 @@ bool is_power_of_2(T y) {
 template <FloatingPoint T>
 inline T exp(T x) {
   return std::exp(x);
-  if (x < 0)
-    return T{1} / exp(-x);
+  if (x < 0) return T{1} / exp(-x);
   T y = 0;
 
   const int n = 8;
 
-  for (int i = n; i > 0; --i)
-    y = 1 + x * y / i;
+  for (int i = n; i > 0; --i) y = 1 + x * y / i;
 
   return y;
 }
@@ -313,8 +296,7 @@ inline T cos_0_pi_2(T x) {
   T y = 1;
 
   const int n = 8;
-  for (int i = n; i > 0; i -= 2)
-    y = 1 - y * x * x / (i * (i - 1));
+  for (int i = n; i > 0; i -= 2) y = 1 - y * x * x / (i * (i - 1));
 
   return y;
 }
@@ -322,13 +304,11 @@ inline T cos_0_pi_2(T x) {
 template <FloatingPoint T>
 inline T cos(T x) {
   return std::cos(x);
-  if (x < 0)
-    x = -x;
+  if (x < 0) x = -x;
   // TODO
   CorrespondingInt<T> y = x / (Pi * 2);
   x -= y * (Pi * 2);
-  if (x > Pi)
-    x = Pi * 2 - x;
+  if (x > Pi) x = Pi * 2 - x;
 
   if (x < Pi / 2)
     return cos_0_pi_2(x);
@@ -353,8 +333,7 @@ template <FloatingPoint T>
 inline T acos(T y) {
   return std::acos(y);
   // TODO
-  if (y < -1 || y > 1)
-    return 0;
+  if (y < -1 || y > 1) return 0;
 
   T x = (1 - y) * Pi / 2;
 
@@ -373,8 +352,7 @@ template <FloatingPoint T>
 inline T asin(T y) {
   return std::asin(y);
   // TODO
-  if (y < -1 || y > 1)
-    return 0;
+  if (y < -1 || y > 1) return 0;
 
   T x = y * Pi / 2;
 

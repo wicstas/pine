@@ -17,5 +17,6 @@ scene.add(Sphere([3, 1, 0], 1), "glossy");
 scene.add(Rect([-1, 3, -1], [1, 0, 0], [0, 0, 1]), Emissive([1, 1, 1] * 160));
 scene.set(ThinLenCamera(Film(image_size), [0, 4, -8], [0, 1, 0], 0.3));
 
-PathIntegrator(BlueSampler(64), 6).render(scene);
+MicroRenderGI(1024 * 2).render(scene);
+#PathIntegrator(BlueSampler(64), 6).render(scene);
 scene.camera.film().save("images/classic.png");

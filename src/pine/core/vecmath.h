@@ -1208,7 +1208,7 @@ inline vec3 unit_square_to_cartesian(vec2 sc) {
 float atan2_approx(float y, float x);
 inline float phi2pi(float x, float y) {
   // float phi = psl::atan2(y, x);
-  float phi = atan2_approx(y, x);
+  float phi = psl::atan2(y, x);
   return phi < 0.0f ? Pi * 2 + phi : phi;
 }
 

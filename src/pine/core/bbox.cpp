@@ -122,27 +122,17 @@ void AABB::compute_surface_info(vec3 p, SurfaceInteraction& it) const {
   it.n[axis] = pu[axis] > 0 ? 1 : -1;
   it.p[axis] = pu[axis] > 0 ? upper[axis] : lower[axis];
 }
-psl::optional<ShapeSample> AABB::sample(vec3 p, vec2 u) const {
-  auto x = false, y = false, z = false;
-  if (with_prob(0.5f, u.x)) x = true;
-  if (with_prob(0.5f, u.x)) y = true;
-  if (with_prob(0.5f, u.y)) z = true;
-  auto p0 = vec3(x ? lower.x : upper.x, y ? lower.y : upper.y, z ? lower.z : upper.z);
+psl::optional<ShapeSample> AABB::sample(vec3, vec2 u) const {
+  auto axis = int(u.x * 3);
+  u.x = u.x * 3 - axis;
+  auto b = with_prob(0.5f, u.y);
+  auto p0 = lower;
+  if (b) p0[axis] = upper[axis];
+  p0[(axis + 1) % 3] += u.x * diagonal((axis + 1) % 3);
+  p0[(axis + 2) % 3] += u.y * diagonal((axis + 2) % 3);
   auto ss = ShapeSample();
-  if (!x) {
-    p0.x += diagonal(0) * u.x;
-    u.x = u.y;
-  }
-  if (!y) {
-    p0.y += diagonal(1) * u.x;
-    u.x = u.y;
-  }
-  if (!z) {
-    p0.z += diagonal(2) * u.x;
-    u.x = u.y;
-  }
-  ss.p = p;
-  ss.n = vec3(x ? -1 : 1, y ? -1 : 1, z ? -1 : 1);
+  ss.p = p0;
+  ss.n[axis] = b ? 1 : -1;
   return ss;
 }
 float AABB::area() const {

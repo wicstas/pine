@@ -148,7 +148,7 @@ public:
   }
   template <typename... Ts>
   requires(sizeof...(Ts) > 1)
-  void push_back(auto... xs) {
+  void push_back(Ts... xs) {
     (push_back(MOVE(xs)), ...);
   }
   void push_front(T x) {
