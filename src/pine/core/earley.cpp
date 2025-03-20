@@ -180,7 +180,7 @@ private:
   psl::vector<States> states_list;
 };
 
-psl::optional<EarleyNode> Parse(const Grammar& grammar, const psl::vector<EarleyNode>& tokens,
+psl::optional<EarleyNode> parse(const Grammar& grammar, const psl::vector<EarleyNode>& tokens,
                                 const psl::string& root_sym) {
   auto parser = Parser(grammar, tokens);
   return parser.parse(root_sym);

@@ -656,6 +656,34 @@ Mesh& Mesh::apply(mat4 m) {
   for (auto& n : normals) n = normalize(m3 * n);
   return *this;
 }
+void Mesh::assign_normals_and_texcoords() {
+  if (normals.size() == 0) {
+    normals.resize(vertices.size());
+    for (auto face : indices) {
+      auto v0 = vertices[face[0]];
+      auto v1 = vertices[face[1]];
+      auto v2 = vertices[face[2]];
+      normals[face[0]] = normals[face[1]] = normals[face[2]] = normalize(cross(v1 - v0, v2 - v0));
+    }
+  }
+  if (texcoords.size() == 0) {
+    texcoords.resize(vertices.size());
+    for (auto face : indices) {
+      texcoords[face[0]] = {0, 0};
+      texcoords[face[1]] = {1, 0};
+      texcoords[face[2]] = {0, 1};
+    }
+  }
+}
+void Mesh::merge(const Mesh& mesh) {
+  assign_normals_and_texcoords();
+  auto offset = vertices.size();
+  for (auto face : mesh.indices) indices.push_back(face + vec3u32(offset));
+  vertices.insert_range(vertices.end(), mesh.vertices);
+  normals.insert_range(normals.end(), mesh.normals);
+  texcoords.insert_range(texcoords.end(), mesh.texcoords);
+  assign_normals_and_texcoords();
+}
 
 Mesh heightmap(const Array2d<float>& height_map) {
   auto width = height_map.size().x + 1;

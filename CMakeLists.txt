@@ -34,7 +34,6 @@ src/pine/core/program_context.cpp
 src/pine/core/phase_function.cpp
 src/pine/core/lowdiscrepancy.cpp
 src/pine/core/sobolmatrices.cpp
-src/pine/core/jit_compiler.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
 src/pine/core/video_writer.cpp
@@ -45,7 +44,6 @@ src/pine/core/geometry.cpp
 src/pine/core/material.cpp
 src/pine/core/profiler.cpp
 src/pine/core/parallel.cpp
-#src/pine/core/compiler.cpp
 src/pine/core/context.cpp
 src/pine/core/vecmath.cpp
 src/pine/core/sampler.cpp
@@ -54,6 +52,7 @@ src/pine/core/primes.cpp
 src/pine/core/fileio.cpp
 src/pine/core/camera.cpp
 src/pine/core/medium.cpp
+src/pine/core/earley.cpp
 src/pine/core/noise.cpp
 src/pine/core/scene.cpp
 src/pine/core/light.cpp
@@ -67,8 +66,11 @@ src/pine/core/film.cpp
 src/pine/core/bxdf.cpp
 src/pine/core/math.cpp
 src/pine/core/rng.cpp
+src/pine/core/jit.cpp
 src/pine/core/log.cpp
+src/pine/core/esl.cpp
 src/pine/impl/integrator/micro_render.cpp
+src/pine/impl/integrator/path_opengl.cpp
 src/pine/impl/integrator/randomwalk.cpp
 src/pine/impl/integrator/guidedpath.cpp
 src/pine/impl/integrator/cachedpath.cpp
@@ -102,7 +104,7 @@ src/contrib/bluesobol/bluenoise_256spp.cpp
 
 target_compile_options(pinelib PRIVATE -Wall -Wextra -pedantic)
 target_include_directories(pinelib PUBLIC src/)
-target_include_directories(pinelib PRIVATE src/contrib)
+target_include_directories(pinelib PUBLIC src/contrib)
 set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
@@ -116,14 +118,6 @@ target_link_libraries(pinelib psl Threads::Threads embree LLVM-18 glfw)
 add_executable(pine src/cli/pine.cpp)
 target_link_libraries(pine pinelib)
 
-#Gltf tool
-# add_executable(gltf-tool src/cli/gltf-tool.cpp)
-# target_link_libraries(gltf-tool pinelib)
-
-#Image tool
-#add_executable(image-tool src/cli/image-tool.cpp)
-#target_link_libraries(image-tool pinelib)
-
 #Pine executable
-#add_executable(pine-repl src/cli/pine-repl.cpp)
-#target_link_libraries(pine-repl pinelib ncurses)
+add_executable(pine_test test/path_opengl_test.cpp)
+target_link_libraries(pine_test pinelib)

@@ -71,10 +71,13 @@ void scene_from_gltf(Scene& scene, void* tiny_gltf_model, mat4 m);
 Mesh mesh_from_gltf(void* tiny_gltf_model);
 UberMaterial material_from_gltf(void* tiny_gltf_model);
 
-void scene_from_gltf(Scene& scene, psl::string file_name, const psl::map<psl::string, Bytes>& fs,
-                     mat4 m);
-Mesh mesh_from_gltf(psl::string file_name, const psl::map<psl::string, Bytes>& fs);
-UberMaterial material_from_gltf(psl::string file_name, const psl::map<psl::string, Bytes>& fs);
+void scene_from_gltf(Scene &scene, const Bytes &data, mat4 m);
+Mesh mesh_from_gltf(const Bytes &data);
+UberMaterial material_from_gltf(const Bytes &data);
+
+void scene_from_gltf(Scene &scene, psl::string filename, mat4 m);
+Mesh mesh_from_gltf(psl::string filename);
+UberMaterial material_from_gltf(psl::string filename);
 
 void interpret_file(Context& context, psl::string_view filename);
 

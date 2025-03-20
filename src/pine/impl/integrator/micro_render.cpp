@@ -57,12 +57,24 @@ float solid_angle(vec3 p, Disc d) {
 }
 
 struct BSphere {
-  BSphere(AABB aabb) {
-    center = aabb.centroid();
-    r = length(aabb.upper - aabb.lower) / 2;
+  BSphere() = default;
+  BSphere(vec3 center) : center(center) {}
+
+  void extend(Disc disc) {
+    if (r == 0.0f) {
+      center = disc.p;
+      r = disc.r;
+      return;
+    }
+    auto dist = 0.0f;
+    auto dir = normalize(disc.p - center, dist);
+    auto pl = disc.p + dir * psl::max(r - dist, disc.r);
+    auto pr = center - dir * psl::max(r, disc.r - dist);
+    center = (pl + pr) / 2;
+    r = distance(pl, pr) / 2;
   }
   vec3 center;
-  float r;
+  float r = 0.0f;
 };
 
 psl::optional<vec2> project(vec3 sample_p, vec3 p_, vec3 n) {
@@ -84,7 +96,7 @@ void MicroRenderIntegrator::render(Scene& scene) {
   auto cdf = Distribution1D(transform_vector(scene.geometries, [](auto& x) { return x->area(); }));
   auto radius = psl::sqrt(cdf.density_sum() / point_count) / Pi;
 
-  auto window = GLWindow(film.size() * vec2i(3, 1), "MicroRenderGI");
+  auto window = GLWindow(film.size() * vec2i(4, 1), "MicroRenderGI");
   auto program = GLProgram("shaders/basic.vert", "shaders/mrgi.frag");
   auto vao = VAO(psl::vector_of<float>(-1, -1, -1, 1, 1, 1, 1, -1), 0, 2);
 
@@ -94,9 +106,17 @@ void MicroRenderIntegrator::render(Scene& scene) {
   auto color = Texture<vec3>(film.size(), 2);
   auto direct = Texture<vec3>(film.size(), 3);
   auto debug = Texture<vec4>(vec2i(32, 32), 4);
-
+  auto debug1 = Texture<vec4>(vec2i(32, 32), 5);
+  auto debug2 = Texture<vec4>(vec2i(32, 32), 6);
   auto timer = Timer();
-  auto discs = psl::vector<Disc>(point_count * 2);
+
+  auto discs = psl::vector<Disc>(point_count * 2 - 1);
+  auto disc_add_index = 0u;
+  auto add_disc = [&](Disc disc) {
+    CHECK_LT(disc_add_index, discs.size());
+    discs[disc_add_index++] = disc;
+  };
+
   parallel_for(point_count, [&](int i) {
     auto& geo = scene.geometries[cdf.sample(radical_inverse(0, i)).i];
     auto gs = geo->sample({radical_inverse(1, i), radical_inverse(2, i)}, radical_inverse(3, i));
@@ -107,49 +127,45 @@ void MicroRenderIntegrator::render(Scene& scene) {
     discs[i + point_count] = {gs.p, gs.n, cd, radius};
   });
 
-  /*
-      0
-    1   2
-  3  4 5 6
-  */
-
-  auto child_index_offset = [](int i) {
-    return psl::roundup2(i + 2) - 1 + (i + 1 - psl::roundup2(i + 2) / 2) * 2;
-  };
-  auto disc_add_index = 0u;
-  auto add_disc = [&](Disc disc) {
-    CHECK_LT(disc_add_index, discs.size());
-    discs[disc_add_index++] = disc;
-  };
   auto build = [&](Disc* pstart, Disc* pend, auto build) {
     if (pstart + 2 >= pend) return;
     auto range = psl::range(pstart, pend);
+    auto half_size = range.size() / 2;
     auto aabb = AABB();
     for (const auto& disc : range) aabb.extend(disc.p);
     auto axis = max_axis(aabb.diagonal());
     psl::sort(range, [axis](const Disc& a, const Disc& b) { return a.p[axis] < b.p[axis]; });
     Disc a, b;
-    AABB A, B;
+    BSphere A, B;
 
-    for (size_t i = 0; i < range.size() / 2; i++) {
-      A.extend(pstart[i].p);
-      B.extend(pstart[i + range.size() / 2].p);
+    for (size_t i = 0; i < half_size; i++) {
+      A.extend(pstart[i]);
+      B.extend(pstart[i + half_size]);
       a.cd += pstart[i].cd;
-      b.cd += pstart[i + range.size() / 2].cd;
+      b.cd += pstart[i + half_size].cd;
     }
-    a.cd /= range.size() / 2;
-    a.p = BSphere(A).center;
-    a.r = BSphere(A).r;
-    b.p = BSphere(B).center;
-    b.r = BSphere(B).r;
-    b.cd /= range.size() / 2;
-    LOG("axis: ", axis, " count: ", range.size(), ' ', a.p, ' ', a.r, ' ', b.p, ' ', b.r);
+    a.p = A.center;
+    a.r = A.r;
+    a.cd /= half_size;
+    b.p = B.center;
+    b.r = B.r;
+    b.cd /= half_size;
+    a.cd = b.cd = vec3(1, 1, 0);
+    // LOG("axis: ", axis, " count: ", range.size(), ' ', a.p, ' ', a.r, ' ', b.p, ' ', b.r);
     add_disc(a);
+    build(pstart, pstart + half_size, build);
     add_disc(b);
-    build(pstart, pstart + range.size() / 2, build);
-    build(pstart + range.size() / 2, pend, build);
+    build(pstart + half_size, pend, build);
   };
   build(&discs[point_count], &discs[point_count * 2], build);
+
+  auto child_index_offset = [&](int i, int k) {
+    if (k == 0)
+      return i + 1;
+    else
+      return i + (1 << (1 + psl::log2i(point_count) - int(psl::log2<float>(i + 1))));
+  };
+  auto is_leaf = [point_count = point_count](int i) { return i >= point_count; };
 
   // auto discs_unstructured = psl::vector<float>(point_count * sizeof(Disc) / 4);
   // parallel_for(point_count, [&](int i) {
@@ -188,11 +204,15 @@ void MicroRenderIntegrator::render(Scene& scene) {
     });
     auto t1 = timer.reset();
 
+    const auto pixel_sa = Pi * 4 / area(debug.size);
     debug.set(vec4(0, 0, 0, Infinity));
+    debug1.set(vec4(0, 0, 0, Infinity));
+    debug2.set(vec4(0, 0, 0, Infinity));
     auto cursor_p = window.cursor_pos();
+    if (!inside(cursor_p, vec2(0), (vec2)film.size())) cursor_p = film.size() / 2;
     auto pos = position[cursor_p];
     auto nor = normal[cursor_p];
-    auto sample = [&](int i) {
+    auto sample = [&](auto& T, int i) {
       auto Dp = discs[i].p;
       auto Dcd = discs[i].cd;
       auto projected = project(Dp, pos, nor);
@@ -201,17 +221,33 @@ void MicroRenderIntegrator::render(Scene& scene) {
       auto py = int(projected->y * debug.height());
 
       auto depth = length(Dp - pos);
-      if (depth < debug[{px, py}].w) {
-        debug[{px, py}] = vec4(Dcd, depth);
+      if (depth < T[{px, py}].w) {
+        T[{px, py}] = vec4(Dcd, depth);
       }
     };
-    for (int i = point_count; i < point_count * 2; i++) {
-      sample(i);
-    }
+    for (int i = 0; i < point_count; i++) sample(debug, i + point_count);
+
+    auto count = 0;
+    auto make_cut = [&](int i, auto& make_cut) -> void {
+      auto disc_sa = solid_angle(pos, discs[i]);
+      if (is_leaf(i)) {
+        count++;
+        sample(debug1, i);
+      } else if (disc_sa < pixel_sa) {
+        // LOG(i, ' ', disc_sa, ' ', pixel_sa);
+        count++;
+        sample(debug1, i);
+      } else {
+        make_cut(child_index_offset(i, 0), make_cut);
+        make_cut(child_index_offset(i, 1), make_cut);
+      }
+    };
+    make_cut(0, make_cut);
+    // LOG(count, ' ', point_count, ' ', float(count) / point_count);
 
     auto t2 = timer.reset();
-    auto debug1 = Texture(debug, 5);
-    push_pop(debug1);
+    debug2.texels = debug1.texels;
+    push_pop(debug2);
 
     position.upload();
     normal.upload();
@@ -219,6 +255,7 @@ void MicroRenderIntegrator::render(Scene& scene) {
     direct.upload();
     debug.upload();
     debug1.upload();
+    debug2.upload();
     auto t3 = timer.reset();
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);

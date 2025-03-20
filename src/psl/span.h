@@ -9,32 +9,19 @@ namespace psl {
 template <typename T>
 struct span {
   span() = default;
-  span(T* ptr, size_t length) : ptr(ptr), length(length) {
-  }
+  span(T* ptr, size_t length) : ptr(ptr), length(length) {}
   template <RandomAccessIterator It>
   requires requires(T* ptr, It first) { ptr = &*first; }
-  span(It first, It last) : ptr(&(*first)), length(size_t(last - first)) {
-  }
+  span(It first, It last) : ptr(&(*first)), length(size_t(last - first)) {}
   template <Range ARange>
   requires requires(T* ptr, ARange&& range) { ptr = &*psl::begin(range); }
-  span(ARange&& range) : span(psl::begin(range), psl::end(range)) {
-  }
+  span(ARange&& range) : span(psl::begin(range), psl::end(range)) {}
 
-  T* begin() {
-    return ptr;
-  }
-  const T* begin() const {
-    return ptr;
-  }
-  T* end() {
-    return ptr + length;
-  }
-  const T* end() const {
-    return ptr + length;
-  }
-  size_t size() const {
-    return length;
-  }
+  T* begin() { return ptr; }
+  const T* begin() const { return ptr; }
+  T* end() { return ptr + length; }
+  const T* end() const { return ptr + length; }
+  size_t size() const { return length; }
   T& operator[](size_t i) {
     psl_check(i < length);
     return ptr[i];
@@ -53,9 +40,14 @@ struct span {
     return span(ptr + start, size);
   }
 
-private:
+ private:
   T* ptr = nullptr;
   size_t length = 0;
 };
+
+template <typename T>
+span<T> make_span(T* ptr, size_t len) {
+  return span<T>(ptr, ptr + len);
+}
 
 }  // namespace psl

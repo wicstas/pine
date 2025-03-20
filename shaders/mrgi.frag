@@ -8,6 +8,7 @@ layout(binding = 2) uniform sampler2D Tcd;
 layout(binding = 3) uniform sampler2D Tdirect;
 layout(binding = 4) uniform sampler2D Tdebug;
 layout(binding = 5) uniform sampler2D Tdebug1;
+layout(binding = 6) uniform sampler2D Tdebug2;
 uniform ivec2 film_size;
 
 uniform int n_discs;
@@ -59,6 +60,11 @@ void main() {
     else if (coord.x <= 3){
       coord.x -= 2;
       out_color = sqrt(vec4(texture(Tdebug1, coord).xyz, 1));
+      return;
+    }
+    else if (coord.x <= 4){
+      coord.x -= 3;
+      out_color = sqrt(vec4(texture(Tdebug2, coord).xyz, 1));
       return;
     }
     // vec3 position = texture(Tp, coord).xyz;

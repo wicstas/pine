@@ -182,7 +182,7 @@ struct EarleyNode {
 };
 
 inline psl::string to_string(const EarleyNode &node, int depth = 0) {
-  auto str = psl::string(depth * 2, ' ');
+  auto str = psl::string_n_of(depth * 2, ' ');
   str += node.sym + "\n";
 
   for (const auto &child : node.children)
@@ -191,7 +191,7 @@ inline psl::string to_string(const EarleyNode &node, int depth = 0) {
   return str;
 }
 
-psl::optional<EarleyNode> Parse(const Grammar &grammar, const psl::vector<EarleyNode> &tokens,
+psl::optional<EarleyNode> parse(const Grammar &grammar, const psl::vector<EarleyNode> &tokens,
                                 const psl::string &root_sym);
 
 template <typename... Ts>

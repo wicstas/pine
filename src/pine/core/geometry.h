@@ -164,7 +164,9 @@ struct Mesh {
   void compute_surface_info(vec3, SurfaceInteraction&) const { PINE_UNREACHABLE; }
   bool intersect(Ray& ray, SurfaceInteraction& it) const;
   AABB get_aabb() const;
-  float area() const { return get_triangle(0).area() * num_triangles(); }
+  float area() const {  // TODO
+    return get_triangle(0).area() * num_triangles();
+  }
   psl::optional<ShapeSample> sample(vec3 p, vec2 u, float u1) const {
     if (num_triangles() == 0) return psl::nullopt;
 
@@ -205,6 +207,9 @@ struct Mesh {
     else
       return psl::nullopt;
   }
+
+  void assign_normals_and_texcoords();
+  void merge(const Mesh& mesh);
 
   psl::vector<vec3> vertices;
   psl::vector<vec3> normals;
