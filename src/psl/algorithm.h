@@ -46,10 +46,6 @@ template <typename T, size_t N>
 auto end(T (&x)[N]) {
   return x + N;
 }
-template <size_t N>
-auto end(const char (&x)[N]) {
-  return x + N - 1;
-}
 
 template <typename T>
 requires requires(T&& x) { x.size(); }
@@ -66,8 +62,6 @@ concept Range = requires(T& x) {
   psl::begin(x);
   psl::end(x);
 };
-auto iters(Range auto&& range) { return psl::make_pair(psl::begin(range), psl::end(range)); }
-
 template <typename T>
 constexpr bool has_size = requires(T& x) { psl::size(x); };
 
@@ -77,6 +71,8 @@ struct IteratorType {
 };
 template <Range T>
 using IteratorTypeT = typename IteratorType<T>::Type;
+
+auto iter_of(Range auto&& range) { return psl::make_pair(psl::begin(range), psl::end(range)); }
 
 template <RandomAccessIterator It>
 auto distance(It first, It last, PriorityTag<1>) {
@@ -125,7 +121,6 @@ template <ForwardIterator It>
 It next(It it) {
   return ++it;
 }
-
 template <ForwardIterator It>
 It next(It it, size_t n) {
   if constexpr (psl::RandomAccessIterator<It>) {
@@ -198,8 +193,7 @@ void insert(auto&& f, Range auto&& input) {
   for (; first != last; ++first) f(*first);
 }
 
-namespace range_equal {
-bool operator==(Range auto&& a, Range auto&& b) {
+bool equal(Range auto&& a, Range auto&& b) {
   if (psl::size(a) != psl::size(b)) return false;
   auto a_it = psl::begin(a);
   auto b_it = psl::begin(b);
@@ -211,7 +205,6 @@ bool operator==(Range auto&& a, Range auto&& b) {
 
   return true;
 }
-}  // namespace range_equal
 
 struct StrictOrdering {};
 
@@ -613,6 +606,13 @@ auto clip(Range auto&& range, RandomAccessIterator auto last) {
 }
 inline auto clip_(RandomAccessIterator auto last) {
   return [last](Range auto&& range) { return clip(FWD(range), last); };
+}
+
+auto find_subrange(psl::Range auto&& range, psl::Range auto&& subrange) {
+  for (size_t i = 0; i + subrange.size() <= range.size(); i++)
+    if (psl::equal(psl::trim(range, i, subrange.size()), subrange)) return psl::begin(range) + i;
+
+  return psl::end(range);
 }
 
 template <typename ResultType>

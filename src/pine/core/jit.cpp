@@ -35,13 +35,14 @@
 
 namespace pine {
 
+namespace {
+
 // ================================================
 // Source
 // ================================================
 struct SourceLoc {
   SourceLoc() = default;
-  SourceLoc(size_t row, size_t column) : row(row), column(column) {
-  }
+  SourceLoc(size_t row, size_t column) : row(row), column(column) {}
   size_t row = size_t(-1);
   size_t column = size_t(-1);
 };
@@ -60,7 +61,7 @@ struct SourceLines {
 
   [[noreturn]] void error_impl(SourceLoc sl, psl::string_view message) const;
 
-private:
+ private:
   psl::vector<psl::string> lines;
   size_t paddings = invalid;
   static constexpr size_t invalid = size_t(-1);
@@ -80,16 +81,13 @@ static psl::vector<psl::string> split(psl::string_view input, auto pred) {
   return parts;
 }
 SourceLines::SourceLines(psl::string_view tokens, size_t paddings)
-    : lines(split(tokens, psl::equal_to_any('\n', '\r', '\f'))), paddings(paddings) {
-}
+    : lines(split(tokens, psl::equal_to_any('\n', '\r', '\f'))), paddings(paddings) {}
 psl::optional<psl::string_view> SourceLines::next_line(size_t row) const {
-  if (row == lines.size())
-    return psl::nullopt;
+  if (row == lines.size()) return psl::nullopt;
   return lines[row];
 }
 psl::optional<char> SourceLines::next(SourceLoc sl) const {
-  if (auto line = next_line(sl.row))
-    return (*line)[sl.column];
+  if (auto line = next_line(sl.row)) return (*line)[sl.column];
   return psl::nullopt;
 }
 [[noreturn]] void SourceLines::error_impl(SourceLoc sl, psl::string_view message) const {
@@ -104,10 +102,8 @@ psl::optional<char> SourceLines::next(SourceLoc sl) const {
   for (int64_t i = sl.row - paddings; i <= int64_t(sl.row); i++)
     vicinity += " | " + line_at(i) + "\n";
   vicinity += "  -" + psl::string_n_of(sl.column, '-') + "^\n";
-  for (size_t i = sl.row + 1; i <= sl.row + paddings; i++)
-    vicinity += " | " + line_at(i) + "\n";
-  if (vicinity.size())
-    vicinity.pop_back();
+  for (size_t i = sl.row + 1; i <= sl.row + paddings; i++) vicinity += " | " + line_at(i) + "\n";
+  if (vicinity.size()) vicinity.pop_back();
 
   SEVERE(message, "\n", vicinity);
 }
@@ -119,17 +115,10 @@ struct Value {
   enum ValueCategory { L, R };
   Value() = default;
   Value(llvm::Value* ptr, psl::string type_name, ValueCategory category = ValueCategory::R)
-      : ptr(ptr), type_name(MOVE(type_name)), category(category) {
-  }
-  explicit operator bool() const {
-    return ptr;
-  }
-  bool is_l_value() const {
-    return category == ValueCategory::L;
-  }
-  bool is_r_value() const {
-    return category == ValueCategory::R;
-  }
+      : ptr(ptr), type_name(MOVE(type_name)), category(category) {}
+  explicit operator bool() const { return ptr; }
+  bool is_l_value() const { return category == ValueCategory::L; }
+  bool is_r_value() const { return category == ValueCategory::R; }
 
   llvm::Value* ptr = nullptr;
   psl::string type_name;
@@ -148,9 +137,7 @@ struct Module {
   // ================================================
   // Module construction
   // ================================================
-  [[noreturn]] void error(SourceLoc loc, const auto&... args) const {
-    source.error(loc, args...);
-  }
+  [[noreturn]] void error(SourceLoc loc, const auto&... args) const { source.error(loc, args...); }
 
   Context::FindUniqueFResult find_unique_f(psl::string_view name) const {
     return context.find_unique_f(name);
@@ -183,9 +170,7 @@ struct Module {
     else
       SEVERE("Type `", tag.name, "` is not registered");
   }
-  const TypeInfo type(psl::string name) {
-    return type(TypeTag(name));
-  }
+  const TypeInfo type(psl::string name) { return type(TypeTag(name)); }
   size_t type_size(psl::string_view name) {
     if (is_function_type(name))
       return sizeof(psl::pair<void*, void*>);
@@ -194,9 +179,7 @@ struct Module {
   }
 
   struct ClassMemberInfo {
-    explicit operator bool() const {
-      return index != size_t(-1);
-    }
+    explicit operator bool() const { return index != size_t(-1); }
     psl::string type_name;
     size_t index = size_t(-1);
   };
@@ -211,16 +194,13 @@ struct Module {
     auto f_ptr =
         llvm::Function::Create(get_type_of(f.rtype(), f.ptypes()), llvm::Function::ExternalLinkage,
                                f.unique_name().c_str(), M);
-    if (f.ptr())
-      llvm::sys::DynamicLibrary::AddSymbol(f.unique_name().c_str(), f.ptr());
+    if (f.ptr()) llvm::sys::DynamicLibrary::AddSymbol(f.unique_name().c_str(), f.ptr());
     functions.emplace_back(f_ptr, &f);
   }
   void add_created_function(llvm::Function* ptr, const Function* f) {
     functions.emplace_back(ptr, f);
   }
-  const FunctionInfo& function(size_t i) const {
-    return functions[i];
-  }
+  const FunctionInfo& function(size_t i) const { return functions[i]; }
 
   void add_constant(psl::string name, const Variable& var) {
     auto type_name = context.type_name_from_id(var.type_id());
@@ -252,12 +232,10 @@ struct Module {
       rtype = builder.getPtrTy();
     } else {
       rtype = builder.getVoidTy();
-      if (f_rtype.name != "void")
-        ptypes.push_back(builder.getPtrTy());
+      if (f_rtype.name != "void") ptypes.push_back(builder.getPtrTy());
     }
 
-    for (auto& ptype : f_ptypes)
-      ptypes.push_back(builder.getPtrTy());
+    for (auto& ptype : f_ptypes) ptypes.push_back(builder.getPtrTy());
 
     return llvm::FunctionType::get(rtype, ptypes, false);
   }
@@ -284,16 +262,12 @@ struct Module {
 
     return get_type_of(name.substr(p + 2), ptypes);
   }
-  llvm::ArrayType* function_object_type() {
-    return llvm::ArrayType::get(builder.getPtrTy(), 2);
-  }
+  llvm::ArrayType* function_object_type() { return llvm::ArrayType::get(builder.getPtrTy(), 2); }
 
   // ================================================
   // Compilation
   // ================================================
-  llvm::BasicBlock* create_block() {
-    return llvm::BasicBlock::Create(C, "", F);
-  }
+  llvm::BasicBlock* create_block() { return llvm::BasicBlock::Create(C, "", F); }
   void cond_br(SourceLoc sl, Value cond, llvm::BasicBlock* true_block,
                llvm::BasicBlock* false_block) {
     if (cond.type_name == "bool") {
@@ -321,9 +295,7 @@ struct Module {
 
     return value;
   }
-  Value alloc(psl::string type_name) {
-    return {alloc(type(type_name)), type_name};
-  }
+  Value alloc(psl::string type_name) { return {alloc(type(type_name)), type_name}; }
   llvm::Value* alloc_return(TypeInfo type) {
     auto current = builder.GetInsertBlock();
     builder.SetInsertPoint(entry, entry->begin());
@@ -355,9 +327,7 @@ struct Module {
     return_types.pop_back();
     return type;
   }
-  void enter_scope() {
-    stack.back().blocks.push_back(BlockScope());
-  }
+  void enter_scope() { stack.back().blocks.push_back(BlockScope()); }
   void exit_scope() {
     CHECK(stack.back().blocks.size() > 1);
     auto&& block = stack.back().blocks.back();
@@ -367,8 +337,7 @@ struct Module {
   }
   Value find_variable(psl::string_view name) const {
     for (auto& block : psl::reverse_adapter(stack.back().blocks))
-      if (auto it = block.variables.find(name); it != block.variables.end())
-        return it->second;
+      if (auto it = block.variables.find(name); it != block.variables.end()) return it->second;
     return psl::find_or(constants, name, Value());
   }
 
@@ -550,8 +519,7 @@ struct Module {
     if (!rtype.is_ref && rtype.name != "void")
       arg_values.push_back(res ? res : alloc(type(rtype.name)));
 
-    for (auto&& arg : args)
-      arg_values.push_back(arg.ptr);
+    for (auto&& arg : args) arg_values.push_back(arg.ptr);
 
     if (rtype.is_ref) {
       return {builder.CreateCall(ptr, arg_values), rtype.name, Value::L};
@@ -564,8 +532,7 @@ struct Module {
   Value call(SourceLoc sl, psl::string_view name, psl::vector<Value> args,
              llvm::Value* res = nullptr) {
     auto fr = find_f(name, args);
-    if (!fr)
-      error(sl, "Unable to find function `", name, "`");
+    if (!fr) error(sl, "Unable to find function `", name, "`");
 
     for (auto cv : fr.converts)
       args[cv.position] = call(cv.converter_index, psl::vector_of(args[cv.position]));
@@ -593,8 +560,7 @@ struct Module {
   void setup_params(const TypeTag& rtype, psl::span<const TypeTag> ptypes,
                     psl::span<psl::string> pnames) {
     auto arg_i = 0;
-    if (rtype.is_ref)
-      arg_i++;
+    if (rtype.is_ref) arg_i++;
 
     for (size_t i = 0; i < ptypes.size(); i++) {
       auto&& ptype = ptypes[i];
@@ -612,8 +578,7 @@ struct Module {
     builder.CreateBr(exit);
 
     for (auto& block : *F) {
-      if (&block == exit)
-        continue;
+      if (&block == exit) continue;
 
       for (auto it = block.begin(); it != block.end(); ++it) {
         if (llvm::BranchInst::classof(&*it)) {
@@ -621,12 +586,10 @@ struct Module {
           break;
         } else if (llvm::ReturnInst::classof(&*it)) {
           builder.SetInsertPoint(&block, it);
-          for (auto& inst : *exit)
-            builder.Insert(inst.clone());
+          for (auto& inst : *exit) builder.Insert(inst.clone());
 
           for (auto it_ = block.begin(); it_ != block.end(); ++it_)
-            if (llvm::ReturnInst::classof(&*it_))
-              block.erase(std::next(it_), block.end());
+            if (llvm::ReturnInst::classof(&*it_)) block.erase(std::next(it_), block.end());
           break;
         }
       }
@@ -637,8 +600,7 @@ struct Module {
 
     auto blocks_without_predecessor = psl::vector<llvm::BasicBlock*>();
     for (auto& block : *F)
-      if (&block != entry && llvm::pred_empty(&block))
-        blocks_without_predecessor.push_back(&block);
+      if (&block != entry && llvm::pred_empty(&block)) blocks_without_predecessor.push_back(&block);
 
     for (auto block : blocks_without_predecessor) {
       block->removeFromParent();
@@ -737,8 +699,7 @@ struct Expr {
 };
 
 struct Id {
-  Id(SourceLoc sl, psl::string value) : sl(sl), value(MOVE(value)) {
-  }
+  Id(SourceLoc sl, psl::string value) : sl(sl), value(MOVE(value)) {}
   Value emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -748,8 +709,7 @@ struct Id {
 struct NumberLiteral {
   NumberLiteral(const psl::string& str);
   Value emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
   bool is_float = false;
@@ -757,28 +717,23 @@ struct NumberLiteral {
   int valuei;
 };
 struct BooleanLiteral {
-  BooleanLiteral(bool value) : value(value) {
-  }
+  BooleanLiteral(bool value) : value(value) {}
   Value emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
   bool value;
 };
 struct StringLiteral {
-  StringLiteral(psl::string value) : value(MOVE(value)) {
-  }
+  StringLiteral(psl::string value) : value(MOVE(value)) {}
   Value emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
   psl::string value;
 };
 struct Vector {
-  Vector(SourceLoc sl, psl::vector<Expr> args) : sl(sl), args{MOVE(args)} {
-  }
+  Vector(SourceLoc sl, psl::vector<Expr> args) : sl(sl), args{MOVE(args)} {}
   Value emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -787,8 +742,7 @@ struct Vector {
 };
 struct FunctionCall {
   FunctionCall(SourceLoc sl, psl::string name, psl::vector<Expr> args)
-      : sl(sl), name{MOVE(name)}, args{MOVE(args)} {
-  }
+      : sl(sl), name{MOVE(name)}, args{MOVE(args)} {}
   Value emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -817,18 +771,15 @@ struct Subscript {
 struct LambdaExpr {
   LambdaExpr(SourceLoc sl, FunctionDefinition body);
   Value emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
   psl::Box<FunctionDefinition> body;
 };
 struct TypeInitExpr {
-  TypeInitExpr(SourceLoc sl, psl::string type_name) : sl(sl), type_name(MOVE(type_name)) {
-  }
+  TypeInitExpr(SourceLoc sl, psl::string type_name) : sl(sl), type_name(MOVE(type_name)) {}
   Value emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
   psl::string type_name;
@@ -847,10 +798,8 @@ struct PExpr : psl::variant<Id, NumberLiteral, BooleanLiteral, StringLiteral, Ve
 struct Expr0 {
   enum Op { None, PreInc, PreDec, PostInc, PostDec, Positive, Negate, Invert };
   template <typename T>
-  Expr0(T x) : sl(x.sl), x{MOVE(x)}, op{None} {
-  }
-  Expr0(SourceLoc sl, PExpr x, Op op = None) : sl(sl), x{MOVE(x)}, op{op} {
-  }
+  Expr0(T x) : sl(x.sl), x{MOVE(x)}, op{None} {}
+  Expr0(SourceLoc sl, PExpr x, Op op = None) : sl(sl), x{MOVE(x)}, op{op} {}
   Value emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -861,8 +810,7 @@ struct Expr0 {
 struct Declaration {
   enum Flag { None = 0, AsRef = 1, AssignIfExist = 2 };
   Declaration(SourceLoc sl, psl::string name, Expr expr, Flag flag = Flag::None)
-      : sl(sl), name{MOVE(name)}, expr{MOVE(expr)}, flag(flag) {
-  }
+      : sl(sl), name{MOVE(name)}, expr{MOVE(expr)}, flag(flag) {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -872,36 +820,29 @@ struct Declaration {
   Flag flag;
 };
 struct Semicolon {
-  void emit(Module&) const {
-  }
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void emit(Module&) const {}
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 };
 struct BreakStmt {
-  BreakStmt(SourceLoc sl) : sl(sl) {
-  }
+  BreakStmt(SourceLoc sl) : sl(sl) {}
   void emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
 };
 struct ContinueStmt {
-  ContinueStmt(SourceLoc sl) : sl(sl) {
-  }
+  ContinueStmt(SourceLoc sl) : sl(sl) {}
   void emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
   SourceLoc sl;
 };
 struct ReturnStmt {
-  ReturnStmt(SourceLoc sl, psl::optional<Expr> expr) : sl(sl), expr(MOVE(expr)) {
-  }
+  ReturnStmt(SourceLoc sl, psl::optional<Expr> expr) : sl(sl), expr(MOVE(expr)) {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
-private:
+ private:
   SourceLoc sl;
   psl::optional<Expr> expr;
 };
@@ -915,8 +856,7 @@ struct Stmt : psl::variant<Semicolon, Expr, Declaration, BreakStmt, ContinueStmt
   }
 };
 struct Block {
-  Block(psl::vector<BlockElem> elems) : elems{MOVE(elems)} {
-  }
+  Block(psl::vector<BlockElem> elems) : elems{MOVE(elems)} {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -925,8 +865,7 @@ struct Block {
 };
 struct While {
   While(SourceLoc sl, Expr condition, Block body)
-      : sl(sl), condition(MOVE(condition)), body(MOVE(body)) {
-  }
+      : sl(sl), condition(MOVE(condition)), body(MOVE(body)) {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -936,8 +875,7 @@ struct While {
 };
 struct For {
   For(SourceLoc sl, Stmt init, Expr condition, Expr inc, Block body)
-      : sl(sl), init{MOVE(init)}, condition{MOVE(condition)}, inc{MOVE(inc)}, body{MOVE(body)} {
-  }
+      : sl(sl), init{MOVE(init)}, condition{MOVE(condition)}, inc{MOVE(inc)}, body{MOVE(body)} {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -949,21 +887,19 @@ struct For {
 };
 struct If {
   If(SourceLoc sl, Expr condition, Block body)
-      : sl(sl), condition{MOVE(condition)}, body{MOVE(body)} {
-  }
+      : sl(sl), condition{MOVE(condition)}, body{MOVE(body)} {}
   SourceLoc sl;
   Expr condition;
   Block body;
 };
 struct Else {
-  Else(SourceLoc sl, Block body) : sl(sl), body{MOVE(body)} {
-  }
+  Else(SourceLoc sl, Block body) : sl(sl), body{MOVE(body)} {}
   SourceLoc sl;
   Block body;
 };
 struct IfElseChain {
-  IfElseChain(psl::vector<If> ifs, psl::optional<Else> else_) : ifs{MOVE(ifs)}, else_{MOVE(else_)} {
-  }
+  IfElseChain(psl::vector<If> ifs, psl::optional<Else> else_)
+      : ifs{MOVE(ifs)}, else_{MOVE(else_)} {}
   void emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
 
@@ -971,8 +907,7 @@ struct IfElseChain {
   psl::optional<Else> else_;
 };
 struct ParameterDeclaration {
-  ParameterDeclaration(Id name, Id type) : name(name), type(type) {
-  }
+  ParameterDeclaration(Id name, Id type) : name(name), type(type) {}
   Id name;
   Id type;
 };
@@ -983,8 +918,7 @@ struct FunctionDefinition {
         name(MOVE(name)),
         return_type(MOVE(return_type)),
         params(MOVE(params)),
-        body(MOVE(body)) {
-  }
+        body(MOVE(body)) {}
 
   llvm::Function* emit(Module& m) const;
   void get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const;
@@ -996,8 +930,7 @@ struct FunctionDefinition {
   Block body;
 };
 struct MemberDefinition {
-  MemberDefinition(Id name, Id type) : name(MOVE(name)), type(MOVE(type)) {
-  }
+  MemberDefinition(Id name, Id type) : name(MOVE(name)), type(MOVE(type)) {}
 
   Id name;
   Id type;
@@ -1009,14 +942,12 @@ struct ClassDefinition {
         name(MOVE(name)),
         ctors(MOVE(ctors)),
         methods(MOVE(methods)),
-        members(MOVE(members)) {
-  }
+        members(MOVE(members)) {}
 
   void emit(Module& m) const;
-  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {
-  }
+  void get_undeclared_variable(Module&, psl::set<psl::string>&) const {}
 
-private:
+ private:
   SourceLoc sl;
   psl::string name;
   psl::vector<FunctionDefinition> ctors;
@@ -1081,8 +1012,7 @@ Value StringLiteral::emit(Module& m) const {
   return m.call(sl, "str", psl::vector_of(cstr));
 }
 Value Vector::emit(Module& m) const {
-  if (args.size() < 2 || args.size() > 4)
-    m.error(sl, "Only 2, 3, or 4 items can exist inside []");
+  if (args.size() < 2 || args.size() > 4) m.error(sl, "Only 2, 3, or 4 items can exist inside []");
 
   auto arg_values = psl::transform_vector(args, [&](auto&& x) { return x.emit(m); });
 
@@ -1092,8 +1022,7 @@ Value Vector::emit(Module& m) const {
     return m.call(sl, "vec" + psl::to_string(args.size()) + "i", arg_values);
 }
 void Vector::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
-  for (auto& arg : args)
-    arg.get_undeclared_variable(m, vars);
+  for (auto& arg : args) arg.get_undeclared_variable(m, vars);
 }
 static psl::string get_rtype(psl::string_view sig) {
   auto depth = 0;
@@ -1116,8 +1045,7 @@ Value FunctionCall::emit(Module& m) const {
         ptr_ty, m.builder.CreateConstGEP2_32(m.function_object_type(), res.ptr, 0, 1));
     auto arg_values = std::vector<llvm::Value*>();
     arg_values.push_back(obj);
-    for (auto&& arg : args)
-      arg_values.push_back(arg.emit(m).ptr);
+    for (auto&& arg : args) arg_values.push_back(arg.emit(m).ptr);
     auto r = m.alloc(get_rtype(res.type_name));
     arg_values.insert(arg_values.begin(), r.ptr);
     m.builder.CreateCall(m.get_type_of(res.type_name), f, arg_values);
@@ -1130,12 +1058,10 @@ Value FunctionCall::emit(Module& m) const {
 void FunctionCall::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
   if (m.find_unique_f(name).error == Context::FindUniqueFResult::FindNone && !m.find_variable(name))
     vars.insert(name);
-  for (auto& arg : args)
-    arg.get_undeclared_variable(m, vars);
+  for (auto& arg : args) arg.get_undeclared_variable(m, vars);
 }
 MemberAccess::MemberAccess(SourceLoc sl, PExpr pexpr, Id id)
-    : sl(sl), pexpr(MOVE(pexpr)), id(MOVE(id)) {
-}
+    : sl(sl), pexpr(MOVE(pexpr)), id(MOVE(id)) {}
 Value MemberAccess::emit(Module& m) const {
   auto x = pexpr->emit(m);
   if (auto info = m.find_class_member_info("@member." + x.type_name + "." + id.value))
@@ -1151,8 +1077,7 @@ void MemberAccess::get_undeclared_variable(Module& m, psl::set<psl::string>& var
   pexpr->get_undeclared_variable(m, vars);
 }
 Subscript::Subscript(SourceLoc sl, PExpr pexpr, Expr index)
-    : sl(sl), pexpr(MOVE(pexpr)), index(MOVE(index)) {
-}
+    : sl(sl), pexpr(MOVE(pexpr)), index(MOVE(index)) {}
 Value Subscript::emit(Module& m) const {
   auto args = psl::vector_of(pexpr->emit(m), index.emit(m));
   return m.call(sl, "[]", args);
@@ -1160,16 +1085,14 @@ Value Subscript::emit(Module& m) const {
 void Subscript::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
   pexpr->get_undeclared_variable(m, vars);
 }
-LambdaExpr::LambdaExpr(SourceLoc sl, FunctionDefinition body_) : sl(sl), body(MOVE(body_)) {
-}
+LambdaExpr::LambdaExpr(SourceLoc sl, FunctionDefinition body_) : sl(sl), body(MOVE(body_)) {}
 Value LambdaExpr::emit(Module& m) const {
   auto class_name = psl::to_string("@lambda.", m.lambda_counter++);
 
   // Setup the members of the lambda
   auto vars = psl::set<psl::string>();
   body->get_undeclared_variable(m, vars);
-  for (auto&& param : body->params)
-    vars.erase(param.name.value);
+  for (auto&& param : body->params) vars.erase(param.name.value);
 
   //   if (vars.size() == 0) {
   //     auto body = this->body;
@@ -1227,21 +1150,28 @@ Value LambdaExpr::emit(Module& m) const {
                                 return TypeTag(x.type.value);
                               }))};
 }
-Value TypeInitExpr::emit(Module& m) const {
-  return {m.alloc(m.type(type_name)), type_name};
-}
+Value TypeInitExpr::emit(Module& m) const { return {m.alloc(m.type(type_name)), type_name}; }
 Value Expr0::emit(Module& m) const {
   auto args = psl::vector_of(x.emit(m));
   switch (op) {
-    case None: return args[0];
-    case PreInc: return m.call(sl, "++x", args);
-    case PreDec: return m.call(sl, "--x", args);
-    case PostInc: return m.call(sl, "x++", args);
-    case PostDec: return m.call(sl, "x--", args);
-    case Positive: return m.call(sl, "+x", args);
-    case Negate: return m.call(sl, "-x", args);
-    case Invert: return m.call(sl, "!x", args);
-    default: PINE_UNREACHABLE;
+    case None:
+      return args[0];
+    case PreInc:
+      return m.call(sl, "++x", args);
+    case PreDec:
+      return m.call(sl, "--x", args);
+    case PostInc:
+      return m.call(sl, "x++", args);
+    case PostDec:
+      return m.call(sl, "x--", args);
+    case Positive:
+      return m.call(sl, "+x", args);
+    case Negate:
+      return m.call(sl, "-x", args);
+    case Invert:
+      return m.call(sl, "!x", args);
+    default:
+      PINE_UNREACHABLE;
   }
 }
 void Expr0::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
@@ -1249,15 +1179,11 @@ void Expr0::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) cons
 }
 template <typename T>
 requires requires(T x) { x.sl; }
-Expr::Expr(T x) : Expr(Expr0(x.sl, MOVE(x))) {
-}
-Expr::Expr(Expr0 x) : sl(x.sl), op{None}, x{MOVE(x)} {
-}
-Expr::Expr(Expr a, Expr b, Op op) : sl(a.sl), op{op}, a{MOVE(a)}, b{MOVE(b)} {
-}
+Expr::Expr(T x) : Expr(Expr0(x.sl, MOVE(x))) {}
+Expr::Expr(Expr0 x) : sl(x.sl), op{None}, x{MOVE(x)} {}
+Expr::Expr(Expr a, Expr b, Op op) : sl(a.sl), op{op}, a{MOVE(a)}, b{MOVE(b)} {}
 Value Expr::emit(Module& m) const {
-  if (op == None)
-    return x->emit(m);
+  if (op == None) return x->emit(m);
 
   auto args = psl::vector_of(a->emit(m), b->emit(m));
 
@@ -1267,29 +1193,52 @@ Value Expr::emit(Module& m) const {
   }
 
   switch (op) {
-    case None: PINE_UNREACHABLE;
-    case Mul: return m.call(sl, "*", args);
-    case Div: return m.call(sl, "/", args);
-    case Mod: return m.call(sl, "%", args);
-    case Pow: return m.call(sl, "^", args);
-    case Add: return m.call(sl, "+", args);
-    case Sub: return m.call(sl, "-", args);
-    case Lt: return m.call(sl, "<", args);
-    case Gt: return m.call(sl, ">", args);
-    case Le: return m.call(sl, "<=", args);
-    case Ge: return m.call(sl, ">=", args);
-    case Eq: return m.call(sl, "==", args);
-    case Ne: return m.call(sl, "!=", args);
-    case And: return m.call(sl, "&&", args);
-    case Or: return m.call(sl, "||", args);
-    case AddE: return m.call(sl, "+=", args);
-    case SubE: return m.call(sl, "-=", args);
-    case MulE: return m.call(sl, "*=", args);
-    case DivE: return m.call(sl, "/=", args);
-    case ModE: return m.call(sl, "%=", args);
-    case Assi: return m.call(sl, "=", args);
-    case Init: PINE_UNREACHABLE;
-    default: PINE_UNREACHABLE;
+    case None:
+      PINE_UNREACHABLE;
+    case Mul:
+      return m.call(sl, "*", args);
+    case Div:
+      return m.call(sl, "/", args);
+    case Mod:
+      return m.call(sl, "%", args);
+    case Pow:
+      return m.call(sl, "^", args);
+    case Add:
+      return m.call(sl, "+", args);
+    case Sub:
+      return m.call(sl, "-", args);
+    case Lt:
+      return m.call(sl, "<", args);
+    case Gt:
+      return m.call(sl, ">", args);
+    case Le:
+      return m.call(sl, "<=", args);
+    case Ge:
+      return m.call(sl, ">=", args);
+    case Eq:
+      return m.call(sl, "==", args);
+    case Ne:
+      return m.call(sl, "!=", args);
+    case And:
+      return m.call(sl, "&&", args);
+    case Or:
+      return m.call(sl, "||", args);
+    case AddE:
+      return m.call(sl, "+=", args);
+    case SubE:
+      return m.call(sl, "-=", args);
+    case MulE:
+      return m.call(sl, "*=", args);
+    case DivE:
+      return m.call(sl, "/=", args);
+    case ModE:
+      return m.call(sl, "%=", args);
+    case Assi:
+      return m.call(sl, "=", args);
+    case Init:
+      PINE_UNREACHABLE;
+    default:
+      PINE_UNREACHABLE;
   }
 }
 void Expr::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
@@ -1318,12 +1267,10 @@ void Declaration::get_undeclared_variable(Module& m, psl::set<psl::string>& vars
   m.push_variable(name, Value((llvm::Value*)1, "@placeholder"));
 }
 void ReturnStmt::emit(Module& m) const {
-  if (m.return_types.size() == 0)
-    m.error(sl, "`return` can only be used inside a function");
+  if (m.return_types.size() == 0) m.error(sl, "`return` can only be used inside a function");
   auto return_type = m.return_types.back();
   if (expr) {
-    if (return_type.name == "void")
-      m.error(sl, "Can only return void");
+    if (return_type.name == "void") m.error(sl, "Can only return void");
 
     auto x = expr->emit(m);
     if (x.type_name != return_type.name) {
@@ -1343,28 +1290,23 @@ void ReturnStmt::emit(Module& m) const {
   }
 }
 void ReturnStmt::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
-  if (expr)
-    expr->get_undeclared_variable(m, vars);
+  if (expr) expr->get_undeclared_variable(m, vars);
 }
 void BreakStmt::emit(Module& m) const {
-  if (m.loop_stack.size() == 0)
-    m.error(sl, "Can only be used in a loop");
+  if (m.loop_stack.size() == 0) m.error(sl, "Can only be used in a loop");
   m.builder.CreateBr(m.loop_stack.back().end);
 }
 void ContinueStmt::emit(Module& m) const {
-  if (m.loop_stack.size() == 0)
-    m.error(sl, "Can only be used in a loop");
+  if (m.loop_stack.size() == 0) m.error(sl, "Can only be used in a loop");
   m.builder.CreateBr(m.loop_stack.back().at_inc);
 }
 void Block::emit(Module& m) const {
   m.enter_scope();
-  for (const auto& block_elem : elems)
-    block_elem.emit(m);
+  for (const auto& block_elem : elems) block_elem.emit(m);
   m.exit_scope();
 }
 void Block::get_undeclared_variable(Module& m, psl::set<psl::string>& vars) const {
-  for (const auto& block_elem : elems)
-    block_elem.get_undeclared_variable(m, vars);
+  for (const auto& block_elem : elems) block_elem.get_undeclared_variable(m, vars);
 }
 void While::emit(Module& m) const {
   auto cond_block = m.create_block();
@@ -1453,8 +1395,7 @@ void IfElseChain::get_undeclared_variable(Module& m, psl::set<psl::string>& vars
     if_.condition.get_undeclared_variable(m, vars);
     if_.body.get_undeclared_variable(m, vars);
   }
-  if (else_)
-    else_->body.get_undeclared_variable(m, vars);
+  if (else_) else_->body.get_undeclared_variable(m, vars);
 }
 
 llvm::Function* FunctionDefinition::emit(Module& m) const {
@@ -1470,8 +1411,7 @@ llvm::Function* FunctionDefinition::emit(Module& m) const {
     pnames.push_front("@res");
     ptypes.push_front(psl::exchange(rtype, TypeTag("void")));
   }
-  for (auto& ptype : ptypes)
-    ptype.is_ref = true;
+  for (auto& ptype : ptypes) ptype.is_ref = true;
   auto F = llvm::Function::Create(m.get_type_of(rtype, ptypes), llvm::Function::ExternalLinkage,
                                   unique_name.c_str(), m.M);
 
@@ -1520,26 +1460,19 @@ void ClassDefinition::emit(Module& m) const {
   m.add_type(name, llvm::StructType::create(m.C, member_types, name.c_str()), nullptr);
   m.context.create_type_trait(name, byte_size);
 
-  for (auto ctor : ctors)
-    ctor.emit(m);
-  for (auto method : methods)
-    method.emit(m);
+  for (auto ctor : ctors) ctor.emit(m);
+  for (auto method : methods) method.emit(m);
 }
 
 struct Parser {
   template <typename T>
   struct ExplicitParameter {
-    explicit ExplicitParameter(T value) : value(MOVE(value)) {
-    }
-    operator T&() {
-      return value;
-    }
+    explicit ExplicitParameter(T value) : value(MOVE(value)) {}
+    operator T&() { return value; }
     T value;
   };
 
-  Parser(psl::string_view tokens) : sl(tokens, row_padding) {
-    to_valid_pos();
-  }
+  Parser(psl::string_view tokens) : sl(tokens, row_padding) { to_valid_pos(); }
 
   Block block(bool top_level = false) {
     consume_spaces();
@@ -1550,8 +1483,7 @@ struct Parser {
       consume("{", "to begin block");
 
     auto block_elems = psl::vector<BlockElem>{};
-    while (!expect("}") && next())
-      block_elems.push_back(block_elem());
+    while (!expect("}") && next()) block_elems.push_back(block_elem());
 
     if (top_level)
       accept("}");
@@ -1639,8 +1571,7 @@ struct Parser {
       }
     }
     auto else_clause = psl::optional<Else>{};
-    if (expect("else"))
-      else_clause = else_();
+    if (expect("else")) else_clause = else_();
     return IfElseChain{MOVE(ifs), MOVE(else_clause)};
   }
   If if_() {
@@ -1685,8 +1616,7 @@ struct Parser {
         members.push_back(member_definition());
         consume(";", "to end the previous member definition");
       }
-      while (accept(";"))
-        ;
+      while (accept(";"));
     }
 
     for (auto [ctor, init_size] : psl::tie_adapter(ctors, ctor_init_sizes))
@@ -1743,8 +1673,7 @@ struct Parser {
     it = psl::next(block_.elems.insert(
         it, Stmt(Declaration(loc, "self", Expr0(TypeInitExpr(loc, class_name))))));
     // Add the initializer of its members
-    for (const auto& init_stmt : init_stmts)
-      it = psl::next(block_.elems.insert(it, init_stmt));
+    for (const auto& init_stmt : init_stmts) it = psl::next(block_.elems.insert(it, init_stmt));
     // Return `self` in the ctor
     block_.elems.push_back(Stmt(ReturnStmt({loc}, Id(loc, "self"))));
     return {FunctionDefinition(loc, ctor_name, Id(loc, class_name), MOVE(params), MOVE(block_)),
@@ -2020,10 +1949,8 @@ struct Parser {
   }
   psl::string type_names() {
     auto r = psl::string();
-    while (!expect(")"))
-      r += type_name().value + ", ";
-    if (r.size())
-      r.pop_back(2);
+    while (!expect(")")) r += type_name().value + ", ";
+    if (r.size()) r.pop_back(2);
     return r;
   }
   Id type_name() {
@@ -2036,8 +1963,7 @@ struct Parser {
       return Id(loc, "(" + params + "): " + rtype);
     } else {
       auto id_ = id();
-      if (accept("&"))
-        id_.value += "&";
+      if (accept("&")) id_.value += "&";
       return id_;
     }
   }
@@ -2056,15 +1982,13 @@ struct Parser {
   Id id() {
     auto loc = source_loc();
     auto pred = [](char c) { return psl::isalpha(c) || c == '_'; };
-    if (!expect(pred, 0))
-      error("Expect a letter or `_` to start an identifier");
+    if (!expect(pred, 0)) error("Expect a letter or `_` to start an identifier");
     auto str = psl::string{};
     while (true) {
       str.push_back(*next());
       proceed();
       auto n = next();
-      if (!n || (!pred(*n) && !psl::isdigit(*n)))
-        break;
+      if (!n || (!pred(*n) && !psl::isdigit(*n))) break;
     }
     consume_spaces();
     return Id{loc, MOVE(str)};
@@ -2072,15 +1996,13 @@ struct Parser {
   psl::optional<Id> maybe_id() {
     auto loc = source_loc();
     auto pred = [](char c) { return psl::isalpha(c) || c == '_'; };
-    if (!expect(pred, 0))
-      return psl::nullopt;
+    if (!expect(pred, 0)) return psl::nullopt;
     auto str = psl::string{};
     while (true) {
       str.push_back(*next());
       proceed();
       auto n = next();
-      if (!n || (!pred(*n) && !psl::isdigit(*n)))
-        break;
+      if (!n || (!pred(*n) && !psl::isdigit(*n))) break;
     }
     consume_spaces();
     return Id{loc, MOVE(str)};
@@ -2097,11 +2019,9 @@ struct Parser {
       if (str.back() == '.') {
         pass_decimal_point = true;
       }
-      if (expect(".."))
-        break;
+      if (expect("..")) break;
       auto n = next();
-      if (!n || !((psl::isdigit(*n) || (!pass_decimal_point && *n == '.'))))
-        break;
+      if (!n || !((psl::isdigit(*n) || (!pass_decimal_point && *n == '.')))) break;
     }
     if (!pass_decimal_point) {
       if (str.size() > 15 || psl::stoi64(str) > psl::numeric_limits<int>::max())
@@ -2133,8 +2053,7 @@ struct Parser {
         proceed();
         continue;
       }
-      if (*n == (single_quote ? '\'' : '"'))
-        break;
+      if (*n == (single_quote ? '\'' : '"')) break;
       proceed();
       str.push_back(*n);
       escape = *n == '\\';
@@ -2148,7 +2067,7 @@ struct Parser {
 
   SourceLines sl;
 
-private:
+ private:
   void consume_spaces() {
     auto in_comment = false;
     auto row_ = row;
@@ -2189,8 +2108,7 @@ private:
   bool expect(psl::string_view str) {
     for (size_t i = 0; i < str.size(); i++) {
       if (auto n = next(i)) {
-        if (*n != str[i])
-          return false;
+        if (*n != str[i]) return false;
       } else {
         return false;
       }
@@ -2202,8 +2120,7 @@ private:
               ExplicitParameter<bool> remove_tail_spaces = ExplicitParameter<bool>(true)) {
     if (expect(str)) {
       proceed(str.size());
-      if (remove_tail_spaces)
-        consume_spaces();
+      if (remove_tail_spaces) consume_spaces();
       return true;
     } else {
       return false;
@@ -2236,8 +2153,7 @@ private:
               ", but reach end-of-file");
       }
     }
-    if (remove_tail_spaces)
-      consume_spaces();
+    if (remove_tail_spaces) consume_spaces();
   }
 
   psl::optional<char> next(size_t n) {
@@ -2266,9 +2182,7 @@ private:
     }
   }
 
-  void backup() {
-    backup_stack.emplace_back(row, column);
-  }
+  void backup() { backup_stack.emplace_back(row, column); }
   void commit() {
     CHECK(backup_stack.size() != 0);
     backup_stack.pop_back();
@@ -2279,16 +2193,10 @@ private:
     column = backup_stack.back().second;
     backup_stack.pop_back();
   }
-  psl::optional<psl::string_view> next_line() const {
-    return sl.next_line(row);
-  }
-  psl::optional<char> next() const {
-    return sl.next(source_loc());
-  }
+  psl::optional<psl::string_view> next_line() const { return sl.next_line(row); }
+  psl::optional<char> next() const { return sl.next(source_loc()); }
 
-  SourceLoc source_loc() const {
-    return {row, column};
-  }
+  SourceLoc source_loc() const { return {row, column}; }
   template <typename... Args>
   [[noreturn]] void error(const Args&... args) {
     sl.error(source_loc(), args...);
@@ -2301,17 +2209,18 @@ private:
   static constexpr size_t invalid = size_t(-1);
 };
 
-static psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
+psl::pair<Block, SourceLines> parse_as_block(psl::string source) {
   auto parser = Parser{source};
   return {parser.block(true), MOVE(parser.sl)};
 }
+
+}  // namespace
+
 void jit_interpret(Context& context, psl::string source) {
   using namespace llvm;
 
   struct MyObj {
-    void call() {
-      LOG(f());
-    }
+    void call() { LOG(f()); }
     psl::function<float()> f;
   };
   context.type<MyObj>("MyObj").ctor<psl::function<float()>>().method<&MyObj::call>("call");
@@ -2345,8 +2254,7 @@ void jit_interpret(Context& context, psl::string source) {
     auto type_map = psl::map<psl::string, llvm::Type*>();
     auto add_type = [&](auto& add_type, const pine::TypeTrait* trait) -> llvm::Type* {
       llvm::Type*& ptr = type_map[trait->name];
-      if (ptr)
-        return ptr;
+      if (ptr) return ptr;
       if (trait->is_fundamental()) {
         if (trait->name == "void")
           ptr = Type::getVoidTy(C);
@@ -2356,11 +2264,21 @@ void jit_interpret(Context& context, psl::string source) {
           ptr = Type::getFloatTy(C);
         else {
           switch (trait->byte_size) {
-            case 1: ptr = Type::getInt8Ty(C); break;
-            case 2: ptr = Type::getInt16Ty(C); break;
-            case 4: ptr = Type::getInt32Ty(C); break;
-            case 8: ptr = Type::getInt64Ty(C); break;
-            case 16: ptr = Type::getInt128Ty(C); break;
+            case 1:
+              ptr = Type::getInt8Ty(C);
+              break;
+            case 2:
+              ptr = Type::getInt16Ty(C);
+              break;
+            case 4:
+              ptr = Type::getInt32Ty(C);
+              break;
+            case 8:
+              ptr = Type::getInt64Ty(C);
+              break;
+            case 16:
+              ptr = Type::getInt128Ty(C);
+              break;
             default:
               if (trait->byte_size % 8 == 0)
                 ptr = ArrayType::get(Type::getInt64Ty(C), trait->byte_size / 8);
@@ -2376,8 +2294,7 @@ void jit_interpret(Context& context, psl::string source) {
         }
       } else {
         auto members = std::vector<llvm::Type*>();
-        for (auto&& member : trait->members)
-          members.push_back(add_type(add_type, member));
+        for (auto&& member : trait->members) members.push_back(add_type(add_type, member));
         ptr = llvm::StructType::create(C, members, trait->name.c_str());
       }
 
@@ -2393,14 +2310,11 @@ void jit_interpret(Context& context, psl::string source) {
       m.add_type(trait->name, ptr, destructor);
       return ptr;
     };
-    for (const auto& [name, type] : context.types)
-      add_type(add_type, type.get());
+    for (const auto& [name, type] : context.types) add_type(add_type, type.get());
 
-    for (const auto& f : context.functions)
-      m.add_function(f);
+    for (const auto& f : context.functions) m.add_function(f);
 
-    for (const auto& [name, var] : context.constants)
-      m.add_constant(name, var);
+    for (const auto& [name, var] : context.constants) m.add_constant(name, var);
 
     block.emit(m);
 

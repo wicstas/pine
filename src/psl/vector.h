@@ -16,9 +16,7 @@ struct default_allocator {
     psl_check(ptr != nullptr);
     return ptr;
   }
-  void free(T* ptr) const {
-    ::operator delete(ptr);
-  }
+  void free(T* ptr) const { ::operator delete(ptr); }
 
   template <typename... Args>
   void construct_at(T* ptr, Args&&... args) const {
@@ -39,9 +37,7 @@ struct context_allocator {
     psl_check(ptr != nullptr);
     return ptr;
   }
-  void free(T* ptr) const {
-    context_free(ptr);
-  }
+  void free(T* ptr) const { context_free(ptr); }
 
   template <typename... Args>
   void construct_at(T* ptr, Args&&... args) const {
@@ -61,8 +57,7 @@ struct static_allocator {
     psl_check(size <= capacity);
     return reinterpret_cast<T*>(storage.ptr());
   }
-  void free(T* ptr [[maybe_unused]]) const {
-  }
+  void free(T* ptr [[maybe_unused]]) const {}
 
   template <typename... Args>
   void construct_at(T* ptr, Args&&... args) const {
@@ -82,26 +77,20 @@ struct static_allocator {
 
 template <typename T, typename Allocator = default_allocator<T>>
 class vector {
-public:
+ public:
   using ValueType = T;
 
   using Iterator = T*;
   using ConstIterator = const T*;
 
-  ~vector() {
-    reset();
-  }
+  ~vector() { reset(); }
 
   vector() = default;
 
-  explicit vector(size_t len) {
-    resize(len);
-  }
+  explicit vector(size_t len) { resize(len); }
   struct _reserve_size {};
   inline static constexpr _reserve_size reserve_size{};
-  vector(size_t len, _reserve_size) {
-    reserve(len);
-  }
+  vector(size_t len, _reserve_size) { reserve(len); }
 
   template <Range ARange>
   explicit vector(ARange&& range) {
@@ -114,15 +103,10 @@ public:
     }
   }
   template <ForwardIterator It>
-  vector(It first, It last) : vector(psl::range(first, last)) {
-  }
+  vector(It first, It last) : vector(psl::range(first, last)) {}
 
-  vector(const vector& rhs) : vector{} {
-    *this = rhs;
-  }
-  vector(vector&& rhs) : vector{} {
-    *this = move(rhs);
-  }
+  vector(const vector& rhs) : vector{} { *this = rhs; }
+  vector(vector&& rhs) : vector{} { *this = move(rhs); }
 
   vector& operator=(const vector& rhs) {
     clear();
@@ -151,9 +135,7 @@ public:
   void push_back(Ts... xs) {
     (push_back(MOVE(xs)), ...);
   }
-  void push_front(T x) {
-    insert(begin(), psl::move(x));
-  }
+  void push_front(T x) { insert(begin(), psl::move(x)); }
 
   template <typename... Args>
   void emplace_back(Args&&... args) {
@@ -162,9 +144,7 @@ public:
     allocator.construct_at(&back(), T(forward<Args>(args)...));
   }
 
-  void pop_back() {
-    resize_less(size() - 1);
-  }
+  void pop_back() { resize_less(size() - 1); }
   T consume_back() {
     auto x = back();
     pop_back();
@@ -174,9 +154,7 @@ public:
     psl_check(n <= size());
     resize_less(size() - n);
   }
-  void pop_front() {
-    erase(begin());
-  }
+  void pop_front() { erase(begin()); }
   T consume_front() {
     auto x = front();
     pop_front();
@@ -189,8 +167,7 @@ public:
     it = begin() + dist;
 
     auto i = psl::prev(end());
-    for (; i > it; --i)
-      psl::swap(*psl::prev(i), *i);
+    for (; i > it; --i) psl::swap(*psl::prev(i), *i);
 
     return it;
   }
@@ -206,20 +183,21 @@ public:
     len = nlen;
   }
 
-  void erase(Iterator it) {
-    if (it == end())
-      return;
+  auto erase(Iterator it) {
+    if (it == end()) return it;
+    auto offset = it - begin();
     while (psl::next(it) != end()) {
       auto next = psl::next(it);
       psl::swap(*it, *next);
       ++it;
     }
     pop_back();
+    return begin() + offset;
   }
-  void erase_range(Iterator first, Iterator last) {
+  auto erase_range(Iterator first, Iterator last) {
     psl_check(first <= last);
-    if (first == last)
-      return;
+    if (first == last) return first;
+    auto offset = first - begin();
     while (last != end()) {
       psl::swap(*first, *last);
       ++first;
@@ -227,27 +205,24 @@ public:
     }
 
     resize(size() - (last - first));
+    return begin() + offset;
   }
 
   void resize(size_t nlen) {
     reserve(nlen);
-    for (size_t i = size(); i < nlen; ++i)
-      allocator.construct_at(&ptr[i]);
-    for (size_t i = nlen; i < size(); ++i)
-      allocator.destruct_at(&ptr[i]);
+    for (size_t i = size(); i < nlen; ++i) allocator.construct_at(&ptr[i]);
+    for (size_t i = nlen; i < size(); ++i) allocator.destruct_at(&ptr[i]);
     len = nlen;
   }
   void resize_less(size_t nlen) {
     psl_check(nlen <= len);
-    for (size_t i = nlen; i < size(); ++i)
-      allocator.destruct_at(&ptr[i]);
+    for (size_t i = nlen; i < size(); ++i) allocator.destruct_at(&ptr[i]);
     len = nlen;
   }
 
   void reserve(size_t nreserved) {
     nreserved = roundup2(nreserved);
-    if (nreserved <= reserved)
-      return;
+    if (nreserved <= reserved) return;
 
     auto nptr = allocator.alloc(nreserved);
     if (ptr) {
@@ -260,8 +235,7 @@ public:
   }
 
   void clear() {
-    for (size_t i = 0; i < size(); ++i)
-      allocator.destruct_at(&ptr[i]);
+    for (size_t i = 0; i < size(); ++i) allocator.destruct_at(&ptr[i]);
     len = 0;
   }
   void reset() {
@@ -271,63 +245,31 @@ public:
     reserved = 0;
   }
 
-  T& operator[](size_t i) {
-    return ptr[i];
-  }
-  const T& operator[](size_t i) const {
-    return ptr[i];
-  }
+  T& operator[](size_t i) { return ptr[i]; }
+  const T& operator[](size_t i) const { return ptr[i]; }
 
-  Iterator begin() {
-    return ptr;
-  }
-  Iterator end() {
-    return ptr + size();
-  }
-  ConstIterator begin() const {
-    return ptr;
-  }
-  ConstIterator end() const {
-    return ptr + size();
-  }
-  T& front() {
-    return ptr[0];
-  }
-  const T& front() const {
-    return ptr[0];
-  }
-  T& back() {
-    return ptr[size() - 1];
-  }
-  const T& back() const {
-    return ptr[size() - 1];
-  }
+  Iterator begin() { return ptr; }
+  Iterator end() { return ptr + size(); }
+  ConstIterator begin() const { return ptr; }
+  ConstIterator end() const { return ptr + size(); }
+  T& front() { return ptr[0]; }
+  const T& front() const { return ptr[0]; }
+  T& back() { return ptr[size() - 1]; }
+  const T& back() const { return ptr[size() - 1]; }
 
-  size_t size() const {
-    return len;
-  }
-  size_t byte_size() const {
-    return size() * sizeof(T);
-  }
-  size_t capacity() const {
-    return reserved;
-  }
+  size_t size() const { return len; }
+  size_t byte_size() const { return size() * sizeof(T); }
+  size_t capacity() const { return reserved; }
 
-  const T* data() const {
-    return ptr;
-  }
-  T* data() {
-    return ptr;
-  }
+  const T* data() const { return ptr; }
+  T* data() { return ptr; }
 
   template <typename U, typename UDeleter>
   requires EqualityComparable<T, U>
   bool operator==(const vector<U, UDeleter>& rhs) const {
-    if (size() != rhs.size())
-      return false;
+    if (size() != rhs.size()) return false;
     for (size_t i = 0; i < size(); i++)
-      if (ptr[i] != rhs[i])
-        return false;
+      if (ptr[i] != rhs[i]) return false;
     return true;
   }
   template <typename U, typename UDeleter>
@@ -336,11 +278,9 @@ public:
     return !((*this) == rhs);
   }
 
-  void _set_size(size_t nlen) {
-    len = nlen;
-  }
+  void _set_size(size_t nlen) { len = nlen; }
 
-protected:
+ protected:
   T* ptr = nullptr;
   size_t len = 0;
   size_t reserved = 0;
@@ -358,7 +298,7 @@ using context_vector = vector<T, context_allocator<T>>;
 
 template <typename T, size_t _max_static_capacity>
 struct smart_vector {
-public:
+ public:
   using ValueType = T;
 
   using Iterator = T*;
@@ -409,9 +349,7 @@ public:
     }
   }
 
-  void pop_back() {
-    resize_less(size() - 1);
-  }
+  void pop_back() { resize_less(size() - 1); }
 
   void resize(size_t nlen) {
     if (overflowed) {
@@ -451,64 +389,33 @@ public:
     st.reset();
   }
 
-  T& operator[](size_t i) {
-    return overflowed ? dy[i] : st[i];
-  }
-  const T& operator[](size_t i) const {
-    return overflowed ? dy[i] : st[i];
-  }
+  T& operator[](size_t i) { return overflowed ? dy[i] : st[i]; }
+  const T& operator[](size_t i) const { return overflowed ? dy[i] : st[i]; }
 
-  Iterator begin() {
-    return overflowed ? dy.begin() : st.begin();
-  }
-  Iterator end() {
-    return overflowed ? dy.end() : st.end();
-  }
-  ConstIterator begin() const {
-    return overflowed ? dy.begin() : st.begin();
-  }
-  ConstIterator end() const {
-    return overflowed ? dy.end() : st.end();
-  }
-  T& front() {
-    return overflowed ? dy.front() : st.front();
-  }
-  const T& front() const {
-    return overflowed ? dy.front() : st.front();
-  }
-  T& back() {
-    return overflowed ? dy.back() : st.back();
-  }
-  const T& back() const {
-    return overflowed ? dy.back() : st.back();
-  }
+  Iterator begin() { return overflowed ? dy.begin() : st.begin(); }
+  Iterator end() { return overflowed ? dy.end() : st.end(); }
+  ConstIterator begin() const { return overflowed ? dy.begin() : st.begin(); }
+  ConstIterator end() const { return overflowed ? dy.end() : st.end(); }
+  T& front() { return overflowed ? dy.front() : st.front(); }
+  const T& front() const { return overflowed ? dy.front() : st.front(); }
+  T& back() { return overflowed ? dy.back() : st.back(); }
+  const T& back() const { return overflowed ? dy.back() : st.back(); }
 
-  size_t size() const {
-    return overflowed ? dy.size() : st.size();
-  }
-  size_t byte_size() const {
-    return overflowed ? dy.byte_size() : st.byte_size();
-  }
-  size_t capacity() const {
-    return overflowed ? dy.capacity() : max_static_capacity;
-  }
+  size_t size() const { return overflowed ? dy.size() : st.size(); }
+  size_t byte_size() const { return overflowed ? dy.byte_size() : st.byte_size(); }
+  size_t capacity() const { return overflowed ? dy.capacity() : max_static_capacity; }
 
-  const T* data() const {
-    return overflowed ? dy.data() : st.data();
-  }
-  T* data() {
-    return overflowed ? dy.data() : st.data();
-  }
+  const T* data() const { return overflowed ? dy.data() : st.data(); }
+  T* data() { return overflowed ? dy.data() : st.data(); }
 
-private:
+ private:
   void switch_to_dy(size_t new_size, bool zero_init = false) {
     psl_check(!overflowed);
     psl_check(new_size >= st.size());
     dy.reserve(new_size);
     psl::move_inplace(dy.begin(), st);
     if (zero_init) {
-      for (size_t i = st.size(); i < new_size; i++)
-        psl::construct_at(&dy[i]);
+      for (size_t i = st.size(); i < new_size; i++) psl::construct_at(&dy[i]);
       dy._set_size(new_size);
     } else {
       dy._set_size(st.size());
@@ -565,8 +472,7 @@ auto vector_of(Ts... xs) {
 auto transform_vector(Range auto&& xs, auto f) {
   using R = RemoveReference<decltype(f(*xs.begin()))>;
   auto res = vector<R>(xs.size(), vector<R>::reserve_size);
-  for (const auto& x : xs)
-    res.push_back(f(x));
+  for (const auto& x : xs) res.push_back(f(x));
   return res;
 }
 

@@ -3,11 +3,9 @@
 namespace psl {
 
 size_t strlen(const char* str) {
-  if (str == nullptr)
-    return 0;
+  if (str == nullptr) return 0;
   size_t len = 0;
-  while (*(str++))
-    ++len;
+  while (*(str++)) ++len;
   return len;
 }
 
@@ -33,12 +31,8 @@ int strcmp(const char* lhs, const char* rhs) {
   }
 }
 
-string::string() {
-  resize(0);
-}
-string::string(size_t len) {
-  resize(len);
-}
+string::string() { resize(0); }
+string::string(size_t len) { resize(len); }
 string::string(const char* cstr) {
   resize(psl::strlen(cstr));
   psl::copy(begin(), range(cstr, size()));
@@ -80,6 +74,10 @@ string& string::operator=(const char* cstr) {
 string_view string::subview(size_t pos, size_t len) const {
   return string_view(*this).subview(pos, len);
 }
+string_view string::subview(Iterator p0, Iterator p1) const {
+  return subview(p0 - begin(), p1 - p0);
+}
+string_view string::subview(Iterator p0) const { return subview(p0 - begin(), end() - p0); }
 
 string& string::operator=(string_view str) {
   resize(str.size());
@@ -101,9 +99,7 @@ string& string::operator+=(class string_view rhs) {
   psl::copy(begin() + old_len, rhs);
   return *this;
 }
-string& string::operator+=(const char* rhs) {
-  return (*this) += string_view(rhs);
-}
+string& string::operator+=(const char* rhs) { return (*this) += string_view(rhs); }
 string& string::operator+=(char c) {
   push_back(c);
   return *this;
@@ -121,12 +117,9 @@ string_view string_view::subview(size_t pos, size_t len) const {
 }
 
 string to_string(float x) {
-  if (psl::isnan(x))
-    return "nan";
-  if (x > psl::numeric_limits<float>::max())
-    return "inf";
-  if (x < -psl::numeric_limits<float>::max())
-    return "-inf";
+  if (psl::isnan(x)) return "nan";
+  if (x > psl::numeric_limits<float>::max()) return "inf";
+  if (x < -psl::numeric_limits<float>::max()) return "-inf";
 
   auto neg = x < 0;
   auto str = psl::string(neg ? "-" : "");
@@ -143,12 +136,9 @@ string to_string(float x) {
   return str;
 }
 string to_string(double x) {
-  if (psl::isnan(x))
-    return "nan";
-  if (x > psl::numeric_limits<double>::max())
-    return "inf";
-  if (x < -psl::numeric_limits<double>::max())
-    return "-inf";
+  if (psl::isnan(x)) return "nan";
+  if (x > psl::numeric_limits<double>::max()) return "inf";
+  if (x < -psl::numeric_limits<double>::max()) return "-inf";
 
   auto neg = x < 0;
   auto str = psl::string(neg ? "-" : "");
@@ -169,8 +159,7 @@ int stoi(string_view str) {
   auto number = 0;
   auto is_neg = false;
   for (size_t j = 0; j < psl::size(str); j++) {
-    if (str[j] == '.')
-      break;
+    if (str[j] == '.') break;
     if (j == 0 && str[j] == '-')
       is_neg = true;
     else
@@ -183,8 +172,7 @@ int64_t stoi64(string_view str) {
   auto number = 0;
   auto is_neg = false;
   for (size_t j = 0; j < psl::size(str); j++) {
-    if (str[j] == '.')
-      break;
+    if (str[j] == '.') break;
     if (j == 0 && str[j] == '-')
       is_neg = true;
     else
@@ -211,33 +199,6 @@ float stof(string_view str) {
     }
   }
   return is_neg ? -number : number;
-}
-
-string space_by(vector<string> input, string spacer) {
-  auto result = string{};
-  for (string& c : input)
-    result += c + (&c == &input.back() ? "" : spacer);
-  return result;
-}
-string space_by(string input, string spacer) {
-  auto result = string{};
-  for (char& c : input)
-    result += psl::to_string(c) + (&c == &input.back() ? "" : spacer);
-  return result;
-}
-
-string from_last_of(const string& str, char c) {
-  if (auto p = psl::find_last_of(str, c); p != psl::end(str))
-    return str.substr(psl::next(p) - str.begin());
-  else
-    return str;
-}
-
-string until_last_of(const string& str, char c) {
-  if (auto p = psl::find_last_of(str, c); p != psl::end(str))
-    return str.substr(0, p - str.begin());
-  else
-    return str;
 }
 
 }  // namespace psl

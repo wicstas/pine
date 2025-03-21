@@ -1,12 +1,15 @@
 #include <pine/impl/integrator/path_opengl.h>
 #include <pine/core/opengl.h>
+#include <pine/core/esl.h>
 
 namespace pine {
 
 void OpenGLPathIntegrator::render() {
   auto film_size = vec2(640, 480);
   auto window = GLWindow(film_size, "Path");
-  auto program = GLProgram("shaders/path.vert", "shaders/path.frag");
+  auto vs = GLShader(GLShader::Vertex, read_string_file("shaders/path.vert"));
+  auto fs = GLShader(GLShader::Fragment, load_esl("shaders/path.frag"));
+  auto program = GLProgram(vs, fs);
   program.set_uniform("film_size", film_size);
   auto vao = VAO(psl::vector_of<float>(-1, -1, -1, 1, 1, 1, 1, -1), 0, 2);
   auto fbo = FBO<vec4>(film_size, 0);

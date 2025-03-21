@@ -54,7 +54,9 @@ void save_image(psl::string filename, vec2i size, int nchannel, const float *dat
   save_image(filename, size, nchannel, pixels.data());
 }
 void save_image(psl::string filename, vec2i size, int nchannel, const uint8_t *data) {
-  auto ext = from_last_of(filename, '.');
+  auto it = find(filename, '.');
+  if (it != filename.end()) ++it;
+  auto ext = filename.substr(it);
   if (ext == "bmp")
     stbi_write_bmp(filename.c_str(), size.x, size.y, nchannel, data);
   else if (ext == "png")

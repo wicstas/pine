@@ -11,6 +11,61 @@
 
 namespace pine {
 
+template <typename T>
+constexpr bool is_grammar_item = false;
+template <typename T>
+concept GrammarItem_ = is_grammar_item<T>;
+
+struct Sym {
+  Sym(psl::string sym) : sym(MOVE(sym)) {}
+  psl::string sym;
+};
+
+inline Sym operator""_s(const char *str, size_t len) { return Sym(psl::string(str, len)); }
+
+struct Maybe {
+  Maybe(Sym item) : sym(item.sym) {};
+  psl::string sym;
+};
+struct OneOrMore {
+  OneOrMore(Sym item) : sym(item.sym) {};
+  psl::string sym;
+};
+struct Many {
+  Many(Sym item) : sym(item.sym) {};
+  psl::string sym;
+};
+template <GrammarItem_ T>
+struct Sup {
+  Sup(T item) : item(item) {}
+  T item;
+};
+
+template <typename T, typename U>
+struct Concat {
+  Concat(T first, U second) : first(first), second(second) {}
+  T first;
+  U second;
+};
+
+template <>
+inline constexpr bool is_grammar_item<Sym> = true;
+template <>
+inline constexpr bool is_grammar_item<Maybe> = true;
+template <>
+inline constexpr bool is_grammar_item<OneOrMore> = true;
+template <>
+inline constexpr bool is_grammar_item<Many> = true;
+template <typename T, typename U>
+inline constexpr bool is_grammar_item<Concat<T, U>> = true;
+template <typename T>
+inline constexpr bool is_grammar_item<Sup<T>> = true;
+
+template <GrammarItem_ T, GrammarItem_ U>
+auto operator+(T first, U second) {
+  return Concat<T, U>(first, second);
+}
+
 enum class Qualifier { One, Maybe, OneOrMore, Many };
 inline psl::string to_string(Qualifier qualifier) {
   switch (qualifier) {
@@ -36,79 +91,14 @@ struct GrammarRule {
   psl::vector<GrammarItem> expr;
 };
 
-template <typename T>
-constexpr bool is_grammar_item = false;
-template <typename T>
-concept GrammarItem_ = is_grammar_item<T>;
-
-struct Sym {
-  Sym(psl::string sym) : sym(MOVE(sym)) {
-  }
-  psl::string sym;
-};
-
-inline Sym operator""_s(const char *str, size_t len) {
-  return Sym(psl::string(str, len));
-}
-
-struct Maybe {
-  Maybe(Sym item) : sym(item.sym){};
-  psl::string sym;
-};
-struct OneOrMore {
-  OneOrMore(Sym item) : sym(item.sym){};
-  psl::string sym;
-};
-struct Many {
-  Many(Sym item) : sym(item.sym){};
-  psl::string sym;
-};
-template <GrammarItem_ T>
-struct Sup {
-  Sup(T item) : item(item) {
-  }
-  T item;
-};
-
-template <typename T, typename U>
-struct Concat {
-  Concat(T first, U second) : first(first), second(second) {
-  }
-  T first;
-  U second;
-};
-
-template <>
-inline constexpr bool is_grammar_item<Sym> = true;
-template <>
-inline constexpr bool is_grammar_item<Maybe> = true;
-template <>
-inline constexpr bool is_grammar_item<OneOrMore> = true;
-template <>
-inline constexpr bool is_grammar_item<Many> = true;
-template <typename T, typename U>
-inline constexpr bool is_grammar_item<Concat<T, U>> = true;
-template <typename T>
-inline constexpr bool is_grammar_item<Sup<T>> = true;
-
-template <GrammarItem_ T, GrammarItem_ U>
-auto operator+(T first, U second) {
-  return Concat<T, U>(first, second);
-}
-
 class Grammar {
-public:
+ public:
   struct RuleProxy {
-    RuleProxy(Grammar &grammar, size_t rule_index) : grammar(grammar), rule_index(rule_index) {
-    }
-    void operator=(GrammarItem_ auto item) {
-      parse(item);
-    };
+    RuleProxy(Grammar &grammar, size_t rule_index) : grammar(grammar), rule_index(rule_index) {}
+    void operator=(GrammarItem_ auto item) { parse(item); };
 
-  private:
-    void parse(Sym sym) {
-      add_item(GrammarItem{sym.sym, Qualifier::One, superficial});
-    };
+   private:
+    void parse(Sym sym) { add_item(GrammarItem{sym.sym, Qualifier::One, superficial}); };
     void parse(Maybe item) {
       auto qualified_sym = "@maybe#" + psl::to_string(item.sym);
       add_item(GrammarItem{qualified_sym, Qualifier::One, superficial});
@@ -136,9 +126,7 @@ public:
       parse(x.second);
     }
 
-    void add_item(GrammarItem item) {
-      grammar.rules[rule_index].expr.push_back(item);
-    }
+    void add_item(GrammarItem item) { grammar.rules[rule_index].expr.push_back(item); }
 
     Grammar &grammar;
     size_t rule_index;
@@ -152,6 +140,7 @@ public:
     return RuleProxy{*this, rule_index};
   }
 
+ private:
   void add_qualified(psl::string sym, psl::string qualified_sym, Qualifier qualifier) {
     if (sym2index.find(qualified_sym) == sym2index.end()) {
       auto rule_index = rules.size();
@@ -161,6 +150,7 @@ public:
     }
   }
 
+ public:
   psl::vector<GrammarRule> rules;
   psl::multimap<psl::string, size_t> sym2index;
 };
@@ -169,8 +159,7 @@ inline psl::string to_string(const Grammar &grammar) {
   auto str = psl::string();
   for (const auto &rule : grammar.rules) {
     str += rule.sym + " := ";
-    for (const auto &item : rule.expr)
-      str += item.sym + to_string(item.qualifier) + " ";
+    for (const auto &item : rule.expr) str += item.sym + to_string(item.qualifier) + " ";
     str += "\n";
   }
   return str;
@@ -185,14 +174,15 @@ inline psl::string to_string(const EarleyNode &node, int depth = 0) {
   auto str = psl::string_n_of(depth * 2, ' ');
   str += node.sym + "\n";
 
-  for (const auto &child : node.children)
-    str += to_string(child, depth + 1);
+  for (const auto &child : node.children) str += to_string(child, depth + 1);
 
   return str;
 }
 
+psl::vector<EarleyNode> tokenize(psl::string input);
+
 psl::optional<EarleyNode> parse(const Grammar &grammar, const psl::vector<EarleyNode> &tokens,
-                                const psl::string &root_sym);
+                                psl::string root_sym);
 
 template <typename... Ts>
 struct CtorSpecifier {};
@@ -220,8 +210,7 @@ struct Object {
   template <typename T, bool final_ = false>
   struct Model : Concept {
     Model() = default;
-    Model(T base) : base{MOVE(base)} {
-    }
+    Model(T base) : base{MOVE(base)} {}
     psl::unique_ptr<Concept> make_optional() const override {
       CHECK(!final_);
       if constexpr (!final_)
@@ -239,32 +228,22 @@ struct Object {
       CHECK(!final_);
       vector.as<psl::vector<T>>().push_back(MOVE(base));
     }
-    psl::unique_ptr<Concept> clone() const override {
-      return psl::make_unique<Model>(*this);
-    }
-    void *ptr() override {
-      return reinterpret_cast<void *>(&base);
-    }
-    size_t type_id() const override {
-      return psl::type_id<T>();
-    }
-    const psl::string &type_name() const override {
-      return psl::type_name<T>();
-    }
+    psl::unique_ptr<Concept> clone() const override { return psl::make_unique<Model>(*this); }
+    void *ptr() override { return reinterpret_cast<void *>(&base); }
+    size_t type_id() const override { return psl::type_id<T>(); }
+    const psl::string &type_name() const override { return psl::type_name<T>(); }
 
-  private:
+   private:
     T base;
   };
 
   Object() = default;
   template <typename T>
-  Object(T base) : model(psl::make_unique<Model<T>>(MOVE(base))) {
-  }
+  Object(T base) : model(psl::make_unique<Model<T>>(MOVE(base))) {}
 
   Object(Object &&) = default;
   Object(const Object &rhs) {
-    if (rhs.model)
-      model = rhs.model->clone();
+    if (rhs.model) model = rhs.model->clone();
   }
   Object &operator=(Object rhs) {
     model = MOVE(rhs.model);
@@ -301,15 +280,13 @@ struct Object {
   template <typename T>
   T &as() {
     CHECK(model != nullptr);
-    if (!is<T>())
-      SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
+    if (!is<T>()) SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
     return *reinterpret_cast<T *>(model->ptr());
   }
   template <typename T>
   const T &as() const {
     CHECK(model != nullptr);
-    if (!is<T>())
-      SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
+    if (!is<T>()) SEVERE("Can't interpret ", type_name(), " as ", psl::type_name<T>());
     return *reinterpret_cast<const T *>(model->ptr());
   }
 
@@ -318,8 +295,7 @@ struct Object {
 
 struct Generator {
   struct Concept {
-    Concept(bool use_string) : use_string{use_string} {
-    }
+    Concept(bool use_string) : use_string{use_string} {}
 
     virtual ~Concept() = default;
     virtual Object make_null_optional() const = 0;
@@ -352,16 +328,10 @@ struct Generator {
         return psl::nullopt;
     }
 
-    Object make_null_optional() const override {
-      return Object{psl::optional<T>{psl::nullopt}};
-    }
-    Object make_empty_vector() const override {
-      return Object{psl::vector<T>{}};
-    }
+    Object make_null_optional() const override { return Object{psl::optional<T>{psl::nullopt}}; }
+    Object make_empty_vector() const override { return Object{psl::vector<T>{}}; }
 
-    const psl::string &type_name() const override {
-      return psl::type_name<T>();
-    }
+    const psl::string &type_name() const override { return psl::type_name<T>(); }
 
     template <typename... Args, int... I>
     static bool is(const psl::vector<Object> &args, psl::IntegerSequence<int, I...>) {
@@ -398,12 +368,11 @@ struct Generator {
 
   Concept *find_model(psl::string sym) const {
     auto it = models.find(sym);
-    if (it == psl::end(models))
-      SEVERE("Cannot find the model for `", sym, '`');
+    if (it == psl::end(models)) SEVERE("Cannot find the model for `", sym, '`');
     return it->second.get();
   }
 
-private:
+ private:
   std::map<psl::string, psl::unique_ptr<Concept>> models;
 };
 
