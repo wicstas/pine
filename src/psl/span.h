@@ -49,5 +49,9 @@ template <typename T>
 span<T> make_span(T* ptr, size_t len) {
   return span<T>(ptr, ptr + len);
 }
+template <typename T, size_t len>
+span<T> make_span(T (&ptr)[len]) {
+  return span<T>(ptr, ptr + len);
+}
 
 }  // namespace psl

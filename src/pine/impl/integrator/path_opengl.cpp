@@ -2,6 +2,10 @@
 #include <pine/core/opengl.h>
 #include <pine/core/esl.h>
 
+extern const int sobol_256spp_256d[256 * 256];
+extern const int scramblingTile[128 * 128 * 8];
+extern const int rankingTile[128 * 128 * 8];
+
 namespace pine {
 
 void OpenGLPathIntegrator::render() {
@@ -10,9 +14,15 @@ void OpenGLPathIntegrator::render() {
   auto vs = GLShader(GLShader::Vertex, read_string_file("shaders/path.vert"));
   auto fs = GLShader(GLShader::Fragment, load_esl("shaders/path.frag"));
   auto program = GLProgram(vs, fs);
+
   program.set_uniform("film_size", film_size);
   auto vao = VAO(psl::vector_of<float>(-1, -1, -1, 1, 1, 1, 1, -1), 0, 2);
   auto fbo = FBO<vec4>(film_size, 0);
+  auto image = Array2d4f(film_size);
+
+  auto sobol = SSBO(psl::make_span(sobol_256spp_256d), 10);
+  auto sobol_aux0 = SSBO(psl::make_span(scramblingTile), 11);
+  auto sobol_aux1 = SSBO(psl::make_span(rankingTile), 12);
 
   auto cam_position = vec3(5, 1, 0);
   auto cam_c2w = (mat3)look_at(cam_position, {0, 1, 0});
@@ -56,19 +66,29 @@ void OpenGLPathIntegrator::render() {
     program.set_uniform("cam.fov2d", vec2(film_size.x / film_size.y * cam_fov, cam_fov));
     program.set_uniform("alpha", alpha);
 
-    fbo.bind();
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 6);
-    // image.bind();
-    // glCopyTexImage2D(GL_TEXTURE_2D, 0, image.internal_type(), 0, 0, image.width(),
-    // image.height(),
-    //                  0);
+    if (alpha < 256) {
+      fbo.bind();
+      glDrawArrays(GL_TRIANGLE_FAN, 0, 6);
 
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo.fbo);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBlitFramebuffer(0, 0, film_size.x, film_size.y, 0, 0, film_size.x, film_size.y,
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+      glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo.fbo);
+      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+      glBlitFramebuffer(0, 0, film_size.x, film_size.y, 0, 0, film_size.x, film_size.y,
+                        GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    }
 
-    window.update();
+    static bool key_k_active = true;
+    if (window.is_key_pressed(GLFW_KEY_K)) {
+      if (key_k_active) {
+        key_k_active = false;
+        LOG("Saving screenshot");
+        glReadPixels(0, 0, film_size.x, film_size.y, GL_RGBA, GL_FLOAT, image.data());
+        save_image("images/screenshot.png", image, true);
+      }
+    } else {
+      key_k_active = true;
+    }
+
+    window.update(alpha < 255);
     alpha++;
     glfwSetWindowTitle(
         window.ptr(), psl::to_string(alpha, " / ", int(1000.0f / timer.reset()), " spp/s").c_str());

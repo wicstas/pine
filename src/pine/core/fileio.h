@@ -17,9 +17,10 @@ using Bytes = psl::vector<uint8_t>;
 using BytesView = psl::span<uint8_t>;
 
 psl::string read_string_file(psl::string_view filename);
+void write_string_file(psl::string_view filename, psl::string_view content);
 
-void write_binary_file(psl::string_view filename, const void* ptr, size_t size);
 Bytes read_binary_file(psl::string_view filename);
+void write_binary_file(psl::string_view filename, const void* ptr, size_t size);
 
 psl::map<psl::string, Bytes> read_folder(psl::string path);
 

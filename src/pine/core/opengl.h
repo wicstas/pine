@@ -43,11 +43,11 @@ struct GLWindow {
   ~GLWindow() { glfwDestroyWindow(window); }
   GLWindow(GLWindow&&) = delete;
 
-  void update() const {
+  void update(bool clear_framebuffer = true) const {
     glfwPollEvents();
 
     glfwSwapBuffers(window);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (clear_framebuffer) glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 
   bool should_close() const { return glfwWindowShouldClose(window); }
@@ -215,7 +215,10 @@ struct SSBO {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, index, ssbo);
   }
   template <typename T>
-  SSBO(const psl::vector<T>& data, int index) : SSBO(data.size() * sizeof(T), &data[0], index) {}
+  SSBO(psl::span<T> data, int index) : SSBO(data.size() * sizeof(T), &data[0], index) {}
+  template <typename T>
+  SSBO(const psl::vector<T>& data, int index) : SSBO(psl::span<const T>(data), index) {}
+
   void update(void* data) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, size, data);

@@ -53,7 +53,7 @@ auto size(T&& x) {
   return x.size();
 }
 template <typename T, size_t N>
-auto size(T[N]) {
+auto size(T (&)[N]) {
   return N;
 }
 

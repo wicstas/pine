@@ -23,10 +23,10 @@ psl::string read_string_file(psl::string_view filename) {
   file.read(&str[0], size);
   return str;
 }
-void write_binary_file(psl::string_view filename, const void *ptr, size_t size) {
-  auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::out);
+void write_string_file(psl::string_view filename, psl::string_view content) {
+  auto file = psl::ScopedFile(filename, psl::ios::out);
   if (!file.is_open()) WARNING("Unable to create file `", filename, '`');
-  file.write((const char *)ptr, size);
+  file.write(content.data(), content.size());
 }
 Bytes read_binary_file(psl::string_view filename) {
   auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::in);
@@ -34,6 +34,11 @@ Bytes read_binary_file(psl::string_view filename) {
   Bytes data(file.size());
   file.read(&data[0], file.size());
   return data;
+}
+void write_binary_file(psl::string_view filename, const void *ptr, size_t size) {
+  auto file = psl::ScopedFile(filename, psl::ios::binary | psl::ios::out);
+  if (!file.is_open()) WARNING("Unable to create file `", filename, '`');
+  file.write((const char *)ptr, size);
 }
 psl::vector<uint8_t> to_uint8_array(vec2i size, int nchannel, const float *data, bool flip_y,
                                     bool apply_gamma) {
