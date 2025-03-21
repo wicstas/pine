@@ -46,6 +46,6 @@ float bluenoise(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension)
 	return v;
 }
 
-float next() { return bluenoise(int(gl_FragCoord.x), int(gl_FragCoord.y), alpha, dim++);}
+float next() { return bluenoise(frag_coord.x, frag_coord.y, alpha, dim++);}
 vec2 next2() { return vec2(next(), next()); }
 vec3 next3() { return vec3(next(), next(), next()); }

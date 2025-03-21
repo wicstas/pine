@@ -293,7 +293,6 @@ struct Texture2D {
     glBindTexture(GL_TEXTURE_2D, texture);
     glBindImageTexture(index, texture, 0, false, 0, GL_READ_ONLY, internal_type());
   };
-  void bind() { glBindTexture(GL_TEXTURE_2D, texture); }
   static int internal_type() {
     if (psl::same_as<T, vec3>)
       return GL_RGB32F;
@@ -340,8 +339,55 @@ struct FBO {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
     CHECK(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   }
-  void bind() { glBindFramebuffer(GL_FRAMEBUFFER, fbo); }
-  static void bind_main() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
+  void bind() {
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  }
+  static void bind_main() {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
+
+  static int internal_type() {
+    if (psl::same_as<T, vec3>)
+      return GL_RGB32F;
+    else if (psl::same_as<T, vec4>)
+      return GL_RGBA32F;
+    else
+      PINE_UNREACHABLE;
+  }
+  static int format() {
+    if (psl::same_as<T, vec3>)
+      return GL_RGB;
+    else if (psl::same_as<T, vec4>)
+      return GL_RGBA;
+    else
+      PINE_UNREACHABLE;
+  }
+  static int base_type() { return GL_FLOAT; }
+
+  int width() const { return size.x; }
+  int height() const { return size.y; }
+
+  GLuint texture;
+  GLuint fbo;
+  vec2i size;
+  int index;
+};
+
+template <typename T>
+struct TextureImage {
+  TextureImage(vec2i size, int index) : size(size), index(index) {
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_type(), size.x, size.y, 0, format(), base_type(),
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glActiveTexture(GL_TEXTURE0 + index);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindImageTexture(index, texture, 0, false, 0, GL_READ_WRITE, internal_type());
+  }
 
   static int internal_type() {
     if (psl::same_as<T, vec3>)

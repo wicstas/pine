@@ -14,6 +14,7 @@ int main() {
   auto renderer = OpenGLPathIntegrator();
 
   // renderer.add(gen_mesh(vec3(0, 0, 0), vec3(1, 0, 0), vec3(1, 1, 0), vec3(0, 1, 0)));
-  renderer.add(mesh_from_gltf("scenes/cbox.glb"));
-  renderer.render();
+
+  auto scene = load_scene("scenes/cbox.glb");
+  renderer.render(scene);
 }

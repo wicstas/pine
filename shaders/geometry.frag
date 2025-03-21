@@ -1,25 +1,35 @@
+struct Material {
+    vec4 color;
+};
+
 struct SurfaceInteraction {
   vec3 p;
   vec3 n;
   vec2 uv;
+  Material material;
 };
 
 struct Mesh {
     int n_faces;
-    int offset_face;
+    int face_index_offset;
+    Material material;
 };
-uniform Mesh mesh;
+
+uniform int n_meshes;
 
 layout(std430, binding = 0) buffer SSBO0 {
-    ivec4 faces[];
+    Mesh meshes[];
 };
 layout(std430, binding = 1) buffer SSBO1 {
-    vec4 vertices[];
+    ivec4 faces[];
 };
 layout(std430, binding = 2) buffer SSBO2 {
-    vec4 normals[];
+    vec4 vertices[];
 };
 layout(std430, binding = 3) buffer SSBO3 {
+    vec4 normals[];
+};
+layout(std430, binding = 4) buffer SSBO4 {
     vec2 texcoords[];
 };
 
@@ -49,16 +59,16 @@ vec2 load_texcoord(int i) { return texcoords[i]; }
 vec2 lerp(vec2 uv, vec2 a, vec2 b, vec2 c) { return (1 - uv[0] - uv[1]) * a + uv[0] * b + uv[1] * c; }
 vec3 lerp(vec2 uv, vec3 a, vec3 b, vec3 c) { return (1 - uv[0] - uv[1]) * a + uv[0] * b + uv[1] * c; }
 
-bool intersect(inout Ray ray, out SurfaceInteraction it) {
+bool intersect(inout Ray ray, out SurfaceInteraction it, Mesh mesh) {
     int hit_index = -1;
-    for(int i = 0; i < mesh.n_faces; i++) {
-        ivec3 face = load_face(mesh.offset_face + i);
+    for(int i = 0; i < min(mesh.n_faces, 10); i++) {
+        ivec3 face = load_face(mesh.face_index_offset + i);
         if(intersect(ray, load_vertex(face[0]), load_vertex(face[1]), load_vertex(face[2])))
             hit_index = i;
     }
 
     if(hit_index != -1) {
-        ivec3 face = load_face(hit_index);
+        ivec3 face = load_face(mesh.face_index_offset + hit_index);
         vec3 v0 = load_vertex(face[0]), v1 = load_vertex(face[1]), v2 = load_vertex(face[2]);
         vec3 e1 = v1 - v0;
         vec3 e2 = v2 - v0;
@@ -69,9 +79,18 @@ bool intersect(inout Ray ray, out SurfaceInteraction it) {
         it.p = lerp(it.uv, v0, v1, v2);
         it.n = lerp(it.uv, load_normal(face[0]), load_normal(face[1]), load_normal(face[2]));
         it.uv = lerp(it.uv, load_texcoord(face[0]), load_texcoord(face[1]), load_texcoord(face[2]));
+        it.material = mesh.material;
 
         return true;
     } else {
         return false;
     }
-};
+}
+
+bool intersect(inout Ray ray, out SurfaceInteraction it) {
+    bool hit = false;
+    for(int i = 0; i < n_meshes; i++)
+        if(intersect(ray, it, meshes[i]))
+            hit = true;
+    return hit;
+}

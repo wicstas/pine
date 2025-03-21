@@ -23,7 +23,7 @@ vec3 offset_ray_origin(vec3 p, vec3 n) {
 
 Ray spawn_ray(vec3 p, vec3 n, vec3 wo) {
   Ray ray;
-  ray.o = offset_ray_origin(p, face_same_hemisphere(n, wo));
+  ray.o = offset_ray_origin(p, n);
   ray.d = wo;
   ray.tmin = 0.0f;
   ray.tmax = Infinity;

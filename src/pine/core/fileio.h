@@ -38,23 +38,19 @@ Array2d<T> invert_y(const Array2d<T>& input) {
   return output;
 }
 inline void save_image(psl::string filename, Array2d<vec3u8> pixels, bool should_invert_y = false) {
-  if (should_invert_y)
-    pixels = invert_y(pixels);
+  if (should_invert_y) pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 3, &pixels.data()[0][0]);
 }
 inline void save_image(psl::string filename, Array2d<vec4u8> pixels, bool should_invert_y = false) {
-  if (should_invert_y)
-    pixels = invert_y(pixels);
+  if (should_invert_y) pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
 }
 inline void save_image(psl::string filename, Array2d<vec3> pixels, bool should_invert_y = false) {
-  if (should_invert_y)
-    pixels = invert_y(pixels);
+  if (should_invert_y) pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 3, &pixels.data()[0][0]);
 }
 inline void save_image(psl::string filename, Array2d<vec4> pixels, bool should_invert_y = false) {
-  if (should_invert_y)
-    pixels = invert_y(pixels);
+  if (should_invert_y) pixels = invert_y(pixels);
   save_image(filename, pixels.size(), 4, &pixels.data()[0][0]);
 }
 inline void save_image(psl::string filename, Image image, bool should_invert_y = false) {
@@ -68,15 +64,16 @@ inline psl::shared_ptr<Image> load_image(psl::string_view filename) {
   return load_image(filename, read_binary_file);
 }
 
-void scene_from_gltf(Scene& scene, void* tiny_gltf_model, mat4 m);
+void scene_from_gltf(Scene& scene, void* tiny_gltf_model, mat4 m = mat4::identity());
 Mesh mesh_from_gltf(void* tiny_gltf_model);
 UberMaterial material_from_gltf(void* tiny_gltf_model);
 
-void scene_from_gltf(Scene &scene, const Bytes &data, mat4 m);
-Mesh mesh_from_gltf(const Bytes &data);
-UberMaterial material_from_gltf(const Bytes &data);
+void scene_from_gltf(Scene& scene, const Bytes& data, mat4 m = mat4::identity());
+Mesh mesh_from_gltf(const Bytes& data);
+UberMaterial material_from_gltf(const Bytes& data);
 
-void scene_from_gltf(Scene &scene, psl::string filename, mat4 m);
+void scene_from_gltf(Scene& scene, psl::string filename, mat4 m = mat4::identity());
+Scene load_scene(psl::string filename, mat4 m = mat4::identity());
 Mesh mesh_from_gltf(psl::string filename);
 UberMaterial material_from_gltf(psl::string filename);
 

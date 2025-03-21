@@ -7,6 +7,8 @@ uniform ivec2 film_size;
 uniform int alpha;
 layout(location = 0, rgba32f) uniform image2D image;
 
+ivec2 frag_coord = ivec2(gl_FragCoord.xy);
+
 #include constants.frag
 #include sampler.frag
 #include sampling.frag
@@ -17,6 +19,7 @@ layout(location = 0, rgba32f) uniform image2D image;
 
 void main() {
   vec3 L = radiance(gen_ray(coord));
-  vec3 color = (imageLoad(image, ivec2(gl_FragCoord.xy)).xyz * alpha + L) / (alpha + 1);
-  out_color = vec4(color, 1.0);
+  vec3 color = (imageLoad(image, frag_coord).xyz * alpha + L) / (alpha + 1);
+  imageStore(image, frag_coord, vec4(color, 1.0));
+  out_color = vec4(sqrt(color), 1.0);
 }

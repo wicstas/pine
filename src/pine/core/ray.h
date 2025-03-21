@@ -38,7 +38,7 @@ inline vec3 offset_ray_origin(vec3 p, vec3 n) {
 
 inline Ray spawn_ray(vec3 p, vec3 n, vec3 wo, float distance = float_max) {
   Ray ray;
-  ray.o = offset_ray_origin(p, face_same_hemisphere(n, wo));
+  ray.o = offset_ray_origin(p, n);
   ray.d = wo;
   ray.tmin = 0.0f;
   ray.tmax = distance * (1.0f - 1e-3f);
@@ -48,7 +48,7 @@ inline Ray spawn_ray(vec3 p, vec3 n, vec3 wo, float distance = float_max) {
 inline Ray spawn_ray1(vec3 p, vec3 n, vec3 wo) {
   Ray ray;
   wo = normalize(wo, ray.tmax);
-  ray.o = offset_ray_origin(p, face_same_hemisphere(n, wo));
+  ray.o = offset_ray_origin(p, n);
   ray.d = wo;
   ray.tmin = 0.0f;
   ray.tmax *= 1.0f - 1e-3f;

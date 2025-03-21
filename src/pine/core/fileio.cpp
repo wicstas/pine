@@ -567,6 +567,11 @@ UberMaterial material_from_gltf(psl::string filename) {
 
   return material_from_gltf(&model);
 }
+Scene load_scene(psl::string filename, mat4 m) {
+  auto scene = Scene();
+  scene_from_gltf(scene, filename, m);
+  return scene;
+}
 
 void interpret_file(Context &context, psl::string_view filename) {
   DEBUG("[FileIO]Loading `", filename, "`");

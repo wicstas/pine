@@ -6,15 +6,7 @@ namespace pine {
 
 class OpenGLPathIntegrator {
  public:
-  void add(Mesh mesh) {
-    mesh.assign_normals_and_texcoords();
-    meshes.push_back(MOVE(mesh));
-  }
-
-  void render();
-
- private:
-  psl::vector<Mesh> meshes;
+  void render(Scene& scene);
 };
 
 }  // namespace pine

@@ -28,6 +28,9 @@ constexpr auto gt_ = [](auto&& a, auto&& b) -> decltype(auto) { return a > b; };
 constexpr auto le_ = [](auto&& a, auto&& b) -> decltype(auto) { return a <= b; };
 constexpr auto ge_ = [](auto&& a, auto&& b) -> decltype(auto) { return a >= b; };
 
+template <typename From, typename To>
+constexpr auto converter = [](From x) { return To(MOVE(x)); };
+
 template <typename T>
 requires requires(T x) { x.begin(); }
 auto begin(T&& x) {
