@@ -66,15 +66,13 @@ void OpenGLPathIntegrator::render() {
     program.set_uniform("cam.fov2d", vec2(film_size.x / film_size.y * cam_fov, cam_fov));
     program.set_uniform("alpha", alpha);
 
-    if (alpha < 256) {
-      fbo.bind();
-      glDrawArrays(GL_TRIANGLE_FAN, 0, 6);
+    fbo.bind();
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 6);
 
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo.fbo);
-      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-      glBlitFramebuffer(0, 0, film_size.x, film_size.y, 0, 0, film_size.x, film_size.y,
-                        GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo.fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, film_size.x, film_size.y, 0, 0, film_size.x, film_size.y,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     static bool key_k_active = true;
     if (window.is_key_pressed(GLFW_KEY_K)) {
@@ -88,7 +86,7 @@ void OpenGLPathIntegrator::render() {
       key_k_active = true;
     }
 
-    window.update(alpha < 255);
+    window.update();
     alpha++;
     glfwSetWindowTitle(
         window.ptr(), psl::to_string(alpha, " / ", int(1000.0f / timer.reset()), " spp/s").c_str());

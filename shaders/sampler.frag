@@ -1,18 +1,5 @@
 int dim = 0;
 
-uint triple32(uint x)
-{
-    x ^= x >> 17;
-    x *= 0xed5ad4bbU;
-    x ^= x >> 11;
-    x *= 0xac4c1b51U;
-    x ^= x >> 15;
-    x *= 0x31848babU;
-    x ^= x >> 14;
-    return x;
-}
-float next() { return triple32(triple32(triple32(triple32(dim++) ^ uint(alpha)) ^ triple32(uint(gl_FragCoord.x))) ^ triple32(uint(gl_FragCoord.y))) * 2.3283064E-10;}
-
 float radical_inverse(int base_index, uint a) {
   int base = Primes[base_index];
   float invBase = 1.0f / base, invBaseN = 1.0f;
@@ -59,6 +46,6 @@ float bluenoise(int pixel_i, int pixel_j, int sampleIndex, int sampleDimension)
 	return v;
 }
 
-// float next() { return bluenoise(int(gl_FragCoord.x), int(gl_FragCoord.y), alpha, dim++);}
+float next() { return bluenoise(int(gl_FragCoord.x), int(gl_FragCoord.y), alpha, dim++);}
 vec2 next2() { return vec2(next(), next()); }
 vec3 next3() { return vec3(next(), next(), next()); }
