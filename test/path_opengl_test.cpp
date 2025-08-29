@@ -15,6 +15,6 @@ int main() {
 
   // renderer.add(gen_mesh(vec3(0, 0, 0), vec3(1, 0, 0), vec3(1, 1, 0), vec3(0, 1, 0)));
 
-  auto scene = load_scene("scenes/cbox.glb");
+  auto scene = load_scene("scenes/room.glb");
   renderer.render(scene);
 }

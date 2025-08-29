@@ -58,48 +58,8 @@ fn tan(x: f32): f32;
 fn acos(x: f32): f32;
 fn asin(x: f32): f32;
 fn atan2(y: f32, x: f32): f32;
-while(true) {
-    do_something();
-}
-if(x < 4) {
-    do_thing_a();
-} else if(x < 10) {
-    do_thing_b();
-} else {
-    do_thing_c();
-}
 
-# Pre-defined constants
-Pi = 3.1415927;
-E = 2.7182817;
-
-# Pre-defined functions & classes
-fn print(x: str);
-fn println(x: str);
-fn min(a, b);
-fn min(a, b, c);
-fn max(a, b);
-fn max(a, b, c);
-fn abs(x);
-fn clamp(x, min, max);
-fn lerp(x, min, max);
-fn sqr(x);
-fn sqrt(x);
-fn floor(x);
-fn ceil(x);
-fn fract(x);
-fn powi(base, exp);
-fn pow(base, exp);
-fn log2(x: f32): f32;
-fn log(x: f32): f32;
-fn log10(x: f32): f32;
-fn sin(x: f32): f32;
-fn cos(x: f32): f32;
-fn tan(x: f32): f32;
-fn acos(x: f32): f32;
-fn asin(x: f32): f32;
-fn atan2(y: f32, x: f32): f32;
-
+# Vector types
 class vec2i {
     ctor vec2i(x: i32, y: i32);
 
@@ -146,9 +106,10 @@ class mat4 {
 # while some_vector * some_vector performs per-component multiplication
 # Constructor is used to construct objects:
 # e.g. vec3(1.0, 2.0, 3.0)
-# In the case of vectors, a convenient syntax exists
+# In the case of vectors, a shorthand syntax exists
 # [1.0, 2.0, 3.0]
 
+# Vector-related functions
 fn normalize(x);
 fn length(x);
 fn dot(x, y);

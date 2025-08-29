@@ -1,6 +1,5 @@
 #include <pine/core/program_context.h>
 #include <pine/core/jit.h>
-#include <pine/core/video_writer.h>
 #include <pine/core/profiler.h>
 #include <pine/core/parallel.h>
 #include <pine/core/fileio.h>
@@ -617,12 +616,6 @@ void fileio_context(Context &ctx) {
   ctx("save") = [](const Array2d4f &array, psl::string filename, bool should_invert_y) {
     save_image(filename, array, should_invert_y);
   };
-
-  ctx.type<VideoWriter>("VideoWriter")
-      .ctor<psl::string, vec2i, int>()
-      .method<overloaded<const Array2d3f &>(&VideoWriter::add_frame)>("add_frame")
-      .method<overloaded<const Array2d4f &>(&VideoWriter::add_frame)>("add_frame")
-      .method<&VideoWriter::done>("done");
 }
 
 }  // namespace pine

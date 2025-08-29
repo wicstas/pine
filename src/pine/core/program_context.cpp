@@ -13,6 +13,7 @@
 #include <pine/impl/integrator/ears.h>
 #include <pine/impl/integrator/path.h>
 #include <pine/impl/integrator/mlt.h>
+#include <pine/impl/integrator/vol.h>
 #include <pine/impl/integrator/ao.h>
 #include <pine/impl/accel/embree.h>
 #include <pine/impl/accel/bvh.h>
@@ -58,6 +59,12 @@ void setup_program_context() {
       .ctor<Accel, Sampler>()
       .method<&AOIntegrator::render>("render");
   ctx("AOIntegrator") = [](Sampler sampler) { return AOIntegrator(EmbreeAccel(), sampler); };
+
+
+  ctx.type<VolIntegrator>("VolIntegrator")
+      .ctor<Accel, Sampler>()
+      .method<&VolIntegrator::render>("render");
+  ctx("VolIntegrator") = [](Sampler sampler) { return VolIntegrator(EmbreeAccel(), sampler); };
 
   ctx.type<RandomWalkIntegrator>("RandomWalkIntegrator")
       .ctor<Accel, Sampler, LightSampler, int>()

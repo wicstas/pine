@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.19)
 
 project(pine LANGUAGES CXX C)
 
@@ -36,7 +36,6 @@ src/pine/core/lowdiscrepancy.cpp
 src/pine/core/sobolmatrices.cpp
 src/pine/core/lightsampler.cpp
 src/pine/core/distribution.cpp
-src/pine/core/video_writer.cpp
 src/pine/core/interaction.cpp
 src/pine/core/integrator.cpp
 src/pine/core/blackbody.cpp
@@ -79,13 +78,11 @@ src/pine/impl/integrator/restir.cpp
 src/pine/impl/integrator/mlt.cpp
 src/pine/impl/integrator/path.cpp
 src/pine/impl/integrator/ao.cpp
+src/pine/impl/integrator/vol.cpp
 src/pine/impl/accel/embree.cpp
 src/pine/impl/accel/bvh.cpp
 
 
-src/contrib/libgwavi/avi-utils.cpp
-src/contrib/libgwavi/fileio.cpp
-src/contrib/libgwavi/gwavi.cpp
 src/contrib/stb_image_write.cpp
 src/contrib/stb_image.cpp
 src/contrib/tiny_gltf.cpp
@@ -109,7 +106,7 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 find_package(Embree REQUIRED)
-find_package(LLVM 18.1.8 REQUIRED CONFIG)
+find_package(LLVM 18.1 REQUIRED CONFIG)
 target_include_directories(pinelib PRIVATE ${LLVM_INCLUDE_DIRS})
 find_package(glfw3 REQUIRED)
 target_link_libraries(pinelib psl Threads::Threads embree LLVM-18 glfw)

@@ -186,7 +186,7 @@ inline T safe_sqrt(T y) {
 
 template <typename T>
 inline constexpr T powi(T x, int e) {
-  T y = 1;
+  auto y = T(1);
 
   while (e) {
     if (e & 1) y *= x;
