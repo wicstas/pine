@@ -106,8 +106,7 @@ set_target_properties(pinelib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 find_package(Embree REQUIRED)
-find_package(LLVM 18.1 REQUIRED CONFIG)
-target_include_directories(pinelib PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(pinelib PRIVATE src/contrib/llvm)
 find_package(glfw3 REQUIRED)
 target_link_libraries(pinelib psl Threads::Threads embree LLVM-18 glfw)
 
